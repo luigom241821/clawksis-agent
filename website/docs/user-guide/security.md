@@ -752,8 +752,7 @@ security:
       - "*.internal.company.com"
       - "admin.example.com"
     shared_files:
-
-      - "/etc/clawksis/blocked-sites.txt"
+      - "/etc/clawk/blocked-sites.txt"
 ```
 
 When a blocked URL is requested, the tool returns an error explaining the domain is blocked by policy. The blocklist is enforced across `web_search`, `web_extract`, `browser_navigate`, and all URL-capable tools.

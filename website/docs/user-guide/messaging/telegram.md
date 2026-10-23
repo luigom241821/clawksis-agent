@@ -473,7 +473,6 @@ stt:
 With STT disabled, the gateway still downloads the voice/audio attachment into Clawksis's audio cache, but **does not transcribe it**. The agent receives the message with a marker like:
 
 ```
-
 [The user sent a voice message: /home/<user>/.clawksis/cache/audio/<hash>.ogg]
 ```
 
@@ -626,7 +625,6 @@ Send the bot a voice note or audio file that's bigger than 20 MB. Tail the gatew
 ```bash
 tail -f ~/.clawksis/logs/gateway.log | grep -iE "telegram|cache"
 ```
-
 
 You should see a `[Telegram] Cached user voice at /home/<user>/.clawksis/cache/audio/...` line and **no** "too large" rejection. Combined with `stt.enabled: false` (above), the path to the original audio file then lands in the agent's inbound message for downstream processing.
 

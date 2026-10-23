@@ -20,7 +20,7 @@ The simplest path: a one-click installer with a guided, point-and-click setup. N
 
 ### 1. Download and install
 
-[Download the Clawksis Desktop installer](https://github.com/samuelgradientai-sys/clawksis-agent for macOS or Windows, then open it. On first launch it finishes setting itself up (usually under a minute).
+[Download the Clawksis Desktop installer](https://github.com/samuelgradientai-sys/clawksis-agent/) for macOS or Windows, then open it. On first launch it finishes setting itself up (usually under a minute).
 
 ### 2. Connect Nous Portal
 
@@ -49,12 +49,16 @@ Prefer the terminal?
 On macOS/Linux/WSL2/Android, run
 
 ```bash
-
-curl -fsSL https://github.com/samuelgradientai-sys/clawksis-agent | bash
+curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
 ```
 
+On Windows, run
 
-Prefer to review first? Download [`install.sh`](https://github.com/samuelgradientai-sys/clawksis-agent inspect it, then run it.
+```powershell
+iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)
+```
+
+Prefer to review first? Download [`install.sh`](https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh), inspect it, then run it.
 
 After it finishes, reload your shell:
 

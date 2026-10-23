@@ -62,8 +62,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-
-LOG_FILE = Path.home() / ".clawk" / "hooks" / "my-hook" / "activity.log"
+LOG_FILE = Path.home() / ".clawksis" / "hooks" / "my-hook" / "activity.log"
 
 async def handle(event_type: str, context: dict):
     """Called for each subscribed event. Must be named 'handle'."""
@@ -159,8 +158,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-
-LOG = Path.home() / ".clawk" / "logs" / "command_usage.jsonl"
+LOG = Path.home() / ".clawksis" / "logs" / "command_usage.jsonl"
 
 def handle(event_type: str, context: dict):
     LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -196,14 +194,10 @@ WEBHOOK_URL = "https://your-service.example.com/clawk-events"
 
 async def handle(event_type: str, context: dict):
     async with httpx.AsyncClient() as client:
-        await client.post(
-            WEBHOOK_URL,
-            json={
-                "event": event_type,
-                **context,
-            },
-            timeout=5,
-        )
+        await client.post(WEBHOOK_URL, json={
+            "event": event_type,
+            **context,
+        }, timeout=5)
 ```
 
 ### Tutorial: BOOT.md — Run a Startup Checklist on Every Gateway Boot
@@ -261,8 +255,7 @@ from pathlib import Path
 
 logger = logging.getLogger("hooks.boot-md")
 
-
-BOOT_FILE = Path.home() / ".clawk" / "BOOT.md"
+BOOT_FILE = Path.home() / ".clawksis" / "BOOT.md"
 
 
 def _build_prompt(content: str) -> str:
@@ -609,13 +602,8 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 def audit_tool_call(tool_name, args, task_id, **kwargs):
-
-    logger.info(
-        "TOOL_CALL session=%s tool=%s args=%s",
-        task_id,
-        tool_name,
-        json.dumps(args)[:200],
-    )
+    logger.info("TOOL_CALL session=%s tool=%s args=%s",
+                task_id, tool_name, json.dumps(args)[:200])
 
 def register(ctx):
     ctx.register_hook("pre_tool_call", audit_tool_call)
@@ -713,10 +701,7 @@ def my_callback(session_id: str, user_message: str, conversation_history: list,
 
 ```python
 # Inject context
-
-return {
-    "context": "Recalled memories:\n- User likes Python\n- Working on clawksis-agent"
-}
+return {"context": "Recalled memories:\n- User likes Python\n- Working on clawksis-agent"}
 
 # Plain string (equivalent)
 return "Recalled memories:\n- User likes Python"
@@ -744,14 +729,10 @@ MEMORY_API = "https://your-memory-api.example.com"
 
 def recall(session_id, user_message, is_first_turn, **kwargs):
     try:
-        resp = httpx.post(
-            f"{MEMORY_API}/recall",
-            json={
-                "session_id": session_id,
-                "query": user_message,
-            },
-            timeout=3,
-        )
+        resp = httpx.post(f"{MEMORY_API}/recall", json={
+            "session_id": session_id,
+            "query": user_message,
+        }, timeout=3)
         memories = resp.json().get("results", [])
         if not memories:
             return None
@@ -813,15 +794,11 @@ MEMORY_API = "https://your-memory-api.example.com"
 
 def sync_memory(session_id, user_message, assistant_response, **kwargs):
     try:
-        httpx.post(
-            f"{MEMORY_API}/store",
-            json={
-                "session_id": session_id,
-                "user": user_message,
-                "assistant": assistant_response,
-            },
-            timeout=5,
-        )
+        httpx.post(f"{MEMORY_API}/store", json={
+            "session_id": session_id,
+            "user": user_message,
+            "assistant": assistant_response,
+        }, timeout=5)
     except Exception:
         pass  # best-effort
 
@@ -836,13 +813,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 def log_response_length(session_id, assistant_response, model, **kwargs):
-
-    logger.info(
-        "RESPONSE session=%s model=%s chars=%d",
-        session_id,
-        model,
-        len(assistant_response or ""),
-    )
+    logger.info("RESPONSE session=%s model=%s chars=%d",
+                session_id, model, len(assistant_response or ""))
 
 def register(ctx):
     ctx.register_hook("post_llm_call", log_response_length)
@@ -1009,10 +981,7 @@ def cleanup_session(session_id, completed, interrupted, **kwargs):
     cache = _session_caches.pop(session_id, None)
     if cache:
         # Flush accumulated data to disk or external service
-
-        status = (
-            "completed" if completed else ("interrupted" if interrupted else "failed")
-        )
+        status = "completed" if completed else ("interrupted" if interrupted else "failed")
         print(f"Session {session_id} ended: {status}, {cache['tool_calls']} tool calls")
 
 def register(ctx):
@@ -1034,14 +1003,8 @@ def on_end(session_id, completed, interrupted, **kwargs):
     start = _start_times.pop(session_id, None)
     if start:
         duration = time.time() - start
-
-        logger.info(
-            "SESSION_DURATION session=%s seconds=%.1f completed=%s interrupted=%s",
-            session_id,
-            duration,
-            completed,
-            interrupted,
-        )
+        logger.info("SESSION_DURATION session=%s seconds=%.1f completed=%s interrupted=%s",
+                     session_id, duration, completed, interrupted)
 
 def register(ctx):
     ctx.register_hook("on_session_start", on_start)
@@ -1311,10 +1274,7 @@ logger = logging.getLogger(__name__)
 def log_subagent(parent_session_id, child_role, child_status, duration_ms, **kwargs):
     logger.info(
         "SUBAGENT parent=%s role=%s status=%s duration_ms=%d",
-        parent_session_id,
-        child_role,
-        child_status,
-        duration_ms,
+        parent_session_id, child_role, child_status, duration_ms,
     )
 
 def register(ctx):
@@ -1502,8 +1462,7 @@ def notify_approval(command, description, session_key, **kwargs):
     title = "Clawksis needs approval"
     body = f"{description}: {command[:80]}"
     subprocess.Popen([
-        "osascript",
-        "-e",
+        "osascript", "-e",
         f'display notification "{body}" with title "{title}"',
     ])
 

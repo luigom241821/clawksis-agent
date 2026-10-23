@@ -249,7 +249,7 @@ on Windows `%LOCALAPPDATA%\clawk` unless `CLAWK_HOME` is set).
 
 ```bash
 # macOS / Linux
-repo="${CLAWK_HOME:-$HOME/.clawk}/clawksis-agent"
+repo="${CLAWK_HOME:-$HOME/.clawksis}/clawksis-agent"
 for p in "$repo"/.git/objects/pack/pack-*.pack; do [ -e "${p%.pack}.promisor" ] || : > "${p%.pack}.promisor"; done
 ```
 

@@ -602,7 +602,7 @@ OIDC tokens are short-lived and should not be used as the documented deployment 
 
 ### Singularity/Apptainer Backend
 
-Runs commands in a [Singularity/Apptainer](https://apptainer.org) container. Designed for HPC clusters and shared machines where Docker isn't available. It is the official [`singularity` plugin](https://github.com/NousResearch/clawk-official-plugins/tree/main/singularity) (formerly built into core; `clawk update` installs it for profiles that already use it):
+Runs commands in a [Singularity/Apptainer](https://apptainer.org) container. Designed for HPC clusters and shared machines where Docker isn't available. It is the official [`singularity` plugin](https://github.com/NousResearch/hermes-official-plugins/tree/main/singularity) (formerly built into core; `clawk update` installs it for profiles that already use it):
 
 ```bash
 clawk plugins install singularity
@@ -1416,6 +1416,37 @@ credential_pool_strategies:
 ```
 
 Options: `fill_first` (default), `round_robin`, `least_used`, `random`. See [Credential Pools](./features/credential-pools.md) for full documentation.
+
+## Resilience (Clawksis)
+
+Opt-in protection against provider rate limits and outages, layered on top of the normal retry, credential-rotation and [fallback provider](./features/fallback-providers.md) path. Every switch is off by default; with the block absent or all flags off, the agent behaves exactly as without it.
+
+```yaml
+resilience:
+  circuit_breaker:
+    enabled: false              # fast-fail to the fallback chain after repeated transient errors
+    failure_threshold: 3        # consecutive transient failures that open the breaker
+    cooldown_seconds: 60        # seconds open before one half-open probe is let through
+  rate_limits:
+    enabled: false              # throttle before sending instead of learning the limit from a 429
+    use_response_headers: true  # learn RPM/TPM caps from the provider's x-ratelimit-* headers
+    max_wait_seconds: 60        # hard ceiling on a single throttle wait
+    providers: {}               # static caps, e.g. {anthropic: {rpm: 50, tpm: 40000}}
+  adaptive_cooldown:
+    enabled: false              # exponential cooldown for a credential that keeps hitting 429
+    base_seconds: 60
+    max_seconds: 3600
+  durable_turns:
+    enabled: false              # journal in-flight turns so they resume after a crash
+    freshness_seconds: 3600     # only resume journaled turns younger than this
+```
+
+- **`circuit_breaker`** — a per-provider breaker shared by every concurrent turn in the process. Only transient failures count (rate limit, server error, overload, timeout); auth, billing, content and context errors keep their own handling. While the breaker is open, the turn switches to the next `fallback_providers` entry right away instead of spending its retry budget on the same provider (credential-pool rotation still goes first). After `cooldown_seconds` one probe request is allowed through; any successful response closes the breaker.
+- **`rate_limits`** — a preemptive per-provider token bucket (requests and tokens per minute). Caps come from the provider's `x-ratelimit-*` headers when `use_response_headers` is on, otherwise from `providers`. A provider with no known cap is never throttled, and waits are interruptible and capped at `max_wait_seconds`.
+- **`adaptive_cooldown`** — when a pooled credential keeps hitting 429s, its cooldown grows exponentially (with jitter) from `base_seconds` up to `max_seconds`, instead of the fixed one-hour exhausted-credential cooldown.
+- **`durable_turns`** — the `tui_gateway` backend (TUI and desktop app) journals each in-flight turn. If the process crashes, resuming that session re-sends the interrupted prompt with a note to continue from the saved transcript (tool calls are not replayed), as long as the entry is younger than `freshness_seconds`. The messaging gateway already resumes interrupted turns on its own.
+
+Returning to the primary provider once its cooldown expires is built in and always on; it is not a resilience toggle.
 
 ## Prompt caching
 
@@ -2770,7 +2801,7 @@ The `web_search` and `web_extract` tools support five backend providers. Configu
 
 ```yaml
 web:
-  backend: firecrawl    # firecrawl | searxng | parallel | tavily | perplexity | keenable | exa
+  backend: firecrawl    # firecrawl | searxng | ddgs | parallel | tavily | perplexity | keenable | exa
 
   # Or use per-capability keys to mix providers (e.g. free search + paid extract):
   search_backend: "searxng"
@@ -2802,6 +2833,9 @@ web:
 | **Tavily** | `TAVILY_API_KEY` (optional — keyless when selected) | ✔ | ✔ |
 | **Perplexity** | `PERPLEXITY_API_KEY` | ✔ | ✔ (query-relevant snippets) |
 | **Exa** | `EXA_API_KEY` (optional — keyless free tier) | ✔ | ✔ |
+| **DuckDuckGo** (`ddgs`) | _(none)_ | ✔ | — |
+
+**Clawksis default:** `web.search_backend: ddgs` — free DuckDuckGo search with no API key; its Python package is installed on first use. Pick another backend in `clawk tools` or set `search_backend` to override it.
 
 **Backend selection:** The runtime always uses the stored `web.backend` selection (set via `clawk tools`; `nous` routes through the managed Tool Gateway). Only if no web backend has ever been selected is one auto-detected from available API keys: if only `SEARXNG_URL` is set, SearXNG is used; if only `EXA_API_KEY` is set, Exa; if only `TAVILY_API_KEY` is set, Tavily; if only `PERPLEXITY_API_KEY` is set, Perplexity; if only `PARALLEL_API_KEY` is set, Parallel; if only `KEENABLE_API_KEY` is set, Keenable. With **no selection and no credentials at all**, requests rotate round-robin across the keyless free-tier ring (Exa / Parallel / Firecrawl / Keenable) with automatic next-in-line failover on rate limits (and, for search, on vendor refusals) — see the [Web Search guide](./features/web-search.md) for details. Once a selection exists, adding a key to `.env` does not change the route. Selecting Tavily, Firecrawl, or Keenable in `clawk tools` also works without a key.
 
@@ -2908,8 +2942,7 @@ security:
       - "admin.example.com"
       - "*.local"
     shared_files:                # Load additional rules from external files
-
-      - "/etc/clawksis/blocked-sites.txt"
+      - "/etc/clawk/blocked-sites.txt"
 ```
 
 When enabled, any URL matching a blocked domain pattern is rejected before the web or browser tool executes. This applies to `web_search`, `web_extract`, `browser_navigate`, and any tool that accesses URLs.
@@ -3066,8 +3099,7 @@ Clawksis uses two different context scopes:
 | File | Purpose | Scope |
 |------|---------|-------|
 | `SOUL.md` | **Primary agent identity** — defines who the agent is (slot #1 in the system prompt) | `~/.clawksis/SOUL.md` or `$CLAWK_HOME/SOUL.md` |
-
-| `.clawk.md` / `HERMES.md` | Project-specific instructions (highest priority) | Walks to git root |
+| `.clawk.md` / `CLAWKSIS.md` | Project-specific instructions (highest priority) | Walks to git root |
 | `AGENTS.md` | Project-specific instructions, coding conventions | Recursive directory walk |
 | `CLAUDE.md` | Claude Code context files (also detected) | Working directory only |
 | `.cursorrules` | Cursor IDE rules (also detected) | Working directory only |

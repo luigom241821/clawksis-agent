@@ -17,7 +17,6 @@ The `PluginManager` scans four sources, in order:
 
 1. **Bundled** — `<repo>/plugins/<name>/` (what this page documents)
 2. **User** — `~/.clawksis/plugins/<name>/`
-
 3. **Project** — `./.clawksis/plugins/<name>/` (requires `CLAWK_ENABLE_PROJECT_PLUGINS=1`)
 4. **Pip entry points** — `clawk_agent.plugins`
 
@@ -142,7 +141,7 @@ The file is still written. The model reads the warning in the next turn's tool m
 ### Langfuse (moved to the plugin catalog)
 
 Langfuse tracing is no longer bundled with Clawksis. It ships as the official
-[`langfuse`](https://github.com/NousResearch/clawk-official-plugins/tree/main/langfuse) catalog plugin, with the same hooks, `CLAWK_LANGFUSE_*`
+[`langfuse`](https://github.com/NousResearch/hermes-official-plugins/tree/main/langfuse) catalog plugin, with the same hooks, `CLAWK_LANGFUSE_*`
 environment variables and capture modes:
 
 ```bash
@@ -152,7 +151,7 @@ clawk plugins install langfuse
 Profiles that had `observability/langfuse` enabled get the plugin installed and
 enabled automatically by `clawk update` (or on the first start after updating),
 and keep tracing to the same Langfuse project. Setup, tuning and capture modes
-are documented in the [plugin's README](https://github.com/NousResearch/clawk-official-plugins/tree/main/langfuse).
+are documented in the [plugin's README](https://github.com/NousResearch/hermes-official-plugins/tree/main/langfuse).
 
 ### NeMo Relay native integration (migration note)
 

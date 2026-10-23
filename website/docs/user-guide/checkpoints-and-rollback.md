@@ -64,8 +64,7 @@ At a high level:
 - Once per conversation turn (per directory), it:
   - Resolves a reasonable project root for the file.
   - Initialises or reuses the **single shared shadow store** at `~/.clawksis/checkpoints/store/`.
-
-  - Stages into a per-project index, builds a tree, and commits to a per-project ref (`refs/clawksis/<project-hash>`).
+  - Stages into a per-project index, builds a tree, and commits to a per-project ref (`refs/clawk/<project-hash>`).
 - These per-project refs form a checkpoint history that you can inspect and restore via `/rollback`.
 
 ```mermaid
@@ -153,7 +152,6 @@ clawk checkpoints
 Sample output:
 
 ```text
-
 Checkpoint base: /home/you/.clawksis/checkpoints
 Total size:      142.3 MB
   store/         138.1 MB
@@ -273,8 +271,7 @@ With a container terminal backend (`docker`, `modal`, `daytona`, `vercel_sandbox
 ~/.clawksis/checkpoints/
   ├── store/                 # single shared bare git repo
   │   ├── HEAD, objects/     # git internals (shared across projects)
-
-  │   ├── refs/clawksis/<hash> # per-project branch tip
+  │   ├── refs/clawk/<hash> # per-project branch tip
   │   ├── indexes/<hash>     # per-project git index
   │   ├── projects/<hash>.json  # workdir + created_at + last_touch
   │   ├── .gc-pending        # refs rewritten since the last gc; cleared by the next prune

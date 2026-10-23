@@ -665,16 +665,12 @@ This applies only to cron deliveries. `TELEGRAM_HOME_CHANNEL_THREAD_ID` (used el
 
 ### Response wrapping
 
-
-By default, delivered cron output is prefixed with a small ⏰ tag so the recipient knows it came from a scheduled task; the agent's output follows directly:
+By default, delivered cron output is prefixed with a small ⏰ tag so the recipient knows it came from a scheduled task; the agent's output follows directly, with no job id, divider, or footer:
 
 ```
-
 ⏰ Morning feeds
 
 <agent output here>
-
-Note: The agent cannot see this message, and therefore cannot respond to it.
 ```
 
 To deliver the raw agent output without the wrapper, set `cron.wrap_response` to `false`:
@@ -955,14 +951,9 @@ Ping me on Telegram if RAM is over 85%, every 5 minutes.
 Clawksis will write the check script to `~/.clawksis/scripts/` via `write_file`, then call:
 
 ```python
-cronjob(
-    action="create",
-    schedule="every 5m",
-    script="memory-watchdog.sh",
-    no_agent=True,
-    deliver="telegram",
-    name="memory-watchdog",
-)
+cronjob(action="create", schedule="every 5m",
+        script="memory-watchdog.sh", no_agent=True,
+        deliver="telegram", name="memory-watchdog")
 ```
 
 It picks `no_agent=True` automatically when the message content is fully determined by the script (watchdogs, threshold alerts, heartbeats). The same tool also lets the agent pause, resume, edit, and remove jobs — so the whole lifecycle is chat-driven without anyone touching the CLI.
@@ -1269,7 +1260,7 @@ import json, sys
 latest = fetch_latest_issue_count()
 prev = read_state("issue_count")
 if latest == prev:
-    print(json.dumps({"wakeAgent": False}))  # skip this tick
+    print(json.dumps({"wakeAgent": False}))   # skip this tick
     sys.exit(0)
 write_state("issue_count", latest)
 print(json.dumps({"wakeAgent": True, "context": {"new_issues": latest - prev}}))
@@ -1387,6 +1378,8 @@ Jobs may store `model` and `provider` as `null`. When those fields are omitted, 
 A per-job `base_url` override needs an explicit `provider`. For a provider with a stored key (a named custom provider or a built-in one), the override must have the same origin as that provider's configured endpoint: the same scheme, host and port. Another scheme, port or subdomain is refused, so the stored key is only ever sent where you configured it. A bare `provider: custom` takes any `base_url` that no stored key goes with. When a stored key matches the URL's hostname (for example `DEEPSEEK_API_KEY` for `api.deepseek.com`), the same rule applies: the `base_url` must have the origin of an endpoint you configured or of a built-in provider.
 
 The storage uses atomic file writes so interrupted writes do not leave a partially written job file behind.
+
+Each run also leaves a chat session behind. Set `cron.archive_chat_sessions: true` (or flip the toggle on the dashboard's **Cron** page) to archive a run's chat session as soon as the run finishes, so scheduled jobs don't flood the conversations sidebar. The transcripts stay available under **Sessions → archived**. Off by default.
 
 ## Self-contained prompts still matter
 

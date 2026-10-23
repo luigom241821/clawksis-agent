@@ -94,8 +94,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 User=clawk
-
-EnvironmentFile=/etc/clawksis/env
+EnvironmentFile=/etc/clawk/env
 ExecStart=/usr/local/bin/clawk teams-pipeline maintain-subscriptions
 ```
 
@@ -125,8 +124,7 @@ systemctl list-timers clawk-teams-pipeline-maintain.timer
 #### Option 3: Plain crontab
 
 ```cron
-
-0 */12 * * * /usr/local/bin/clawk teams-pipeline maintain-subscriptions >> /var/log/clawksis/teams-pipeline-maintain.log 2>&1
+0 */12 * * * /usr/local/bin/clawk teams-pipeline maintain-subscriptions >> /var/log/clawk/teams-pipeline-maintain.log 2>&1
 ```
 
 Make sure the cron environment has the `MSGRAPH_*` credentials. Simplest fix: source `~/.clawksis/.env` at the top of a wrapper script that crontab calls.

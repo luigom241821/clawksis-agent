@@ -6,8 +6,7 @@ description: "Generate agent trajectories at scale — parallel processing, chec
 
 # Batch Processing
 
-
-Batch processing lets you run the Clawksis across hundreds or thousands of prompts in parallel, generating structured trajectory data. This is primarily used for **training data generation** — producing ShareGPT-format trajectories with tool usage statistics that can be used for fine-tuning or evaluation.
+Batch processing lets you run the Clawksis agent across hundreds or thousands of prompts in parallel, generating structured trajectory data. This is primarily used for **training data generation** — producing ShareGPT-format trajectories with tool usage statistics that can be used for fine-tuning or evaluation.
 
 ## Overview
 
@@ -84,8 +83,7 @@ Entries can optionally include:
 
 | Parameter | Description |
 |-----------|-------------|
-
-| `--reasoning_effort` | Effort level: `none`, `minimal`, `low`, `medium`, `high`, `xhigh` |
+| `--reasoning_effort` | Reasoning effort: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra` |
 | `--reasoning_disabled` | Completely disable reasoning/thinking tokens |
 
 ### Advanced Options

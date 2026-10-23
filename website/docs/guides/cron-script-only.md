@@ -61,14 +61,13 @@ Under the hood, the agent makes two tool calls:
 # 1. Write the check script
 write_file(
     path="~/.clawksis/scripts/memory-watchdog.sh",
-    content="""#!/usr/bin/env bash
+    content='''#!/usr/bin/env bash
 ram_pct=$(free | awk '/^Mem:/ {printf "%d", $3 * 100 / $2}')
 if [ "$ram_pct" -ge 85 ]; then
   echo "RAM ${ram_pct}% on $(hostname)"
 fi
 # Empty stdout = silent tick; no message sent.
-
-""",
+''',
 )
 
 # 2. Schedule it — no_agent=True skips the LLM on every tick

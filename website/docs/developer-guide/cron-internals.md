@@ -402,7 +402,6 @@ For **Telegram topics**, use `telegram:<chat_id>:<thread_id>` (e.g., `telegram:-
 
 ### Response Wrapping
 
-
 By default (`cron.wrap_response: true`), cron deliveries are prefixed with a small `⏰ <job name>` tag so the recipient can tell the message came from a scheduled task. The agent's output then follows directly — no job id, divider, or footer. Set `cron.wrap_response: false` to deliver the raw output with no tag.
 
 The `[SILENT]` prefix in a cron response suppresses delivery entirely — useful for jobs that only need to write to files or perform side effects.

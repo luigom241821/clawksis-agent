@@ -13,13 +13,64 @@ import Link from "@docusaurus/Link";
 
 The self-improving AI agent built by [Nous Research](https://nousresearch.com). The only agent with a built-in learning loop — it creates skills from experience, improves them during use, nudges itself to persist knowledge, and builds a deepening model of who you are across sessions.
 
-<div style={{display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap'}}>
-
-  <Link to="/getting-started/installation" style={{display: 'inline-block', padding: '0.6rem 1.2rem', backgroundColor: '#FFD700', color: '#07070d', borderRadius: '8px', fontWeight: 600, textDecoration: 'none'}}>Get Started →</Link>
-
-  <a href="https://github.com/NousResearch/clawksis-agent/releases/latest" style={{display: 'inline-block', padding: '0.6rem 1.2rem', border: '1px solid rgba(255,215,0,0.2)', borderRadius: '8px', textDecoration: 'none'}}>Download Desktop</a>
-
-  <a href="https://github.com/NousResearch/clawksis-agent" style={{display: 'inline-block', padding: '0.6rem 1.2rem', border: '1px solid rgba(255,215,0,0.2)', borderRadius: '8px', textDecoration: 'none'}}>View on GitHub</a>
+<div
+  style={{
+    display: "flex",
+    gap: "1rem",
+    marginBottom: "2rem",
+    flexWrap: "wrap",
+  }}
+>
+  <Link
+    to="/getting-started/installation"
+    style={{
+      display: "inline-block",
+      padding: "0.6rem 1.2rem",
+      backgroundColor: "#FFD700",
+      color: "#07070d",
+      borderRadius: "8px",
+      fontWeight: 600,
+      textDecoration: "none",
+    }}
+  >
+    Get Started →
+  </Link>
+  <Link
+    to="/user-guide/bot-mode"
+    style={{
+      display: "inline-block",
+      padding: "0.6rem 1.2rem",
+      border: "1px solid rgba(255,215,0,0.2)",
+      borderRadius: "8px",
+      textDecoration: "none",
+    }}
+  >
+    Explore Bot Mode
+  </Link>
+  <a
+    href="https://github.com/samuelgradientai-sys/clawksis-agent/"
+    style={{
+      display: "inline-block",
+      padding: "0.6rem 1.2rem",
+      border: "1px solid rgba(255,215,0,0.2)",
+      borderRadius: "8px",
+      textDecoration: "none",
+    }}
+  >
+    Download Desktop
+  </a>
+  <a
+    href="https://github.com/samuelgradientai-sys/clawksis-agent"
+    style={{
+      display: "inline-block",
+      padding: "0.6rem 1.2rem",
+      border: "1px solid rgba(255,215,0,0.2)",
+      borderRadius: "8px",
+      textDecoration: "none",
+    }}
+  >
+    View on GitHub
+  </a>
 </div>
 
 ## Install
@@ -37,8 +88,7 @@ For aarch64 Android devices, use the separate [Termux APT guide](./getting-start
 #### Linux / macOS / WSL2
 
 ```bash
-
-curl -fsSL https://raw.githubusercontent.com/NousResearch/clawksis-agent/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
 ```
 
 #### Windows (native)
@@ -46,8 +96,7 @@ curl -fsSL https://raw.githubusercontent.com/NousResearch/clawksis-agent/main/sc
 Run in powershell:
 
 ```powershell
-
-iex (irm https://raw.githubusercontent.com/NousResearch/clawksis-agent/main/scripts/install.ps1)
+iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)
 ```
 
 See the full **[Installation Guide](./getting-started/installation.md)** for what the installer does, installation ownership and data locations, and Windows-specific notes. For the complete platform support matrix, see **[Platform Support](./getting-started/platform-support.md)**.

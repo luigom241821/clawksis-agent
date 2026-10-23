@@ -2,8 +2,7 @@
 sidebar_position: 3
 sidebar_label: "Git Worktrees"
 title: "Git Worktrees"
-
-description: "Run multiple Clawksiss safely on the same repository using git worktrees and isolated checkouts"
+description: "Run multiple Clawksis agents safely on the same repository using git worktrees and isolated checkouts"
 ---
 
 # Git Worktrees
@@ -178,8 +177,7 @@ Clawksis checks the worktree out without running the repository's own git config
 This is the easiest way to get worktree isolation. You can also combine it with a single query:
 
 ```bash
-
-clawk -w -q "Fix issue #123"
+clawk -w -z "Fix issue #123"
 ```
 
 For parallel agents, open multiple terminals and run `clawk -w` in each — every invocation gets its own worktree and branch automatically.
@@ -281,3 +279,7 @@ This combination gives you:
 - Strong guarantees that different agents and experiments do not step on each other.
 - Fast iteration cycles with easy recovery from bad edits.
 - Clean, reviewable pull requests.
+
+## Developing the UI surfaces across worktrees
+
+The TypeScript surfaces (`ui-tui/`, `apps/desktop/`) each need a `node_modules`, which a fresh `npm ci` per worktree duplicates across every branch. If you hack on the TUI or desktop app from multiple worktrees, see [TUI & Desktop from Worktrees](../developer-guide/worktree-ui-dev.md) for the `htui` / `hgui` helpers that share one install by symlink.

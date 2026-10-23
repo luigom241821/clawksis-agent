@@ -26,7 +26,7 @@ narrower routes (`clawk_cli/gateway_chat_commands.py`).
 setting to this local session (its next turn and `config.get`), saving config.yaml only where the
 handler does; `client-local (cli_only)` commands are terminal/UI features of a client.
 
-104 registry commands: 29 control, 19 read, 56 refused.
+102 registry commands: 28 control, 18 read, 56 refused.
 
 | Command | Gateway (`slash.exec`) | Classic CLI | Ink | Desktop | ACP | Notes |
 |---|---|---|---|---|---|---|
@@ -61,6 +61,7 @@ handler does; `client-local (cli_only)` commands are terminal/UI features of a c
 | `/focus` | refused | ClawksisCLI._handle_focus_command | local (preference not saved) | slash.exec: refused | slash.exec: refused | client-local (cli_only) |
 | `/footer` | control | ClawksisCLI._handle_footer_command | slash.exec | unavailable: terminal | slash.exec | per-session setting (gateway handler) |
 | `/goal` | control | ClawksisCLI._handle_goal_command | slash.exec | slash.exec | slash.exec |  |
+| `/gquota` | refused | ClawksisCLI._handle_gquota_command | slash.exec: refused | slash.exec: refused | slash.exec: refused | client-local (cli_only) |
 | `/handoff` | refused | ClawksisCLI._handle_handoff_command | slash.exec: refused | action: handoff | slash.exec: refused | client-local (cli_only) |
 | `/hatch` (/generate-pet) | refused | ClawksisCLI._handle_hatch_command | slash.exec: refused | action: hatch | slash.exec: refused | client-local (cli_only) |
 | `/heartbeat` (/hb) | control | ClawksisCLI._handle_heartbeat_command | slash.exec | slash.exec | slash.exec |  |
@@ -74,7 +75,6 @@ handler does; `client-local (cli_only)` commands are terminal/UI features of a c
 | `/journey` (/learning, /memory-graph) | refused | ClawksisCLI._handle_journey_command | local | action: journey | slash.exec: refused | client-local (cli_only) |
 | `/kanban` | read (list/show/stats/assignees/context/runs/log/diagnostics) | ClawksisCLI._handle_kanban_command | slash.exec | unavailable: advanced | slash.exec |  |
 | `/learn` | control | ClawksisCLI._handle_learn_command | slash.exec | slash.exec | slash.exec |  |
-| `/login` | control | ClawksisCLI._handle_login_command | slash.exec | unavailable: settings | slash.exec |  |
 | `/loop` (/proactive) | control | ClawksisCLI._handle_loop_command | slash.exec | slash.exec | slash.exec |  |
 | `/memory` | read (bare / `pending`) | ClawksisCLI._handle_memory_command | slash.exec | slash.exec | slash.exec |  |
 | `/moa` | control | ClawksisCLI._cmd_moa | slash.exec | slash.exec | slash.exec |  |
@@ -116,14 +116,12 @@ handler does; `client-local (cli_only)` commands are terminal/UI features of a c
 | `/steer` (/s) | refused | ClawksisCLI._cmd_steer | canonical route | action: steer | session.steer |  |
 | `/stop` | refused | ClawksisCLI._handle_stop_command | canonical route | action: stop | slash.exec: refused |  |
 | `/subgoal` | control | ClawksisCLI._handle_subgoal_command | slash.exec | slash.exec | slash.exec |  |
-| `/subscription` (/upgrade) | refused | ClawksisCLI._show_subscription | sidecar: subscription.state | slash.exec: refused | slash.exec: refused | client-local (cli_only) |
 | `/suggestions` (/suggest) | read (bare only) | ClawksisCLI._handle_suggestions_command | slash.exec | slash.exec | slash.exec |  |
 | `/timestamps` (/ts) | refused | ClawksisCLI._handle_timestamps_command | config.set | action: timestamps | slash.exec: refused | client-local (cli_only) |
 | `/title` | control | ClawksisCLI._cmd_title | canonical route | action: title | session.mutate rename (bare: slash.exec) |  |
 | `/tools` | refused | ClawksisCLI._handle_tools_command | refused: not available yet | slash.exec: refused | session.info | client-local (cli_only) |
 | `/toolsets` | read | ClawksisCLI.show_toolsets | slash.exec | unavailable: terminal | slash.exec | client-local (cli_only) |
 | `/topic` | refused | messaging-only: unknown command | slash.exec: refused | slash.exec: refused | slash.exec: refused | messaging-only |
-| `/topup` | read | ClawksisCLI._show_billing | sidecar: billing.state | slash.exec | slash.exec |  |
 | `/undo` | refused | ClawksisCLI._cmd_undo | canonical route | action: undo | session.mutate rewind |  |
 | `/update` | refused | ClawksisCLI._cmd_update | local | unavailable: terminal | slash.exec: refused |  |
 | `/usage` | read (bare only (`reset` refused)) | ClawksisCLI._handle_usage_command | canonical route | slash.exec | slash.exec |  |

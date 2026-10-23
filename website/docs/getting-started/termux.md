@@ -128,8 +128,8 @@ clawk gateway run
 For a background process:
 
 ```bash
-mkdir -p "${CLAWK_HOME:-$HOME/.clawk}/logs"
-nohup clawk gateway run >> "${CLAWK_HOME:-$HOME/.clawk}/logs/gateway.log" 2>&1 &
+mkdir -p "${CLAWK_HOME:-$HOME/.clawksis}/logs"
+nohup clawk gateway run >> "${CLAWK_HOME:-$HOME/.clawksis}/logs/gateway.log" 2>&1 &
 ```
 
 :::warning Android process limits

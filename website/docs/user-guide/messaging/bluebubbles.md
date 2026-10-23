@@ -50,8 +50,7 @@ platforms:
       require_mention: true
 ```
 
-
-With `require_mention: true`, DMs still work normally, but group-chat messages are ignored unless they match a mention pattern. If you do not configure custom patterns, Clawksis uses conservative defaults for `Clawksis` and `@Clawksis` variants.
+With `require_mention: true`, DMs still work normally, but group-chat messages are ignored unless they match a mention pattern. If you do not configure custom patterns, Clawksis uses conservative defaults for `Clawksis` and `@Clawksis agent` variants.
 
 For a custom agent name, set regex patterns:
 
@@ -234,3 +233,4 @@ One caveat: "basic messaging works without Private API" assumes BlueBubbles can 
 ### "Private API helper not connected"
 - Install the Private API helper: [docs.bluebubbles.app](https://docs.bluebubbles.app/helper-bundle/installation)
 - Basic messaging works without it — only reactions, typing, and read receipts require it
+

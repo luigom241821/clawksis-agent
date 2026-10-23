@@ -816,8 +816,7 @@ clawk skills tap add myorg/skills-repo
 [skills.sh schema](https://skills.sh/schemas/skills.sh.schema.json). Its
 `groupings` (each with a `title` and a list of skill names) are read at index
 time and become the category labels shown in the
-
-[Skills Hub](https://github.com/samuelgradientai-sys/clawksis-agent page — instead of a
+[Skills Hub](https://samuelgradientai-sys.github.io/clawksis-agent) page — instead of a
 tag-derived guess. This is generic: any tap that ships the file gets real
 categorization, no Clawksis-side changes required.
 

@@ -13,8 +13,7 @@ When the manifest is unreachable (offline, network blocked, hosting failure), Cl
 ## Live manifest URL
 
 ```
-
-https://github.com/samuelgradientai-sys/clawksis-agent
+https://samuelgradientai-sys.github.io/clawksis-agent/api/model-catalog.json
 ```
 
 Published on every merge to `main` via the existing `deploy-site.yml` GitHub Pages pipeline. The source of truth lives in the repo at `website/static/api/model-catalog.json`.
@@ -77,10 +76,8 @@ The Desktop, TUI and dashboard pickers (`model.options`) build each provider's r
 ```yaml
 model_catalog:
   enabled: true
-
-  url: https://github.com/samuelgradientai-sys/clawksis-agent
-
-  ttl_hours: 24
+  url: https://samuelgradientai-sys.github.io/clawksis-agent/api/model-catalog.json
+  ttl_minutes: 20
   providers: {}
 ```
 

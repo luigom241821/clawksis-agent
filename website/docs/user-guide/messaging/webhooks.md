@@ -1,14 +1,12 @@
 ---
 sidebar_position: 13
 title: "Webhooks"
-
-description: "Receive events from GitHub, GitLab, and other services to trigger Clawksis runs"
+description: "Receive events from GitHub, GitLab, and other services to trigger Clawksis agent runs"
 ---
 
 # Webhooks
 
-
-Receive events from external services (GitHub, GitLab, JIRA, Stripe, etc.) and trigger Clawksis runs automatically. The webhook adapter runs an HTTP server that accepts POST requests, validates HMAC signatures, transforms payloads into agent prompts, and routes responses back to the source or to another configured platform.
+Receive events from external services (GitHub, GitLab, JIRA, Stripe, etc.) and trigger Clawksis agent runs automatically. The webhook adapter runs an HTTP server that accepts POST requests, validates HMAC signatures, transforms payloads into agent prompts, and routes responses back to the source or to another configured platform.
 
 The agent processes the event and can respond by posting comments on PRs, sending messages to Telegram/Discord, or logging the result.
 

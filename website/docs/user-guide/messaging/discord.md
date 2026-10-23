@@ -33,8 +33,7 @@ Clawksis on Discord is not a webhook that replies statelessly. It runs through t
 2. mention / free-response checks
 3. session lookup
 4. session transcript loading
-
-5. normal Clawksis execution, including tools, memory, and slash commands
+5. normal Clawksis agent execution, including tools, memory, and slash commands
 6. response delivery back to Discord
 
 That matters because behavior in a busy server depends on both Discord routing and Clawksis session policy.
@@ -142,7 +141,7 @@ This is the most critical step in the entire setup. Clawksis always asks Discord
 On the **Bot** page, scroll down to **Privileged Gateway Intents**. You'll see three toggles:
 
 | Intent | Purpose | Required? |
-|--------|---------|-----------|
+|--------|---------|-----------| 
 | **Presence Intent** | See user online/offline status | Optional |
 | **Server Members Intent** | Access the member list, resolve usernames | **Required** |
 | **Message Content Intent** | Read the text content of messages | **Required** |
@@ -1000,3 +999,5 @@ Leave `everyone` and `roles` at `false` unless you know exactly why you need the
 :::
 
 For more information on securing your Clawksis deployment, see the [Security Guide](../security.md).
+
+

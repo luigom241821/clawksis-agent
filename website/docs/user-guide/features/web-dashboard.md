@@ -29,6 +29,9 @@ This starts a local web server and opens `http://127.0.0.1:9119` in your browser
 | `--no-open` | — | Don't auto-open the browser |
 | `--insecure` | off | **Deprecated / no-op.** Formerly bypassed auth on a non-loopback bind; it no longer disables authentication — a public bind always requires an auth provider (password or OAuth) |
 | `--isolated` | off | When launched from a named profile (`worker dashboard`), run a dedicated per-profile server instead of routing to the machine dashboard |
+| `--remote` | — | `USER@HOST` — open a dashboard running on a remote host over an SSH tunnel, no manual `ssh -L`. The remote stays bound to `127.0.0.1`; this is entirely client-side |
+| `--start` | — | With `--remote`, also start `clawk dashboard` on the remote host over the SSH session (otherwise it's assumed already running) |
+| `--ssh-opt` | — | Extra option forwarded to `ssh` (repeatable), e.g. `--ssh-opt -p --ssh-opt 2222` |
 
 ```bash
 # Custom port
@@ -40,16 +43,11 @@ clawk dashboard --host 0.0.0.0
 # Start without opening browser
 clawk dashboard --no-open
 
-
 # Open a dashboard running on a remote host over an SSH tunnel
-
 # (forwards 127.0.0.1:9119 and opens your local browser — no manual ssh -L)
-
 clawk dashboard --remote user@vps
 
-
 # Same, but also start the dashboard on the remote first (custom ssh port)
-
 clawk dashboard --remote user@vps --start --ssh-opt -p --ssh-opt 2222
 ```
 
@@ -154,9 +152,7 @@ it, and a stale heartbeat renders nothing rather than a spurious alert.
 The **Chat** tab embeds the full Clawksis TUI (the same interface you get from `clawk --tui`) directly in the browser. Everything you can do in the terminal TUI — slash commands, model picker, tool-call cards, markdown streaming, clarify/sudo/approval prompts, skin theming — works identically here, because the dashboard is running the real TUI binary and rendering its ANSI output through [xterm.js](https://xtermjs.org/) with its WebGL renderer for pixel-perfect cell layout.
 
 :::note Modern (React) chat
-
 The dashboard also ships a **Modern** chat — a native React client (not the PTY/xterm.js TUI above) that talks to the gateway over WebSocket JSON-RPC. It runs the **same slash-command set** (built-ins, skills, bundles, and pending-input commands like `/queue` and `/retry`) through the shared `slash.exec` → `command.dispatch` pipeline, opens native dialogs for interactive commands (`/model`, and the destructive `/clear` · `/new` · `/reset`), and adds composer niceties: `↑`/`↓` input history, `/` autocomplete with category labels, and collapsible command output. See the [Slash Commands Reference](../../reference/slash-commands.md#modern-web-chat-dashboard).
-
 :::
 
 **How it works:**
@@ -203,7 +199,6 @@ Set a username and password, then run the dashboard bound to a reachable address
 
 ```ini
 [Service]
-
 EnvironmentFile=%h/.clawksis/.env
 ExecStart=/path/to/venv/bin/python -m clawk_cli.main dashboard \
     --host 0.0.0.0 --port 9119 --no-open
@@ -898,8 +893,7 @@ dashboard:
   oauth:
     provider: self-hosted
     self_hosted:
-
-      issuer: https://auth.example.com/application/o/clawksis/   # required
+      issuer: https://auth.example.com/application/o/clawk/   # required
       client_id: clawksis-dashboard                              # required
       scopes: "openid profile email"                           # optional (this is the default)
       id_token_leeway: 60                                      # optional; seconds of clock-skew tolerance
@@ -981,8 +975,7 @@ docker run --rm -p 8080:8080 \
 ```
 
 Once it's up, the realm advertises standard OIDC discovery at
-
-`http://localhost:8080/realms/clawksis/.well-known/openid-configuration` (issuer
+`http://localhost:8080/realms/clawk/.well-known/openid-configuration` (issuer
 `http://localhost:8080/realms/clawk`). The admin console is at
 `http://localhost:8080/` (`admin` / `admin`).
 
@@ -1194,7 +1187,6 @@ clawk dashboard --no-open --host 0.0.0.0 --port 9119
 ```
 
 Prefer no plaintext at rest? Use `CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD_HASH` with a scrypt hash instead — see [Username/password provider](#usernamepassword-provider-no-oauth-idp) for the full surface.
-
 
 If you run the dashboard as a systemd service, `~/.clawksis/.env` is picked up automatically when the unit has `EnvironmentFile=%h/.clawksis/.env`, so the credentials are in the environment at boot.
 

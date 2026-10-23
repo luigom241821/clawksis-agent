@@ -22,21 +22,7 @@ Pick whichever fits the moment. They share state, so you can start a session in 
 
 ## Install
 
-### With the Clawksis Desktop installer on MacOS or Windows (recommended)
-
-[Download the Clawksis Desktop installer](https://github.com/samuelgradientai-sys/clawksis-agent from our website and run it.
-
-### With the CLI installer on Linux, MacOS, or Windows
-
-Add `--include-desktop` to the regular install script.
-
-```bash
-
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash -s -- --include-desktop
-
-```
-
-### With an existing Clawksis installation
+Download the app from the [Clawksis Desktop product page](https://github.com/samuelgradientai-sys/clawksis-agent/), or follow the [installation instructions for Clawksis Desktop](../getting-started/installation.md).
 
 If you already have Clawksis installed, simply run
 
@@ -377,7 +363,48 @@ chats decide who replies: [Bot Mode: A Roster of Agents](./bot-mode.md).
 
 The app checks for updates in the background and offers a one-click update when one is ready.
 
-The [manual update process](https://github.com/samuelgradientai-sys/clawksis-agent also works with the GUI.
+The background check asks the GitHub API for the branch tip. Anonymous GitHub requests are limited to 60 per hour **per network address**, so on a shared connection (office NAT, VPN, proxy) the check can report `GitHub API rate limit reached` even though this machine made almost none of them. To spend a 5,000/hour budget instead, the check uses the first credential it finds, in this order:
+
+1. `GITHUB_TOKEN`, then `GH_TOKEN`, from the environment the app was launched from — read on each request, never stored.
+2. The [GitHub CLI](https://cli.github.com/)'s own login (`gh auth token`). This is the rung that helps an app started from the Dock, Finder, or a desktop launcher, which inherits a minimal environment without your shell's variables. `gh` is looked up on `PATH` and in the usual install locations (Homebrew, `/usr/local/bin`, `~/.local/bin`, the Windows GitHub CLI installer); the answer is cached until the app restarts, so `gh` runs at most once per session.
+3. Anonymous.
+
+A credential GitHub rejects (HTTP 401 — expired or revoked) is logged once in `desktop.log`, naming its source and never the token, and the request is retried anonymously. Applying an update uses `git`, not the API, and is unaffected.
+
+During a local update, detailed build output streams into the active profile's
+`logs/update.log`, including detached `--gateway` updates. It stays out of the
+terminal but is available for troubleshooting before the build finishes. The
+Windows hand-off counts new output in this log as progress; a child that produces
+no output is still subject to the idle watchdog. Process liveness alone does not
+reset that watchdog, and cancelling an update does not wait for its build to finish.
+
+The desktop app and the Clawksis backend it talks to update on separate clocks — the app package on your machine, the backend wherever it runs. When more than one update target exists (a remote gateway, or several registered gateways), the update affordances (**Update now** on the About panel, the ⌘K **Update Clawksis** row, and the update-ready toast) update **everything**: the connected backend first, then every other eligible registered gateway (Clawksis Cloud entries are platform-managed and skipped), and the desktop app itself last, since applying the client update relaunches the app. Single-machine installs keep the one-button experience.
+
+After any backend update, the app also re-checks its own version and warns with a one-click **Update desktop app** action if the GUI is still behind — so updating a remote backend can never silently leave you on a stale desktop build.
+
+The [manual update process](https://samuelgradientai-sys.github.io/clawksis-agent/getting-started/updating) also works with the GUI.
+
+## Uninstalling
+
+For installations managed by the app, open **Settings → About → Danger zone** and pick how much to remove:
+
+- **Uninstall Chat GUI only** — removes the desktop app and its data; the Clawksis agent, your config, and your chats stay. (Same as `clawk uninstall --gui`.)
+- **Uninstall GUI + agent, keep my data** — removes the app and the agent but keeps config, chats, and secrets for a future reinstall. (Same as `clawk uninstall`.)
+- **Uninstall everything** — removes the app, the agent, and all user data. (Same as `clawk uninstall --full`.)
+
+The app closes to finish the job (the cleanup runs after it exits so it can remove the running app bundle and its own venv). The agent-removing options are hidden automatically when no local agent is installed.
+
+These controls are hidden for Nix, bundled packages, and other externally owned installations. Remove those through their package manager or the operating system instead. The app checks its own local package ownership, independently of a remote backend's update status. If ownership cannot be confirmed, no uninstall actions are offered.
+
+For self-managed installations, you can do the same from the terminal — `clawk uninstall --gui` for the GUI alone, or `clawk uninstall` / `clawk uninstall --full` for the agent too.
+
+Preview GUI cleanup with `clawk uninstall --gui --dry-run`. It lists the removal targets and returns without prompting or removing anything, including when `--yes` is also supplied.
+
+:::note
+Running `clawk uninstall --gui` from a **source checkout** (a `clawk desktop` dev build) removes `apps/desktop/{dist,release,node_modules}` and the desktop build stamp. The workspace-root `node_modules` stays installed because it is shared with the TUI, dashboard and other workspaces. Rebuild the GUI with `clawk desktop` if you need it again.
+:::
+
+`clawk update` keeps a desktop app current once it has been built in the checkout, even on a server that never opens it. On a headless Linux host, or when the desktop app's own Node dependencies fail to install (for example a compiler too old for `node-pty`), the update still builds the TUI and web UI, reports the desktop build as owed, and suggests `clawk uninstall --gui`. After that uninstall, later updates skip the desktop app.
 
 ## CLI reference: `clawk desktop`
 
@@ -478,7 +505,7 @@ Separately, make sure the **gateway is running** on the remote host if you rely 
 
 Prefer not to keep a plaintext password at rest? Set `CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD_HASH` to a scrypt hash instead — compute it with `python -c "from plugins.dashboard_auth.basic import hash_password; print(hash_password('PW'))"`. Full configuration surface (config.yaml keys, every env var, the rate limiter): [Web Dashboard → Username/password provider](./features/web-dashboard.md#usernamepassword-provider-no-oauth-idp).
 
-Running the backend as a systemd service? Give the unit `EnvironmentFile=%h/.clawk/.env` so the credentials are in the environment at boot.
+Running the backend as a systemd service? Give the unit `EnvironmentFile=%h/.clawksis/.env` so the credentials are in the environment at boot.
 
 :::warning
 The backend reads and writes your `.env` (API keys, secrets) and can run agent commands. The **username/password** setup shown above is for a trusted network — never expose a password-protected backend directly to the open internet; put it behind a VPN. [Tailscale](https://tailscale.com/) is the clean option: bind to the machine's tailscale IP (`--host <tailscale-ip>`) and use `http://<tailscale-ip>:9119` as the Remote URL so only your tailnet can reach it. To reach a backend over the public internet, use the **OAuth (Nous Portal)** provider instead.
@@ -568,7 +595,7 @@ Clawksis: **one row per plugin**, with two switch columns.
   half is **not** installed in the selected profile shows **Install here**,
   which pre-fills the install dialog from the package's origin (catalog entry
   or git remote) for that profile only. Optional extras such as the
-  [Accent Picker](https://github.com/NousResearch/clawk-official-plugins/tree/main/accent-picker)
+  [Accent Picker](https://github.com/NousResearch/hermes-official-plugins/tree/main/accent-picker)
   install from the plugin catalog.
 - **Uninstall** — every plugin installed under the selected profile's
   `plugins/` folder (user or git install) has a trash button beside its name.
@@ -631,14 +658,6 @@ generic error toast. The card offers recovery actions matched to the failure:
   or Cloud connection the button reads **Open Desktop logs**: it opens the
   local Desktop-side logs (transport evidence), since the failed turn's
   gateway/agent logs live on the remote machine.
-- **Send diagnostics** — uploads a redacted debug bundle to Nous-internal
-  storage after an explicit consent prompt (same pipeline as
-  `clawk debug share --nous`; secrets are always redacted, the bundle is
-  viewable by Nous staff only and auto-deletes after 14 days). On success you
-  get a private view link to paste into your support thread, plus quick links
-  to GitHub Issues, Nous Portal Support, and Discord. On a remote or Cloud
-  connection the backend bundles its own agent/gateway logs and the local
-  Desktop log is attached alongside, so support sees both halves.
 - **Copy error details** — copies a compact plain-text summary (layer, code,
   provider/model, error message) you can paste into a bug report or Discord.
 

@@ -4,8 +4,7 @@ sidebar_position: 3
 
 # Profile Distributions: Share a Whole Agent
 
-
-A **profile distribution** packages a complete Clawksis — personality, skills, cron jobs, MCP connections, config — as a git repository. Anyone with access to the repo can install the whole agent with one command, update it in place, and keep their own memories, sessions, and API keys untouched.
+A **profile distribution** packages a complete Clawksis agent — personality, skills, cron jobs, MCP connections, config — as a git repository. Anyone with access to the repo can install the whole agent with one command, update it in place, and keep their own memories, sessions, and API keys untouched.
 
 If a [profile](./profiles.md) is a local agent, a distribution is that agent made shareable.
 
@@ -31,8 +30,7 @@ The two aren't exclusive. Plenty of authors dogfood a profile, `/export` it to a
 
 ## What this means
 
-
-Before distributions, sharing a Clawksis meant sending someone:
+Before distributions, sharing a Clawksis agent meant sending someone:
 
 1. Your SOUL.md
 2. A list of skills to install
@@ -146,7 +144,7 @@ That's the whole manifest. Every field except `name` has a sensible default.
 ### Step 3 — Create a `.gitignore` before the first commit
 
 :::warning
-Do this **before** running `git init` or `git add`. If you have already chatted with the profile, run setup, or otherwise used it, the directory now contains files you must not ship: `.env`, `auth.json`, `memories/`, `sessions/`, `state.db*`, `logs/`, and more.
+Do this **before** running `git init` or `git add`. If you have already chatted with the profile, run setup, or otherwise used it, the directory now contains files you must not ship: `.env`, `auth.json`, `memories/`, `sessions/`, `state.db*`, `logs/`, and more. 
 :::
 
 Create `~/.clawksis/profiles/research-bot/.gitignore` with at minimum:
@@ -231,7 +229,7 @@ git push -u origin main --tags
 The repo is now a distribution. Anyone with access can install it.
 
 :::note
-The installer will additionally strip the [hard-excluded paths](#whats-not-in-a-distribution-ever) even if an author somehow ships them — but that only protects installers, not the author.
+The installer will additionally strip the [hard-excluded paths](#whats-not-in-a-distribution-ever) even if an author somehow ships them — but that only protects installers, not the author. 
 :::
 
 ### Step 5 — Tag versioned releases
@@ -499,11 +497,11 @@ git init && git add . && git status   # confirm no secrets staged
 git commit -m "v1.0"
 git tag v1.0.0
 # Publish to a public GitHub repo
-git remote add origin https://github.com/you/clawk-polymarket-trader.git
+git remote add origin https://github.com/you/hermes-polymarket-trader.git
 git push -u origin main --tags
 
 # Anyone
-clawk profile install github.com/you/clawk-polymarket-trader --alias
+clawk profile install github.com/you/hermes-polymarket-trader --alias
 ```
 
 Tweet the install command. People who try it send you issues and PRs. If someone wants to customize, they fork — same git workflow everyone already knows.

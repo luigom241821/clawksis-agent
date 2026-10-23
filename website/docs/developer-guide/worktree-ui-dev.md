@@ -92,7 +92,7 @@ hgui() (
   export CLAWK_DESKTOP_CDP_PORT="$cdp_port"
   export CLAWK_DESKTOP_USER_DATA_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/clawk-hgui/slot-$slot"
   # A userData override would otherwise also relocate the agent's home.
-  export CLAWK_HOME="${CLAWK_HOME:-$HOME/.clawk}"
+  export CLAWK_HOME="${CLAWK_HOME:-$HOME/.clawksis}"
   export XCURSOR_SIZE=24
 
   # Mirror the dev scripts, replacing their fixed ports. No repo edits needed.

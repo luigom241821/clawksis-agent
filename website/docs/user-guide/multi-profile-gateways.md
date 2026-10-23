@@ -17,8 +17,7 @@ If you only run one Clawksis agent, you don't need this page — see
 
 ## When to use this
 
-
-You want this setup when you have two or more Clawksiss that should all
+You want this setup when you have two or more Clawksis agents that should all
 be online at the same time. Common reasons:
 
 - A personal assistant on one Telegram bot and a coding agent on another

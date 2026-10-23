@@ -81,7 +81,7 @@ clawk --tui
 After `nix profile install`, `clawk`, `clawksis-agent`, and `clawk-acp` are on your PATH. From here, the workflow is identical to the [standard installation](./installation.md) — `clawk setup` walks you through provider selection, `clawk gateway install` sets up a launchd (macOS) or systemd user service, and config lives in `~/.clawksis/`.
 
 :::warning Messaging platforms (Discord, Telegram, Slack)
-The default package includes ALL libraries clawksis-agent might need. if you want a smaller variant, check the other flake outputs.
+The default package includes ALL libraries clawksis-agent might need. if you want a smaller variant, check the other flake outputs. 
 
 The `default` package adds ~700 MB to the closure. If you only need messaging platforms, `#messaging` adds just ~33 MB.
 
@@ -151,13 +151,11 @@ That's it. `nixos-rebuild switch` creates the `clawk` user, generates `config.ya
 The `environmentFiles` line above assumes you have [sops-nix](https://github.com/Mic92/sops-nix) or [agenix](https://github.com/ryantm/agenix) configured. The file should contain at least one LLM provider key (e.g., `OPENROUTER_API_KEY=sk-or-...`). See [Secrets Management](#secrets-management) for full setup. If you don't have a secrets manager yet, you can use a plain file as a starting point — just ensure it's not world-readable:
 
 ```bash
-
-echo "OPENROUTER_API_KEY=sk-or-your-key" | sudo install -m 0600 -o clawk /dev/stdin /var/lib/clawksis/env
+echo "OPENROUTER_API_KEY=sk-or-your-key" | sudo install -m 0600 -o clawk /dev/stdin /var/lib/clawk/env
 ```
 
 ```nix
-
-services.clawksis-agent.environmentFiles = [ "/var/lib/clawksis/env" ];
+services.clawksis-agent.environmentFiles = [ "/var/lib/clawk/env" ];
 ```
 :::
 
@@ -352,8 +350,7 @@ Run `nix build .#configKeys && cat result` to see every leaf config key extracte
 If you'd rather manage `config.yaml` entirely outside Nix, use `configFile`:
 
 ```nix
-
-services.clawksis-agent.configFile = /etc/clawksis/config.yaml;
+services.clawksis-agent.configFile = /etc/clawk/config.yaml;
 ```
 
 This bypasses `settings` entirely — no merge, no generation. The file is copied as-is to `$CLAWK_HOME/config.yaml` on each activation.
@@ -557,8 +554,7 @@ docker exec -it clawksis-agent \
   clawk mcp add my-oauth-server --url https://mcp.example.com/mcp --auth oauth
 
 # Native mode
-
-sudo -u clawk CLAWK_HOME=/var/lib/clawksis/.clawksis \
+sudo -u clawk CLAWK_HOME=/var/lib/clawk/.clawksis \
   clawk mcp add my-oauth-server --url https://mcp.example.com/mcp --auth oauth
 ```
 
@@ -569,8 +565,7 @@ The container uses `--network=host`, so the OAuth callback listener on `127.0.0.
 ```bash
 clawk mcp add my-oauth-server --url https://mcp.example.com/mcp --auth oauth
 scp ~/.clawksis/mcp-tokens/my-oauth-server{,.client}.json \
-
-    server:/var/lib/clawksis/.clawksis/mcp-tokens/
+    server:/var/lib/clawk/.clawksis/mcp-tokens/
 # Ensure: chown clawk:clawk, chmod 0600
 ```
 
@@ -628,7 +623,7 @@ The option set is the same set that the NixOS module uses. It is `services.clawk
 | | NixOS module | Home Manager module |
 |---|---|---|
 | Runs as | a system user that you declare, with `user`, `group` and `createUser` | you |
-| State directory | `stateDir` and `/.clawk` | `clawkHome`, set directly. The default is `~/.clawksis`. |
+| State directory | `stateDir` and `/.clawksis` | `clawkHome`, set directly. The default is `~/.clawksis`. |
 | Service | `systemd.services` | `systemd.user.services` on Linux, `launchd.agents` on macOS |
 | CLI on the PATH | `addToSystemPackages`, which exports `CLAWK_HOME` for the full system | `programs.clawksis-agent.enable`, which exports it for your session only |
 | Desktop application | not supported, because a system service cannot own a user session | `programs.clawksis-agent.desktop.enable` |
@@ -730,15 +725,12 @@ When container mode is enabled, clawk runs inside a persistent Ubuntu container 
 Host                                    Container
 ────                                    ─────────
 /nix/store/...-clawksis-agent-0.1.0  ──►  /nix/store/... (ro)
-
-~/.clawksis -> /var/lib/clawksis/.clawksis       (symlink bridge, per hostUsers)
-
-/var/lib/clawksis/                    ──►  /data/          (rw)
+~/.clawksis -> /var/lib/clawk/.clawksis    (symlink bridge, per hostUsers)
+/var/lib/clawk/                    ──►  /data/          (rw)
   ├── current-package -> /nix/store/...    (symlink, updated each rebuild)
   ├── .gc-root -> /nix/store/...           (prevents nix-collect-garbage)
   ├── .container-identity                  (sha256 hash, triggers recreation)
-
-  ├── .clawksis/                             (CLAWK_HOME)
+  ├── .clawksis/                          (CLAWK_HOME)
   │   ├── .env                             (merged from environment + environmentFiles)
   │   ├── config.yaml                      (Nix-generated, deep-merged by activation)
   │   ├── .managed                         (marker file)
@@ -787,7 +779,7 @@ The NixOS module supports declarative plugin installation — no imperative `cla
 
 ### Directory Plugins (`extraPlugins`)
 
-For plugins that are just a source tree with `plugin.yaml` + `__init__.py` (e.g., [clawk-lcm](https://github.com/stephenschoettler/clawk-lcm)):
+For plugins that are just a source tree with `plugin.yaml` + `__init__.py` (e.g., [clawk-lcm](https://github.com/stephenschoettler/hermes-lcm)):
 
 ```nix
 services.clawksis-agent.extraPlugins = [
@@ -804,7 +796,7 @@ Plugins are symlinked into `$CLAWK_HOME/plugins/` at activation time. Clawksis d
 
 ### Entry-Point Plugins (`extraPythonPackages`)
 
-For pip-packaged plugins that register via `[project.entry-points."clawk_agent.plugins"]` (e.g., [rtk-clawk](https://github.com/ogallotti/rtk-clawk)):
+For pip-packaged plugins that register via `[project.entry-points."clawk_agent.plugins"]` (e.g., [rtk-clawk](https://github.com/ogallotti/rtk-hermes)):
 
 ```nix
 services.clawksis-agent.extraPythonPackages = [
@@ -1056,7 +1048,7 @@ This option runs the process that a remote Clawksis Desktop connection and the w
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `clawkHome` | `str` | `"${config.home.homeDirectory}/.clawk"` | `CLAWK_HOME` directly. The NixOS module builds it from `stateDir`. |
+| `clawkHome` | `str` | `"${config.home.homeDirectory}/.clawksis"` | `CLAWK_HOME` directly. The NixOS module builds it from `stateDir`. |
 | `gateway.enable` | `bool` | `false` | Run the messaging gateway. On the NixOS module the gateway is the service, so that module has no such option. |
 
 ### `programs.clawksis-agent` (Home Manager only)
@@ -1120,7 +1112,7 @@ replacement.
 
 ```
 /var/lib/clawk/                     # stateDir (owned by clawk:clawk, 0750)
-├── .clawk/                         # CLAWK_HOME
+├── .clawksis/                      # CLAWK_HOME
 │   ├── SOUL.md                      # from clawkHomeFiles: the agent identity
 │   ├── config.yaml                  # Nix-generated (deep-merged each rebuild)
 │   ├── .managed                     # Marker: CLI config mutation blocked
@@ -1218,8 +1210,7 @@ If you need to reset the writable layer (fresh Ubuntu):
 ```bash
 sudo systemctl stop clawksis-agent
 docker rm -f clawksis-agent
-
-sudo rm /var/lib/clawksis/.container-identity
+sudo rm /var/lib/clawk/.container-identity
 sudo systemctl start clawksis-agent
 ```
 
@@ -1229,11 +1220,9 @@ If the agent starts but can't authenticate with the LLM provider, check that the
 
 ```bash
 # Native mode
-
-sudo -u clawk cat /var/lib/clawksis/.clawksis/.env
+sudo -u clawk cat /var/lib/clawk/.clawksis/.env
 
 # Container mode
-
 docker exec clawksis-agent cat /data/.clawksis/.env
 ```
 
