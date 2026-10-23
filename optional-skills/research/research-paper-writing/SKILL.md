@@ -185,7 +185,10 @@ from datetime import datetime
 
 COST_LOG = "results/cost_log.jsonl"
 
-def log_cost(experiment: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float):
+
+def log_cost(
+    experiment: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float
+):
     entry = {
         "timestamp": datetime.now().isoformat(),
         "experiment": experiment,
@@ -327,8 +330,7 @@ import requests
 
 def doi_to_bibtex(doi: str) -> str:
     response = requests.get(
-        f"https://doi.org/{doi}",
-        headers={"Accept": "application/x-bibtex"}
+        f"https://doi.org/{doi}", headers={"Accept": "application/x-bibtex"}
     )
     response.raise_for_status()
     return response.text
@@ -398,7 +400,8 @@ result_path = f"results/{task}/{strategy}/result.json"
 if os.path.exists(result_path):
     continue  # Skip already-completed work
 # ... run experiment ...
-with open(result_path, 'w') as f:
+
+with open(result_path, "w") as f:
     json.dump(result, f, indent=2)
 ```
 
@@ -912,8 +915,8 @@ When responding to actual reviews (post-submission), rebuttals are a distinct sk
 ```
 > R1-W1: "The paper lacks comparison with Method X."
 
-We thank the reviewer for this suggestion. We have added a comparison with 
-Method X in Table 3 (revised). Our method outperforms X by 3.2pp on [metric] 
+We thank the reviewer for this suggestion. We have added a comparison with
+Method X in Table 3 (revised). Our method outperforms X by 3.2pp on [metric]
 (p<0.05). We note that X requires 2x our compute budget.
 ```
 
@@ -1366,7 +1369,8 @@ The main pipeline above targets empirical ML papers. Other paper types require d
 
 ## Clawksis Integration
 
-This skill is designed for the Clawksis agent. It uses Clawksis tools, delegation, scheduling, and memory for the full research lifecycle.
+
+This skill is designed for the Clawksis. It uses Clawksis tools, delegation, scheduling, and memory for the full research lifecycle.
 
 ### Related Skills
 
@@ -1376,7 +1380,8 @@ Compose this skill with other Clawksis skills for specific phases:
 |-------|-------------|-------------|
 | **arxiv** | Phase 1 (Literature Review): searching arXiv, generating BibTeX, finding related papers via Semantic Scholar | `skill_view("arxiv")` |
 | **subagent-driven-development** | Phase 5 (Drafting): parallel section writing with 2-stage review (spec compliance then quality) | `skill_view("subagent-driven-development")` |
-| **plan** | Phase 0 (Setup): creating structured plans before execution. Writes to `.clawk/plans/` | `skill_view("plan")` |
+
+| **plan** | Phase 0 (Setup): creating structured plans before execution. Writes to `.clawksis/plans/` | `skill_view("plan")` |
 | **qmd** | Phase 1 (Literature): searching local knowledge bases (notes, transcripts, docs) via hybrid BM25+vector search | Install: `skill_manage("install", "qmd")` |
 | **diagramming** | Phase 4-5: creating Excalidraw-based figures and architecture diagrams | `skill_view("diagramming")` |
 | **data-science** | Phase 4 (Analysis): Jupyter live kernel for interactive analysis and visualization | `skill_view("data-science")` |
@@ -1398,7 +1403,8 @@ Compose this skill with other Clawksis skills for specific phases:
 | **`memory`** | Persist key decisions across sessions: contribution framing, venue choice, reviewer feedback. |
 | **`cronjob`** | Schedule experiment monitoring, deadline countdowns, automated arXiv checks. |
 | **`clarify`** | Ask the user targeted questions when blocked (venue choice, contribution framing). |
-| **cron `deliver:`** | Notify the user when experiments complete or drafts are ready even if they're not in chat — schedule the check as a cron job with a messaging `deliver:` target (the agent no longer has a `send_message` tool; outbound delivery is handled by cron/`clawk send`). |
+
+| **`send_message`** | Notify user when experiments complete or drafts are ready, even if user isn't in chat. |
 
 ### Tool Usage Patterns
 
@@ -1409,19 +1415,20 @@ terminal("ps aux | grep <pattern>")
 → terminal("ls results/")
 → execute_code("analyze results JSON, compute metrics")
 → terminal("git add -A && git commit -m '<descriptive message>' && git push")
-→ (final response auto-delivers "Experiment complete: <summary>"; for unattended runs, schedule via cron with a deliver: target)
+
+→ send_message("Experiment complete: <summary>")
 ```
 
 **Parallel section drafting** (using delegation):
 ```
-delegate_task("Draft the Methods section based on these experiment scripts and configs. 
-  Include: pseudocode, all hyperparameters, architectural details sufficient for 
+delegate_task("Draft the Methods section based on these experiment scripts and configs.
+  Include: pseudocode, all hyperparameters, architectural details sufficient for
   reproduction. Write in LaTeX using the neurips2025 template conventions.")
 
-delegate_task("Draft the Related Work section. Use web_search and web_extract to 
+delegate_task("Draft the Related Work section. Use web_search and web_extract to
   find papers. Verify every citation via Semantic Scholar. Group by methodology.")
 
-delegate_task("Draft the Experiments section. Read all result files in results/. 
+delegate_task("Draft the Experiments section. Read all result files in results/.
   State which claim each experiment supports. Include error bars and significance.")
 ```
 
@@ -1436,10 +1443,12 @@ import requests
 sch = SemanticScholar()
 results = sch.search_paper("attention mechanism transformers", limit=5)
 for paper in results:
-    doi = paper.externalIds.get('DOI', 'N/A')
-    if doi != 'N/A':
-        bibtex = requests.get(f"https://doi.org/{doi}", 
-                              headers={"Accept": "application/x-bibtex"}).text
+    doi = paper.externalIds.get("DOI", "N/A")
+
+    if doi != "N/A":
+        bibtex = requests.get(
+            f"https://doi.org/{doi}", headers={"Accept": "application/x-bibtex"}
+        ).text
         print(bibtex)
 ```
 
@@ -1448,7 +1457,7 @@ for paper in results:
 **`memory` tool** — persist key decisions (bounded: ~2200 chars for MEMORY.md):
 
 ```
-memory("add", "Paper: autoreason. Venue: NeurIPS 2025 (9 pages). 
+memory("add", "Paper: autoreason. Venue: NeurIPS 2025 (9 pages).
   Contribution: structured refinement works when generation-evaluation gap is wide.
   Key results: Haiku 42/42, Sonnet 3/5, S4.6 constrained 2/3.
   Status: Phase 5 — drafting Methods section.")
@@ -1487,7 +1496,7 @@ cronjob("create", {
     1. ps aux | grep run_experiment
     2. tail -30 logs/experiment_haiku.log
     3. ls results/haiku_baselines/
-    4. If complete: read results, compute Borda scores, 
+    4. If complete: read results, compute Borda scores,
        git add -A && git commit -m 'Add Haiku results' && git push
     5. Report: table of results, key finding, next step
     6. If nothing changed: respond with [SILENT]"
@@ -1500,16 +1509,17 @@ cronjob("create", {
 ```
 cronjob("create", {
   "schedule": "0 9 * * *",  # Daily at 9am
-  "prompt": "NeurIPS 2025 deadline: May 22. Today is {date}. 
-    Days remaining: {compute}. 
-    Check todo list — are we on track? 
+  "prompt": "NeurIPS 2025 deadline: May 22. Today is {date}.
+    Days remaining: {compute}.
+    Check todo list — are we on track?
     If <7 days: warn user about remaining tasks."
 })
 ```
 
 ### Communication Patterns
 
-**When to notify the user** (via your direct/final response, or a cron `deliver:` target for unattended runs):
+
+**When to notify the user** (via `send_message` or direct response):
 - Experiment batch completed (with results table)
 - Unexpected finding or failure requiring decision
 - Draft section ready for review

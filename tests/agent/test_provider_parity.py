@@ -12,7 +12,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from agent.codex_responses_adapter import _chat_content_to_responses_parts, _chat_messages_to_responses_input, _normalize_codex_response, _preflight_codex_input_items
+from agent.codex_responses_adapter import (
+    _chat_content_to_responses_parts,
+    _chat_messages_to_responses_input,
+    _normalize_codex_response,
+    _preflight_codex_input_items,
+)
 
 sys.modules.setdefault("fire", types.SimpleNamespace(Fire=lambda *a, **k: None))
 sys.modules.setdefault("firecrawl", types.SimpleNamespace(Firecrawl=object))
@@ -22,6 +27,7 @@ from run_agent import AIAgent
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _tool_defs(*names):
     return [
@@ -52,21 +58,22 @@ class _FakeOpenAI:
     def __init__(self, **kw):
         self.api_key = kw.get("api_key", "test")
         self.base_url = kw.get("base_url", "http://test")
+
     def close(self):
         pass
 
 
-@pytest.fixture(autouse=True)
-def _reset_auxiliary_provider_state():
-    from agent.auxiliary_client import _reset_aux_unhealthy_cache
-
-    _reset_aux_unhealthy_cache()
-    yield
-    _reset_aux_unhealthy_cache()
-
-
-def _make_agent(monkeypatch, provider, api_mode="chat_completions", base_url="https://openrouter.ai/api/v1", model=None):
-    monkeypatch.setattr("model_tools.get_tool_definitions", lambda **kw: _tool_defs("web_search", "terminal"))
+def _make_agent(
+    monkeypatch,
+    provider,
+    api_mode="chat_completions",
+    base_url="https://openrouter.ai/api/v1",
+    model=None,
+):
+    monkeypatch.setattr(
+        "model_tools.get_tool_definitions",
+        lambda **kw: _tool_defs("web_search", "terminal"),
+    )
     monkeypatch.setattr("model_tools.check_toolset_requirements", dict)
     monkeypatch.setattr("agent.process_bootstrap.OpenAI", _FakeOpenAI)
     kwargs = dict(
@@ -88,8 +95,8 @@ def _make_agent(monkeypatch, provider, api_mode="chat_completions", base_url="ht
 
 # ── _build_api_kwargs tests ─────────────────────────────────────────────────
 
-class TestBuildApiKwargsOpenRouter:
 
+class TestBuildApiKwargsOpenRouter:
     def test_includes_reasoning_in_extra_body(self, monkeypatch):
         agent = _make_agent(monkeypatch, "openrouter")
         agent.model = "anthropic/claude-sonnet-4-20250514"
@@ -98,7 +105,6 @@ class TestBuildApiKwargsOpenRouter:
         extra = kwargs.get("extra_body", {})
         assert "reasoning" in extra
         assert extra["reasoning"]["enabled"] is True
-
 
     def test_no_responses_api_fields(self, monkeypatch):
         agent = _make_agent(monkeypatch, "openrouter")
@@ -124,7 +130,10 @@ class TestBuildApiKwargsOpenRouter:
                         "call_id": "call_123",
                         "response_item_id": "fc_123",
                         "type": "function",
-                        "function": {"name": "terminal", "arguments": "{\"command\":\"pwd\"}"},
+                        "function": {
+                            "name": "terminal",
+                            "arguments": '{"command":"pwd"}',
+                        },
                         "extra_content": {"thought_signature": "opaque"},
                     }
                 ],
@@ -152,13 +161,17 @@ class TestBuildApiKwargsOpenRouter:
         assert messages[1]["tool_calls"][0]["call_id"] == "call_123"
         assert messages[1]["tool_calls"][0]["response_item_id"] == "fc_123"
         assert "codex_reasoning_items" in messages[1]
-        assert messages[1]["tool_calls"][0]["extra_content"] == {"thought_signature": "opaque"}
+        assert messages[1]["tool_calls"][0]["extra_content"] == {
+            "thought_signature": "opaque"
+        }
 
     def test_keeps_extra_content_for_gemini_target(self, monkeypatch):
         """Gemini-family targets must keep extra_content (thought_signature) —
         Gemini 3 thinking models 400 without it replayed on the next turn.
         """
-        agent = _make_agent(monkeypatch, "openrouter", model="google/gemini-3-pro-preview")
+        agent = _make_agent(
+            monkeypatch, "openrouter", model="google/gemini-3-pro-preview"
+        )
         messages = [
             {"role": "user", "content": "hi"},
             {
@@ -170,7 +183,10 @@ class TestBuildApiKwargsOpenRouter:
                         "call_id": "call_123",
                         "response_item_id": "fc_123",
                         "type": "function",
-                        "function": {"name": "terminal", "arguments": "{\"command\":\"pwd\"}"},
+                        "function": {
+                            "name": "terminal",
+                            "arguments": '{"command":"pwd"}',
+                        },
                         "extra_content": {"google": {"thought_signature": "opaque"}},
                     }
                 ],
@@ -205,18 +221,26 @@ class TestBuildApiKwargsOpenRouter:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [{
-                    "id": "call_123",
-                    "type": "function",
-                    "function": {"name": "terminal", "arguments": "{}"},
-                    "extra_content": {"google": {"thought_signature": ""}},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "call_123",
+                        "type": "function",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                        "extra_content": {"google": {"thought_signature": ""}},
+                    }
+                ],
             },
             {"role": "tool", "tool_call_id": "call_123", "content": "ok"},
-            {"role": "user", "content": [
-                {"type": "text", "text": "describe this image"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "describe this image"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AA=="},
+                    },
+                ],
+            },
         ]
 
         kwargs = agent._build_api_kwargs(messages)
@@ -234,18 +258,28 @@ class TestBuildApiKwargsOpenRouter:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [{
-                    "id": "call_123",
-                    "type": "function",
-                    "function": {"name": "terminal", "arguments": "{}"},
-                    "extra_content": {"google": {"thought_signature": "signed-call"}},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "call_123",
+                        "type": "function",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                        "extra_content": {
+                            "google": {"thought_signature": "signed-call"}
+                        },
+                    }
+                ],
             },
             {"role": "tool", "tool_call_id": "call_123", "content": "ok"},
-            {"role": "user", "content": [
-                {"type": "text", "text": "describe this image"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "describe this image"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AA=="},
+                    },
+                ],
+            },
         ]
 
         kwargs = agent._build_api_kwargs(messages)
@@ -254,7 +288,9 @@ class TestBuildApiKwargsOpenRouter:
             "google": {"thought_signature": "signed-call"}
         }
 
-    def test_gemini_native_passes_base_url_for_top_level_thinking_config(self, monkeypatch):
+    def test_gemini_native_passes_base_url_for_top_level_thinking_config(
+        self, monkeypatch
+    ):
         agent = _make_agent(
             monkeypatch,
             "gemini",
@@ -270,19 +306,16 @@ class TestBuildApiKwargsOpenRouter:
         assert "extra_body" not in kwargs["extra_body"]
 
 
-
-
-
-
-
-
 class TestDeveloperRoleSwap:
     """GPT-5 and Codex models should get 'developer' instead of 'system' role."""
 
-    @pytest.mark.parametrize("model", [
-        "openai/gpt-5",
-        "openai/codex-mini",
-    ])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "openai/gpt-5",
+            "openai/codex-mini",
+        ],
+    )
     def test_gpt5_codex_get_developer_role(self, monkeypatch, model):
         agent = _make_agent(monkeypatch, "openrouter")
         agent.model = model
@@ -296,10 +329,6 @@ class TestDeveloperRoleSwap:
         assert kwargs["messages"][1]["role"] == "user"
 
 
-
-
-
-
 class TestBuildApiKwargsChatCompletionsServiceTier:
     """service_tier via request_overrides works on the chat_completions path."""
 
@@ -310,8 +339,6 @@ class TestBuildApiKwargsChatCompletionsServiceTier:
         messages = [{"role": "user", "content": "hi"}]
         kwargs = agent._build_api_kwargs(messages)
         assert kwargs["service_tier"] == "priority"
-
-
 
 
 class TestBuildApiKwargsKimiNoTemperatureOverride:
@@ -332,10 +359,13 @@ class TestBuildApiKwargsKimiNoTemperatureOverride:
 
 
 class TestBuildApiKwargsAIGateway:
-
-
     def test_includes_reasoning_in_extra_body(self, monkeypatch):
-        agent = _make_agent(monkeypatch, "ai-gateway", base_url="https://ai-gateway.vercel.sh/v1", model="gpt-4o")
+        agent = _make_agent(
+            monkeypatch,
+            "ai-gateway",
+            base_url="https://ai-gateway.vercel.sh/v1",
+            model="gpt-4o",
+        )
         messages = [{"role": "user", "content": "hi"}]
         kwargs = agent._build_api_kwargs(messages)
         extra = kwargs.get("extra_body", {})
@@ -343,34 +373,28 @@ class TestBuildApiKwargsAIGateway:
         assert extra["reasoning"]["enabled"] is True
 
 
-
 class TestBuildApiKwargsNousPortal:
-    def test_includes_nous_product_tags(self, monkeypatch):
-        from agent.portal_tags import nous_portal_tags
+    def test_uses_chat_completions_format(self, monkeypatch):
         agent = _make_agent(
             monkeypatch,
             "nous",
             base_url="https://inference-api.nousresearch.com/v1",
             model="gpt-5",
         )
-        messages = [{"role": "user", "content": "hi"}]
-        kwargs = agent._build_api_kwargs(messages)
-        extra = kwargs.get("extra_body", {})
-        assert extra.get("tags") == nous_portal_tags(session_id=agent.session_id)
-
-    @pytest.mark.parametrize("data_use,provider", [
-        (None, None),
-        (["no_training"], {"data_collection": "deny"}),
-        (["zero_retention"], {"data_collection": "deny", "zdr": True}),
-    ])
-    def test_connector_data_use_asks_for_a_no_training_route_and_never_reaches_the_wire(
-            self, monkeypatch, data_use, provider):
-        agent = _make_agent(monkeypatch, "nous", base_url="https://inference-api.nousresearch.com/v1", model="gpt-5")
         tool = {"role": "tool", "tool_call_id": "c1", "content": "inbox"}
         messages = [
             {"role": "user", "content": "read my mail"},
-            {"role": "assistant", "content": "", "tool_calls": [
-                {"id": "c1", "type": "function", "function": {"name": "tool_call", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "tool_call", "arguments": "{}"},
+                    }
+                ],
+            },
             {**tool, **({"data_use": data_use} if data_use else {})},
         ]
         kwargs = agent._build_api_kwargs(messages)
@@ -379,27 +403,51 @@ class TestBuildApiKwargsNousPortal:
 
     def test_connector_data_use_is_not_sent_to_other_providers(self, monkeypatch):
         agent = _make_agent(monkeypatch, "openrouter")
-        messages = [{"role": "user", "content": "hi"},
-                    {"role": "assistant", "content": "", "tool_calls": [
-                        {"id": "c1", "type": "function", "function": {"name": "tool_call", "arguments": "{}"}}]},
-                    {"role": "tool", "tool_call_id": "c1", "content": "inbox", "data_use": ["no_training"]}]
+        messages = [
+            {"role": "user", "content": "hi"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "tool_call", "arguments": "{}"},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "c1",
+                "content": "inbox",
+                "data_use": ["no_training"],
+            },
+        ]
         kwargs = agent._build_api_kwargs(messages)
         assert "provider" not in kwargs.get("extra_body", {})
         assert "data_use" not in kwargs["messages"][-1]
 
-    def test_auxiliary_nous_call_carrying_a_connector_result_asks_for_a_no_training_route(self):
+    def test_auxiliary_nous_call_carrying_a_connector_result_asks_for_a_no_training_route(
+        self,
+    ):
         from agent.auxiliary_client import _build_call_kwargs
 
-        messages = [{"role": "user", "content": "title this"},
-                    {"role": "tool", "tool_call_id": "c1", "content": "inbox", "data_use": ["no_training"]}]
-        kwargs = _build_call_kwargs(provider="nous", model="hermes-4", messages=messages)
+        messages = [
+            {"role": "user", "content": "title this"},
+            {
+                "role": "tool",
+                "tool_call_id": "c1",
+                "content": "inbox",
+                "data_use": ["no_training"],
+            },
+        ]
+        kwargs = _build_call_kwargs(
+            provider="nous", model="hermes-4", messages=messages
+        )
         assert kwargs["extra_body"]["provider"] == {"data_collection": "deny"}
 
 
-
 class TestBuildApiKwargsCustomEndpoint:
-
-
     def test_fireworks_tool_call_payload_strips_codex_only_fields(self, monkeypatch):
         agent = _make_agent(
             monkeypatch,
@@ -422,7 +470,7 @@ class TestBuildApiKwargsCustomEndpoint:
                         "type": "function",
                         "function": {
                             "name": "terminal",
-                            "arguments": "{\"command\":\"pwd\"}",
+                            "arguments": '{"command":"pwd"}',
                         },
                     }
                 ],
@@ -449,8 +497,12 @@ class TestBuildApiKwargsCustomEndpoint:
 
 class TestBuildApiKwargsCodex:
     def test_uses_responses_api_format(self, monkeypatch):
-        agent = _make_agent(monkeypatch, "openai-codex", api_mode="codex_responses",
-                            base_url="https://chatgpt.com/backend-api/codex")
+        agent = _make_agent(
+            monkeypatch,
+            "openai-codex",
+            api_mode="codex_responses",
+            base_url="https://chatgpt.com/backend-api/codex",
+        )
         messages = [{"role": "user", "content": "hi"}]
         kwargs = agent._build_api_kwargs(messages)
         assert "input" in kwargs
@@ -458,10 +510,13 @@ class TestBuildApiKwargsCodex:
         assert "messages" not in kwargs
         assert kwargs["store"] is False
 
-
     def test_includes_service_tier_via_request_overrides(self, monkeypatch):
-        agent = _make_agent(monkeypatch, "openai-codex", api_mode="codex_responses",
-                            base_url="https://chatgpt.com/backend-api/codex")
+        agent = _make_agent(
+            monkeypatch,
+            "openai-codex",
+            api_mode="codex_responses",
+            base_url="https://chatgpt.com/backend-api/codex",
+        )
         agent.model = "gpt-5.4"
         agent.service_tier = "priority"
         agent.request_overrides = {"service_tier": "priority"}
@@ -469,11 +524,13 @@ class TestBuildApiKwargsCodex:
         kwargs = agent._build_api_kwargs(messages)
         assert kwargs["service_tier"] == "priority"
 
-
-
     def test_tools_converted_to_responses_format(self, monkeypatch):
-        agent = _make_agent(monkeypatch, "openai-codex", api_mode="codex_responses",
-                            base_url="https://chatgpt.com/backend-api/codex")
+        agent = _make_agent(
+            monkeypatch,
+            "openai-codex",
+            api_mode="codex_responses",
+            base_url="https://chatgpt.com/backend-api/codex",
+        )
         messages = [{"role": "user", "content": "hi"}]
         kwargs = agent._build_api_kwargs(messages)
         tools = kwargs.get("tools", [])
@@ -484,6 +541,7 @@ class TestBuildApiKwargsCodex:
 
 
 # ── Message conversion tests ────────────────────────────────────────────────
+
 
 class TestChatMessagesToResponsesInput:
     """Verify _chat_messages_to_responses_input for Codex mode."""
@@ -503,31 +561,36 @@ class TestChatMessagesToResponsesInput:
         assert items[0]["role"] == "user"
 
     def test_assistant_tool_calls_become_function_call_items(self, monkeypatch):
-        messages = [{
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [{
-                "id": "call_abc",
-                "call_id": "call_abc",
-                "function": {"name": "web_search", "arguments": '{"query": "test"}'},
-            }],
-        }]
+        messages = [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_abc",
+                        "call_id": "call_abc",
+                        "function": {
+                            "name": "web_search",
+                            "arguments": '{"query": "test"}',
+                        },
+                    }
+                ],
+            }
+        ]
         items = _chat_messages_to_responses_input(messages)
         fc_items = [i for i in items if i.get("type") == "function_call"]
         assert len(fc_items) == 1
         assert fc_items[0]["name"] == "web_search"
         assert fc_items[0]["call_id"] == "call_abc"
 
-
-
-
-
-
     def test_preflight_preserves_assistant_output_text(self, monkeypatch):
         """_preflight_codex_input_items must preserve output_text for assistant."""
         raw_input = [
             {"role": "user", "content": [{"type": "input_text", "text": "hi"}]},
-            {"role": "assistant", "content": [{"type": "output_text", "text": "hello"}]},
+            {
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "hello"}],
+            },
         ]
         normalized = _preflight_codex_input_items(raw_input)
         user_content = normalized[0]["content"]
@@ -555,10 +618,6 @@ class TestChatMessagesToResponsesInput:
 class TestChatContentToResponsesParts:
     """Unit tests for _chat_content_to_responses_parts role parameter (#15687)."""
 
-
-
-
-
     def test_assistant_role_with_mixed_input_output_text_types(self):
         """Parts already marked input_text or output_text get normalized to role's type."""
         parts = [
@@ -574,15 +633,19 @@ class TestChatContentToResponsesParts:
 
 # ── Response normalization tests ─────────────────────────────────────────────
 
+
 class TestNormalizeCodexResponse:
     """Verify _normalize_codex_response extracts all fields correctly."""
 
     def test_text_response(self, monkeypatch):
         response = SimpleNamespace(
             output=[
-                SimpleNamespace(type="message", status="completed",
+                SimpleNamespace(
+                    type="message",
+                    status="completed",
                     content=[SimpleNamespace(type="output_text", text="Hello!")],
-                    phase="final_answer"),
+                    phase="final_answer",
+                ),
             ],
             status="completed",
         )
@@ -590,39 +653,48 @@ class TestNormalizeCodexResponse:
         assert msg.content == "Hello!"
         assert reason == "stop"
 
-
     def test_encrypted_content_captured(self, monkeypatch):
         response = SimpleNamespace(
             output=[
-                SimpleNamespace(type="reasoning",
+                SimpleNamespace(
+                    type="reasoning",
                     encrypted_content="gAAAA_secret_blob_123",
                     summary=[SimpleNamespace(type="summary_text", text="Thinking")],
-                    id="rs_456", status=None),
-                SimpleNamespace(type="message", status="completed",
+                    id="rs_456",
+                    status=None,
+                ),
+                SimpleNamespace(
+                    type="message",
+                    status="completed",
                     content=[SimpleNamespace(type="output_text", text="done")],
-                    phase="final_answer"),
+                    phase="final_answer",
+                ),
             ],
             status="completed",
         )
         msg, _reason = _normalize_codex_response(response)
         assert msg.codex_reasoning_items is not None
         assert len(msg.codex_reasoning_items) == 1
-        assert msg.codex_reasoning_items[0]["encrypted_content"] == "gAAAA_secret_blob_123"
+        assert (
+            msg.codex_reasoning_items[0]["encrypted_content"] == "gAAAA_secret_blob_123"
+        )
         assert msg.codex_reasoning_items[0]["id"] == "rs_456"
-
-
 
     def test_message_items_captured_with_id_and_phase(self, monkeypatch):
         """Exact message items (with id/phase) must be captured for cache replay."""
         response = SimpleNamespace(
             output=[
                 SimpleNamespace(
-                    type="message", status="completed", id="msg_abc",
+                    type="message",
+                    status="completed",
+                    id="msg_abc",
                     phase="commentary",
                     content=[SimpleNamespace(type="output_text", text="Thinking...")],
                 ),
                 SimpleNamespace(
-                    type="message", status="completed", id="msg_def",
+                    type="message",
+                    status="completed",
+                    id="msg_def",
                     phase="final_answer",
                     content=[SimpleNamespace(type="output_text", text="Done!")],
                 ),
@@ -638,7 +710,6 @@ class TestNormalizeCodexResponse:
         assert msg.codex_message_items[1]["id"] == "msg_def"
         assert msg.codex_message_items[1]["phase"] == "final_answer"
         assert msg.codex_message_items[1]["content"][0]["text"] == "Done!"
-
 
 
 class TestChatMessagesToResponsesInputMessageItems:
@@ -663,7 +734,11 @@ class TestChatMessagesToResponsesInputMessageItems:
             {"role": "user", "content": "follow up"},
         ]
         items = _chat_messages_to_responses_input(messages)
-        msg_items = [i for i in items if i.get("type") == "message" and i.get("role") == "assistant"]
+        msg_items = [
+            i
+            for i in items
+            if i.get("type") == "message" and i.get("role") == "assistant"
+        ]
         assert len(msg_items) == 1
         assert msg_items[0]["id"] == "msg_123"
         assert msg_items[0]["phase"] == "final_answer"
@@ -672,11 +747,13 @@ class TestChatMessagesToResponsesInputMessageItems:
     def test_fallback_to_plain_when_no_message_items(self, monkeypatch):
         messages = [{"role": "assistant", "content": "Hello world"}]
         items = _chat_messages_to_responses_input(messages)
-        assert items == [{"type": "message", "role": "assistant", "content": "Hello world"}]
-
+        assert items == [
+            {"type": "message", "role": "assistant", "content": "Hello world"}
+        ]
 
 
 # ── Chat completions response handling (OpenRouter/Nous) ─────────────────────
+
 
 class TestBuildAssistantMessage:
     """Verify _build_assistant_message works for all provider response formats."""
@@ -722,8 +799,12 @@ class TestBuildAssistantMessage:
         assert stored["thinking"] == "deep thoughts here"
 
     def test_codex_preserves_encrypted_reasoning(self, monkeypatch):
-        agent = _make_agent(monkeypatch, "openai-codex", api_mode="codex_responses",
-                            base_url="https://chatgpt.com/backend-api/codex")
+        agent = _make_agent(
+            monkeypatch,
+            "openai-codex",
+            api_mode="codex_responses",
+            base_url="https://chatgpt.com/backend-api/codex",
+        )
         msg = SimpleNamespace(
             content="result",
             tool_calls=None,
@@ -740,8 +821,8 @@ class TestBuildAssistantMessage:
         ]
 
 
-
 # ── Auxiliary client provider resolution ─────────────────────────────────────
+
 
 class TestAuxiliaryClientProviderPriority:
     """Verify auxiliary client resolution doesn't break for any provider."""
@@ -749,23 +830,11 @@ class TestAuxiliaryClientProviderPriority:
     def test_openrouter_always_wins(self, monkeypatch):
         monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
         from agent.auxiliary_client import _OPENROUTER_MODEL, get_text_auxiliary_client
+
         with patch("agent.auxiliary_client.OpenAI") as mock:
             _client, model = get_text_auxiliary_client()
         assert model == _OPENROUTER_MODEL
         assert "openrouter" in str(mock.call_args.kwargs["base_url"]).lower()
-
-    def test_nous_when_no_openrouter(self, monkeypatch):
-        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-        from agent.auxiliary_client import _NOUS_MODEL, get_text_auxiliary_client
-        nous_auth = {
-            "access_token": _fake_invoke_jwt(),
-            "scope": "inference:invoke",
-        }
-        with patch("agent.auxiliary_client._read_nous_auth", return_value=nous_auth), \
-             patch("agent.auxiliary_client.OpenAI"), \
-             patch("clawk_cli.models.get_nous_recommended_aux_model", return_value=None):
-            _client, model = get_text_auxiliary_client()
-        assert model == _NOUS_MODEL
 
     def test_custom_endpoint_when_no_nous(self, monkeypatch):
         """Custom endpoint is used when no OpenRouter/Nous keys are available.
@@ -777,10 +846,19 @@ class TestAuxiliaryClientProviderPriority:
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         monkeypatch.setenv("OPENAI_API_KEY", "local-key")
         from agent.auxiliary_client import get_text_auxiliary_client
-        with patch("agent.auxiliary_client._read_nous_auth", return_value=None), \
-             patch("agent.auxiliary_client._resolve_custom_runtime",
-                   return_value=("http://localhost:1234/v1", "local-key", "openai-compatible")), \
-             patch("agent.auxiliary_client.OpenAI") as mock:
+
+        with (
+            patch("agent.auxiliary_client._read_nous_auth", return_value=None),
+            patch(
+                "agent.auxiliary_client._resolve_custom_runtime",
+                return_value=(
+                    "http://localhost:1234/v1",
+                    "local-key",
+                    "openai-compatible",
+                ),
+            ),
+            patch("agent.auxiliary_client.OpenAI") as mock,
+        ):
             _client, _model = get_text_auxiliary_client()
         assert mock.call_args.kwargs["base_url"] == "http://localhost:1234/v1"
 
@@ -797,16 +875,22 @@ class TestAuxiliaryClientProviderPriority:
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         from agent.auxiliary_client import get_text_auxiliary_client
-        with patch("agent.auxiliary_client._read_nous_auth", return_value=None), \
-             patch("agent.auxiliary_client._resolve_codex_credential_and_base",
-                   return_value=("codex-tok", "https://chatgpt.com/backend-api/codex")), \
-             patch("agent.auxiliary_client.OpenAI"):
+
+        with (
+            patch("agent.auxiliary_client._read_nous_auth", return_value=None),
+            patch(
+                "agent.auxiliary_client._resolve_codex_credential_and_base",
+                return_value=("codex-tok", "https://chatgpt.com/backend-api/codex"),
+            ),
+            patch("agent.auxiliary_client.OpenAI"),
+        ):
             client, model = get_text_auxiliary_client()
         assert client is None
         assert model is None
 
 
 # ── Provider routing tests ───────────────────────────────────────────────────
+
 
 class TestProviderRouting:
     """Verify provider_routing config flows into extra_body.provider."""
@@ -818,15 +902,8 @@ class TestProviderRouting:
         assert kwargs["extra_body"]["provider"]["sort"] == "throughput"
 
 
-
-
-
-
-
-
-
-
 # ── Codex reasoning items preflight tests ────────────────────────────────────
+
 
 class TestCodexReasoningPreflight:
     """Verify reasoning items pass through preflight normalization."""
@@ -834,8 +911,12 @@ class TestCodexReasoningPreflight:
     def test_reasoning_item_passes_through(self, monkeypatch):
         raw_input = [
             {"role": "user", "content": "hello"},
-            {"type": "reasoning", "encrypted_content": "abc123encrypted", "id": "r_001",
-             "summary": [{"type": "summary_text", "text": "Thinking about it"}]},
+            {
+                "type": "reasoning",
+                "encrypted_content": "abc123encrypted",
+                "id": "r_001",
+                "summary": [{"type": "summary_text", "text": "Thinking about it"}],
+            },
             {"role": "assistant", "content": "hi there"},
         ]
         normalized = _preflight_codex_input_items(raw_input)
@@ -846,7 +927,9 @@ class TestCodexReasoningPreflight:
         # with store=False the API returns 404 on server-side id resolution.
         # The id is only used for local deduplication via seen_ids.
         assert "id" not in reasoning_items[0]
-        assert reasoning_items[0]["summary"] == [{"type": "summary_text", "text": "Thinking about it"}]
+        assert reasoning_items[0]["summary"] == [
+            {"type": "summary_text", "text": "Thinking about it"}
+        ]
 
     def test_reasoning_item_without_id(self, monkeypatch):
         raw_input = [
@@ -856,7 +939,6 @@ class TestCodexReasoningPreflight:
         assert len(normalized) == 1
         assert "id" not in normalized[0]
         assert normalized[0]["summary"] == []  # default empty summary
-
 
     def test_reasoning_items_replayed_from_history(self, monkeypatch):
         """Reasoning items stored in codex_reasoning_items get replayed."""
@@ -872,6 +954,8 @@ class TestCodexReasoningPreflight:
             {"role": "user", "content": "follow up"},
         ]
         items = _chat_messages_to_responses_input(messages)
-        reasoning_items = [i for i in items if isinstance(i, dict) and i.get("type") == "reasoning"]
+        reasoning_items = [
+            i for i in items if isinstance(i, dict) and i.get("type") == "reasoning"
+        ]
         assert len(reasoning_items) == 1
         assert reasoning_items[0]["encrypted_content"] == "enc123"

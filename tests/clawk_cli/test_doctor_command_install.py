@@ -1,402 +1,240 @@
-"""Tests for the Command Installation check in clawk doctor."""
+"""Command diagnostics use the same selection and launch contract as setup."""
 
-import sys
-
-import types
-
+import json
 from argparse import Namespace
-
 from pathlib import Path
-
+import shutil
+import subprocess
+import sys
 
 import pytest
 
+from clawk_cli import _launchers, doctor, doctor_platform
+from pm.environments import install_state_dir, site_packages
 
-import clawk_cli.doctor as doctor_mod
+
+def _tree(tmp_path, monkeypatch):
+    home = tmp_path / "data"
+    home.mkdir()
+    project = tmp_path / "source"
+    project.mkdir()
+    (project / ".install_method").write_text("git", encoding="utf-8")
+    monkeypatch.setenv("CLAWK_HOME", str(home))
+    monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(home / "tools"))
+    monkeypatch.delenv("PREFIX", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(doctor, "PROJECT_ROOT", project)
+    monkeypatch.setattr(doctor, "CLAWK_HOME", home)
+    monkeypatch.setattr(
+        doctor, "DOCTOR_CHECKS", ((None, doctor_platform._check_command_installation),)
+    )
+    command = tmp_path / ".local" / "bin" / "clawk"
+    command.parent.mkdir(parents=True)
+    monkeypatch.setenv("PATH", str(command.parent))
+    return project, home, command
 
 
-def _setup_doctor_env(monkeypatch, tmp_path, venv_name="venv"):
-    """Create a minimal CLAWK_HOME + PROJECT_ROOT for doctor tests."""
+def _generation(project):
+    selected = install_state_dir(project) / "environments" / "selected" / "venv"
+    site_packages(selected).mkdir(parents=True)
+    (selected / "pyvenv.cfg").write_text("home = fixture\n", encoding="utf-8")
+    (install_state_dir(project) / "facts.json").write_text(
+        json.dumps({"packages": {"venv": {"environment": str(selected)}}}),
+        encoding="utf-8",
+    )
+    return selected
 
-    home = tmp_path / ".clawksis"
 
-    home.mkdir(parents=True, exist_ok=True)
+def _pm_source(project, home):
+    root = Path(__file__).resolve().parents[2]
+    for relative in (
+        "clawk",
+        "clawk_bootstrap.py",
+        "clawk_constants.py",
+        "clawk_cli/__init__.py",
+        "pm/environments.py",
+        "pm/filesystem.py",
+        "clawk_cli/runtime_state.py",
+        "clawk_cli/_early_recovery.py",
+        "clawk_cli/_parser.py",
+        "clawk_cli/venv_sync.py",
+        "clawk_cli/steward.py",
+        "clawk_cli/stderr_timestamp.py",
+    ):
+        target = project / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / relative, target)
+    (project / "clawk_cli/main.py").write_text(
+        "def main():\n    import selected_probe\n    print(selected_probe.VALUE)\n    return 0\n",
+        encoding="utf-8",
+    )
+    interpreter = home / "tools" / "python-fixture" / "bin" / "python3"
+    interpreter.parent.mkdir(parents=True)
+    interpreter.symlink_to(Path(sys._base_executable).resolve())
+    (home / "tools" / "facts.json").write_text(
+        json.dumps({"packages": {"python": {"entry": "python-fixture"}}}),
+        encoding="utf-8",
+    )
+    return interpreter
 
-    (home / "config.yaml").write_text("memory: {}\n", encoding="utf-8")
 
-    project = tmp_path / "project"
+@pytest.mark.platforms("posix")
+def test_pm_generation_does_not_require_a_legacy_console_script(
+    tmp_path, monkeypatch, capsys
+):
+    project, home, command = _tree(tmp_path, monkeypatch)
+    selected = _generation(project)
+    _pm_source(project, home)
+    assert _launchers.stage_launcher("clawk", project, command.parent) == command
 
-    project.mkdir(exist_ok=True)
+    doctor.run_doctor(Namespace(fix=True))
 
-    # Create a fake venv entry point
+    out = capsys.readouterr().out
+    assert "All checks passed" in out
+    assert not (project / "venv").exists()
+    assert not (selected / "bin" / "clawk").exists()
+    assert command.is_file() and not command.is_symlink()
 
-    venv_bin_dir = project / venv_name / "bin"
 
-    venv_bin_dir.mkdir(parents=True, exist_ok=True)
+@pytest.mark.platforms("posix")
+@pytest.mark.parametrize("prior", ["missing", "legacy"])
+def test_pm_fix_publishes_a_generation_aware_launcher(
+    tmp_path, monkeypatch, capsys, prior
+):
+    project, home, command = _tree(tmp_path, monkeypatch)
+    _pm_source(project, home)
+    selected = _generation(project)
+    (site_packages(selected) / "selected_probe.py").write_text(
+        "VALUE = 'selected'\n", encoding="utf-8"
+    )
+    stale = project / "venv" / "bin" / "clawk"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+    stale.chmod(0o755)
+    if prior == "legacy":
+        command.symlink_to(stale)
 
-    clawk_bin = venv_bin_dir / "clawk"
+    doctor.run_doctor(Namespace(fix=True))
 
-    clawk_bin.write_text("#!/usr/bin/env python\n# entry point\n")
+    assert "Fixed 1 issue" in capsys.readouterr().out
+    assert not command.is_symlink()
+    result = subprocess.run(
+        [str(command)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "selected"
+    assert stale.is_file()
 
-    clawk_bin.chmod(0o755)
 
-    monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
+@pytest.mark.platforms("posix")
+@pytest.mark.parametrize("kind", ["wrapper", "symlink"])
+def test_fix_preserves_user_managed_commands(tmp_path, monkeypatch, capsys, kind):
+    project, home, command = _tree(tmp_path, monkeypatch)
+    _pm_source(project, home)
+    _generation(project)
+    wrapper = tmp_path / "custom-wrapper"
+    body = "#!/bin/sh\nexit 42\n"
+    wrapper.write_text(body, encoding="utf-8")
+    wrapper.chmod(0o755)
+    if kind == "symlink":
+        command.symlink_to(wrapper)
+    else:
+        shutil.copy2(wrapper, command)
 
-    monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
+    doctor.run_doctor(Namespace(fix=True))
 
-    monkeypatch.setattr(doctor_mod, "_DHH", str(home))
+    out = capsys.readouterr().out
+    assert "Fixed 1 issue" not in out
+    assert command.read_text(encoding="utf-8") == body
+    if kind == "symlink":
+        assert command.is_symlink() and command.resolve() == wrapper
+        assert "manual" in out.lower()
 
-    # Stub model_tools so doctor doesn't fail on import
 
-    fake_model_tools = types.SimpleNamespace(
-        check_tool_availability=lambda *a, **kw: ([], []),
-        TOOLSET_REQUIREMENTS={},
+@pytest.mark.parametrize("layout", ["legacy", "generation"])
+@pytest.mark.parametrize("active", [True, False])
+def test_doctor_reports_selected_import_tree_not_interpreter_prefix(
+    tmp_path, monkeypatch, capsys, layout, active
+):
+    import importlib
+    import pm.paths
+
+    project, _home, _command = _tree(tmp_path, monkeypatch)
+    if layout == "generation":
+        selected = _generation(project)
+    else:
+        selected = project / "venv"
+        site_packages(selected).mkdir(parents=True)
+        (selected / "pyvenv.cfg").write_text("home = fixture\n", encoding="utf-8")
+    monkeypatch.setattr(pm.paths, "repo_root", lambda: project)
+    monkeypatch.setattr(
+        doctor, "DOCTOR_CHECKS", ((None, doctor_platform._check_python_environment),)
+    )
+    # A venv prefix with no selected imports is not evidence of activation;
+    # conversely PM's base interpreter can import the selected tree directly.
+    monkeypatch.setattr(sys, "prefix", sys.base_prefix if active else str(selected))
+    if active:
+        module = site_packages(selected) / "doctor_selected_probe.py"
+        module.write_text("VALUE = 'selected'\n", encoding="utf-8")
+        monkeypatch.syspath_prepend(str(site_packages(selected)))
+        monkeypatch.delitem(sys.modules, "doctor_selected_probe", raising=False)
+        loaded = importlib.import_module("doctor_selected_probe")
+        assert Path(loaded.__file__) == module
+        monkeypatch.delitem(sys.modules, "doctor_selected_probe")
+
+    doctor.run_doctor(Namespace(fix=False))
+
+    out = capsys.readouterr().out
+    assert str(selected) in out
+    assert ("active in this process" in out) is active
+    assert ("runs outside it" in out) is not active
+
+
+@pytest.mark.platforms("posix")
+@pytest.mark.parametrize(
+    "method, remedy",
+    [
+        ("git", "clawk pm repair"),
+        ("nix", "Nix"),
+        ("docker", "docker pull"),
+        ("apt", "pkg upgrade"),
+    ],
+)
+def test_remedies_and_launcher_repairs_respect_install_owner(
+    tmp_path, monkeypatch, capsys, method, remedy
+):
+    project, _home, command = _tree(tmp_path, monkeypatch)
+    (project / ".install_method").write_text(method, encoding="utf-8")
+    entry = project / "venv" / "bin" / "clawk"
+    entry.parent.mkdir(parents=True)
+    entry.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    entry.chmod(0o755)
+    monkeypatch.setattr(
+        doctor_platform,
+        "_PACKAGES",
+        (("doctor_missing_dependency_probe", "Required dependency", False),),
+    )
+    monkeypatch.setattr(
+        doctor,
+        "DOCTOR_CHECKS",
+        (
+            (None, doctor_platform._check_required_packages),
+            (None, doctor_platform._check_command_installation),
+        ),
     )
 
-    monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
-
-    # Stub auth checks
-
-    try:
-        from clawk_cli import auth as _auth_mod
-
-        monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
-
-        monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
-
-    except Exception:
-        pass
-
-    # Stub httpx.get to avoid network calls
-
-    try:
-        import httpx
-
-        monkeypatch.setattr(
-            httpx, "get", lambda *a, **kw: types.SimpleNamespace(status_code=200)
-        )
-
-    except Exception:
-        pass
-
-    return home, project, clawk_bin
-
-
-def _run_doctor(fix=False):
-    """Run doctor and capture stdout."""
-
-    import io
-
-    import contextlib
-
-    buf = io.StringIO()
-
-    with contextlib.redirect_stdout(buf):
-        doctor_mod.run_doctor(Namespace(fix=fix))
-
-    return buf.getvalue()
-
-
-class TestDoctorCommandInstallation:
-    """Tests for the ◆ Command Installation section."""
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Symlink check is Unix-only")
-    def test_correct_symlink_shows_ok(self, monkeypatch, tmp_path):
-
-        home, project, clawk_bin = _setup_doctor_env(monkeypatch, tmp_path)
-
-        # Create the command link dir with correct symlink
-
-        cmd_link_dir = tmp_path / ".local" / "bin"
-
-        cmd_link_dir.mkdir(parents=True)
-
-        cmd_link = cmd_link_dir / "clawk"
-
-        cmd_link.symlink_to(clawk_bin)
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        out = _run_doctor(fix=False)
-
-        assert "Command Installation" in out
-
-        assert "Venv entry point exists" in out
-
-        assert "correct target" in out
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Symlink check is Unix-only")
-    def test_missing_symlink_shows_fail(self, monkeypatch, tmp_path):
-
-        home, project, clawk_bin = _setup_doctor_env(monkeypatch, tmp_path)
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        # Don't create the symlink — it should be missing
-
-        out = _run_doctor(fix=False)
-
-        assert "Command Installation" in out
-
-        assert "Venv entry point exists" in out
-
-        assert "not found" in out
-
-        assert "clawk doctor --fix" in out
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Symlink check is Unix-only")
-    def test_fix_creates_missing_symlink(self, monkeypatch, tmp_path):
-
-        home, project, clawk_bin = _setup_doctor_env(monkeypatch, tmp_path)
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        out = _run_doctor(fix=True)
-
-        assert "Command Installation" in out
-
-        assert "Created symlink" in out
-
-        # Verify the symlink was actually created
-
-        cmd_link = tmp_path / ".local" / "bin" / "clawk"
-
-        assert cmd_link.is_symlink()
-
-        assert cmd_link.resolve() == clawk_bin.resolve()
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Symlink check is Unix-only")
-    def test_wrong_target_symlink_shows_warn(self, monkeypatch, tmp_path):
-
-        home, project, clawk_bin = _setup_doctor_env(monkeypatch, tmp_path)
-
-        # Create a symlink pointing to the wrong target
-
-        cmd_link_dir = tmp_path / ".local" / "bin"
-
-        cmd_link_dir.mkdir(parents=True)
-
-        cmd_link = cmd_link_dir / "clawk"
-
-        wrong_target = tmp_path / "wrong_clawk"
-
-        wrong_target.write_text("#!/usr/bin/env python\n")
-
-        cmd_link.symlink_to(wrong_target)
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        out = _run_doctor(fix=False)
-
-        assert "Command Installation" in out
-
-        assert "wrong target" in out
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Symlink check is Unix-only")
-    def test_fix_repairs_wrong_symlink(self, monkeypatch, tmp_path):
-
-        home, project, clawk_bin = _setup_doctor_env(monkeypatch, tmp_path)
-
-        # Create a symlink pointing to wrong target
-
-        cmd_link_dir = tmp_path / ".local" / "bin"
-
-        cmd_link_dir.mkdir(parents=True)
-
-        cmd_link = cmd_link_dir / "clawk"
-
-        wrong_target = tmp_path / "wrong_clawk"
-
-        wrong_target.write_text("#!/usr/bin/env python\n")
-
-        cmd_link.symlink_to(wrong_target)
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        out = _run_doctor(fix=True)
-
-        assert "Fixed symlink" in out
-
-        # Verify the symlink now points to the correct target
-
-        assert cmd_link.is_symlink()
-
-        assert cmd_link.resolve() == clawk_bin.resolve()
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Symlink check is Unix-only")
-    def test_missing_venv_entry_point_shows_warn(self, monkeypatch, tmp_path):
-
-        home = tmp_path / ".clawksis"
-
-        home.mkdir(parents=True, exist_ok=True)
-
-        (home / "config.yaml").write_text("memory: {}\n", encoding="utf-8")
-
-        project = tmp_path / "project"
-
-        project.mkdir(exist_ok=True)
-
-        # Do NOT create any venv entry point
-
-        monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
-
-        monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
-
-        monkeypatch.setattr(doctor_mod, "_DHH", str(home))
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        fake_model_tools = types.SimpleNamespace(
-            check_tool_availability=lambda *a, **kw: ([], []),
-            TOOLSET_REQUIREMENTS={},
-        )
-
-        monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
-
-        try:
-            from clawk_cli import auth as _auth_mod
-
-            monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
-
-            monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
-
-        except Exception:
-            pass
-
-        try:
-            import httpx
-
-            monkeypatch.setattr(
-                httpx, "get", lambda *a, **kw: types.SimpleNamespace(status_code=200)
-            )
-
-        except Exception:
-            pass
-
-        out = _run_doctor(fix=False)
-
-        assert "Command Installation" in out
-
-        assert "Venv entry point not found" in out
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Symlink check is Unix-only")
-    def test_dot_venv_dir_is_found(self, monkeypatch, tmp_path):
-        """The check finds entry points in .venv/ as well as venv/."""
-
-        home, project, _ = _setup_doctor_env(monkeypatch, tmp_path, venv_name=".venv")
-
-        # Create the command link with correct symlink
-
-        clawk_bin = project / ".venv" / "bin" / "clawk"
-
-        cmd_link_dir = tmp_path / ".local" / "bin"
-
-        cmd_link_dir.mkdir(parents=True)
-
-        cmd_link = cmd_link_dir / "clawk"
-
-        cmd_link.symlink_to(clawk_bin)
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        out = _run_doctor(fix=False)
-
-        assert "Venv entry point exists" in out
-
-        assert ".venv/bin/clawk" in out
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Symlink check is Unix-only")
-    def test_non_symlink_regular_file_shows_ok(self, monkeypatch, tmp_path):
-        """If ~/.local/bin/clawk is a regular file (not symlink), accept it."""
-
-        home, project, clawk_bin = _setup_doctor_env(monkeypatch, tmp_path)
-
-        cmd_link_dir = tmp_path / ".local" / "bin"
-
-        cmd_link_dir.mkdir(parents=True)
-
-        cmd_link = cmd_link_dir / "clawk"
-
-        cmd_link.write_text('#!/bin/sh\nexec python -m clawk_cli.main "$@"\n')
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        out = _run_doctor(fix=False)
-
-        assert "non-symlink" in out
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Symlink check is Unix-only")
-    def test_termux_uses_prefix_bin(self, monkeypatch, tmp_path):
-        """On Termux, the command link dir is $PREFIX/bin."""
-
-        prefix_dir = tmp_path / "termux_prefix"
-
-        prefix_bin = prefix_dir / "bin"
-
-        prefix_bin.mkdir(parents=True)
-
-        home, project, clawk_bin = _setup_doctor_env(monkeypatch, tmp_path)
-
-        monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
-
-        monkeypatch.setenv("PREFIX", str(prefix_dir))
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        out = _run_doctor(fix=False)
-
-        assert "Command Installation" in out
-
-        assert "$PREFIX/bin" in out
-
-    def test_windows_skips_check(self, monkeypatch, tmp_path):
-        """On Windows, the Command Installation section is skipped."""
-
-        home = tmp_path / ".clawksis"
-
-        home.mkdir(parents=True, exist_ok=True)
-
-        (home / "config.yaml").write_text("memory: {}\n", encoding="utf-8")
-
-        project = tmp_path / "project"
-
-        project.mkdir(exist_ok=True)
-
-        monkeypatch.setattr(doctor_mod, "CLAWK_HOME", home)
-
-        monkeypatch.setattr(doctor_mod, "PROJECT_ROOT", project)
-
-        monkeypatch.setattr(doctor_mod, "_DHH", str(home))
-
-        monkeypatch.setattr(sys, "platform", "win32")
-
-        fake_model_tools = types.SimpleNamespace(
-            check_tool_availability=lambda *a, **kw: ([], []),
-            TOOLSET_REQUIREMENTS={},
-        )
-
-        monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
-
-        try:
-            from clawk_cli import auth as _auth_mod
-
-            monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
-
-            monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
-
-        except Exception:
-            pass
-
-        try:
-            import httpx
-
-            monkeypatch.setattr(
-                httpx, "get", lambda *a, **kw: types.SimpleNamespace(status_code=200)
-            )
-
-        except Exception:
-            pass
-
-        out = _run_doctor(fix=False)
-
-        assert "Command Installation" not in out
+    doctor.run_doctor(Namespace(fix=True))
+
+    out = capsys.readouterr().out
+    assert remedy in out
+    assert "pip install" not in out
+    if method == "git":
+        assert command.is_symlink() and command.resolve() == entry
+    else:
+        assert not command.exists()
+        assert "clawk pm repair" not in out

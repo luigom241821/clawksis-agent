@@ -1,4 +1,5 @@
 """Tests for automatic MCP reload when config.yaml mcp_servers section changes."""
+
 from unittest.mock import MagicMock, patch
 
 from tests.waiting import wait_for_ctime_tick
@@ -8,11 +9,10 @@ from utils import file_signature
 def _make_cli(tmp_path, mcp_servers=None, extra_config=None):
     """Create a minimal ClawksisCLI instance with mocked config."""
     import cli as cli_mod
+
     obj = object.__new__(cli_mod.ClawksisCLI)
-    cfg = {"mcp_servers": mcp_servers or {}}
-    if extra_config:
-        cfg.update(extra_config)
-    obj.config = cfg
+
+    obj.config = {"mcp_servers": mcp_servers or {}}
     obj._agent_running = False
     obj._last_config_check = 0.0
     obj._config_mcp_servers = mcp_servers or {}
@@ -31,16 +31,18 @@ def _make_cli(tmp_path, mcp_servers=None, extra_config=None):
 
 
 class TestMCPConfigWatch:
-
-
-
     def test_new_mcp_server_triggers_reload(self, tmp_path):
         """Adding a new MCP server to config triggers auto-reload."""
         import clawk_yaml as yaml
+
         obj, cfg_file = _make_cli(tmp_path, mcp_servers={})
 
         # Simulate user adding a new MCP server to config.yaml
-        cfg_file.write_text(yaml.safe_dump({"mcp_servers": {"github": {"url": "https://mcp.github.com"}}}))
+        cfg_file.write_text(
+            yaml.safe_dump(
+                {"mcp_servers": {"github": {"url": "https://mcp.github.com"}}}
+            )
+        )
         obj._config_sig = None  # force stale mtime
 
         with patch("clawk_cli.config.get_config_path", return_value=cfg_file):
@@ -51,7 +53,10 @@ class TestMCPConfigWatch:
     def test_removed_mcp_server_triggers_reload(self, tmp_path):
         """Removing an MCP server from config triggers auto-reload."""
         import clawk_yaml as yaml
-        obj, cfg_file = _make_cli(tmp_path, mcp_servers={"github": {"url": "https://mcp.github.com"}})
+
+        obj, cfg_file = _make_cli(
+            tmp_path, mcp_servers={"github": {"url": "https://mcp.github.com"}}
+        )
 
         # Simulate user removing the server
         cfg_file.write_text(yaml.safe_dump({"mcp_servers": {}}))
@@ -61,8 +66,6 @@ class TestMCPConfigWatch:
             obj._check_config_mcp_changes()
 
         obj._reload_mcp.assert_called_once()
-
-
 
     def test_optout_disables_auto_reload(self, tmp_path, capsys):
         """When mcp.auto_reload_on_config_change is False, a changed
@@ -78,16 +81,21 @@ class TestMCPConfigWatch:
         correctly.
         """
         import clawk_yaml as yaml
+
         obj, cfg_file = _make_cli(
             tmp_path,
             mcp_servers={},
         )
 
         # Simulate a changed mcp_servers section with auto-reload opted out.
-        cfg_file.write_text(yaml.safe_dump({
-            "mcp": {"auto_reload_on_config_change": False},
-            "mcp_servers": {"github": {"url": "https://mcp.github.com"}},
-        }))
+        cfg_file.write_text(
+            yaml.safe_dump(
+                {
+                    "mcp": {"auto_reload_on_config_change": False},
+                    "mcp_servers": {"github": {"url": "https://mcp.github.com"}},
+                }
+            )
+        )
         obj._config_sig = None  # force stale mtime
 
         with patch("clawk_cli.config.get_config_path", return_value=cfg_file):
@@ -103,12 +111,17 @@ class TestMCPConfigWatch:
         tick: the snapshot is updated so the same content compares equal on
         the next pass."""
         import clawk_yaml as yaml
+
         obj, cfg_file = _make_cli(tmp_path, mcp_servers={})
 
-        cfg_file.write_text(yaml.safe_dump({
-            "mcp": {"auto_reload_on_config_change": False},
-            "mcp_servers": {"github": {"url": "https://mcp.github.com"}},
-        }))
+        cfg_file.write_text(
+            yaml.safe_dump(
+                {
+                    "mcp": {"auto_reload_on_config_change": False},
+                    "mcp_servers": {"github": {"url": "https://mcp.github.com"}},
+                }
+            )
+        )
         obj._config_sig = None
 
         with patch("clawk_cli.config.get_config_path", return_value=cfg_file):
@@ -129,15 +142,20 @@ class TestMCPConfigWatch:
         A config that sets ONLY ``auxiliary.mcp.auto_reload_on_config_change:
         false`` must NOT disable the reload."""
         import clawk_yaml as yaml
+
         obj, cfg_file = _make_cli(
             tmp_path,
             mcp_servers={},
         )
 
-        cfg_file.write_text(yaml.safe_dump({
-            "auxiliary": {"mcp": {"auto_reload_on_config_change": False}},
-            "mcp_servers": {"github": {"url": "https://mcp.github.com"}},
-        }))
+        cfg_file.write_text(
+            yaml.safe_dump(
+                {
+                    "auxiliary": {"mcp": {"auto_reload_on_config_change": False}},
+                    "mcp_servers": {"github": {"url": "https://mcp.github.com"}},
+                }
+            )
+        )
         obj._config_sig = None
 
         with patch("clawk_cli.config.get_config_path", return_value=cfg_file):
@@ -160,6 +178,7 @@ class TestMCPConfigWatch:
         fired a full MCP reconnect.
         """
         import clawk_yaml as yaml
+
         monkeypatch.setenv("MCP_GH_API_KEY", "sekrit-token")
 
         raw_servers = {
@@ -179,10 +198,14 @@ class TestMCPConfigWatch:
 
         # Unrelated-key save: mcp_servers content identical (raw templates),
         # only reasoning_effort changed — mtime moves.
-        cfg_file.write_text(yaml.safe_dump({
-            "agent": {"reasoning_effort": "high"},
-            "mcp_servers": raw_servers,
-        }))
+        cfg_file.write_text(
+            yaml.safe_dump(
+                {
+                    "agent": {"reasoning_effort": "high"},
+                    "mcp_servers": raw_servers,
+                }
+            )
+        )
         obj._config_sig = None
 
         with patch("clawk_cli.config.get_config_path", return_value=cfg_file):

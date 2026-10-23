@@ -20,10 +20,13 @@ import pytest
 @pytest.fixture
 def session_db(tmp_path):
     """Create a real SessionDB for testing."""
-    os.environ["CLAWK_HOME"] = str(tmp_path / ".clawk")
-    os.makedirs(tmp_path / ".clawk", exist_ok=True)
+
+    os.environ["CLAWK_HOME"] = str(tmp_path / ".clawksis")
+
+    os.makedirs(tmp_path / ".clawksis", exist_ok=True)
     from clawk_state import SessionDB
-    db = SessionDB(db_path=tmp_path / ".clawk" / "test_sessions.db")
+
+    db = SessionDB(db_path=tmp_path / ".clawksis" / "test_sessions.db")
     yield db
     db.close()
 
@@ -35,8 +38,11 @@ def cli_instance(tmp_path, session_db):
     from unittest.mock import MagicMock
 
     cli = MagicMock()
-    cli._agent_running = False  # a bare MagicMock attribute is truthy and would trip the mid-turn guard
+    cli._agent_running = (
+        False  # a bare MagicMock attribute is truthy and would trip the mid-turn guard
+    )
     from clawk_cli.cli_init_mixin import CLIInitMixin
+
     # The id seam: a plain SessionDB (no gateway facade) keeps main's local mint.
     cli._new_session_id = lambda now, **kw: CLIInitMixin._new_session_id(cli, now, **kw)
     cli._session_db = session_db
@@ -69,22 +75,27 @@ def cli_instance(tmp_path, session_db):
 class TestBranchCommandCLI:
     """Test the /branch command logic for the CLI."""
 
-
-    def test_failed_branch_creation_leaves_original_session_open(self, cli_instance, session_db):
+    def test_failed_branch_creation_leaves_original_session_open(
+        self, cli_instance, session_db
+    ):
         """Branching is child-first: when create_session fails the user stays on the original
         session, so it must not be marked ended as "branched" (#11030)."""
         from unittest.mock import patch
         from cli import ClawksisCLI
 
         original = cli_instance.session_id
-        with patch.object(session_db, "create_session", side_effect=RuntimeError("boom")):
+        with patch.object(
+            session_db, "create_session", side_effect=RuntimeError("boom")
+        ):
             ClawksisCLI._handle_branch_command(cli_instance, "/branch")
 
         assert cli_instance.session_id == original
         row = session_db.get_session(original)
         assert row["end_reason"] is None and row["ended_at"] is None
 
-    def test_gateway_refusal_is_reported_and_leaves_the_session(self, cli_instance, session_db, capsys):
+    def test_gateway_refusal_is_reported_and_leaves_the_session(
+        self, cli_instance, session_db, capsys
+    ):
         """A gateway /branch step that fails (e.g. the child's YOLO could not be set, CLI-20) prints
         main's branch error and keeps the user on the original session, never a traceback."""
         from cli import ClawksisCLI
@@ -92,6 +103,7 @@ class TestBranchCommandCLI:
 
         def refused(now, **kw):
             raise GatewayClientError("Gateway did not answer config.set")
+
         cli_instance._new_session_id = refused
         original = cli_instance.session_id
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
@@ -109,8 +121,6 @@ class TestBranchCommandCLI:
         messages = session_db.get_messages_as_conversation(cli_instance.session_id)
         assert len(messages) == 4  # All 4 messages copied
 
-
-
     def test_branch_with_custom_name(self, cli_instance, session_db):
         """Custom branch name should be used as the title."""
         from cli import ClawksisCLI
@@ -120,20 +130,16 @@ class TestBranchCommandCLI:
         title = session_db.get_session_title(cli_instance.session_id)
         assert title == "refactor approach"
 
-
-
     def test_branch_no_session_db(self, cli_instance):
         """Branching without a session DB should show an error."""
         from cli import ClawksisCLI
+
         cli_instance._session_db = None
 
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
 
         # session_id should not have changed
         assert cli_instance.session_id == "20260403_120000_abc123"
-
-
-
 
     def test_branch_fires_on_session_switch_hook(self, cli_instance, session_db):
         """The /branch command must notify memory providers of the rotation.
@@ -163,9 +169,6 @@ class TestBranchCommandCLI:
         assert kwargs["reason"] == "branch"
 
 
-
-
-
 class TestBranchFlushesBeforeEndSession:
     """Regression for #47202: /branch must flush un-persisted messages to
     the session DB before ending the old session, just like /new and
@@ -184,23 +187,33 @@ class TestBranchFlushesBeforeEndSession:
             conversation_history=cli_instance.conversation_history,
         )
 
-    def test_branch_child_row_carries_the_parent_system_prompt(self, cli_instance, session_db):
+    def test_branch_child_row_carries_the_parent_system_prompt(
+        self, cli_instance, session_db
+    ):
         """The branch's first turn must send the bytes the parent already sends: with no stored prompt the
         child rebuilds (a fresh workspace probe) and the copied transcript's warm cache is lost at byte 0."""
         from cli import ClawksisCLI
 
         parent_id = cli_instance.session_id
-        session_db.update_system_prompt(parent_id, "PARENT PROMPT\n\nWorkspace snapshot: session start")
+        session_db.update_system_prompt(
+            parent_id, "PARENT PROMPT\n\nWorkspace snapshot: session start"
+        )
         # No live agent: the parent's persisted row is the source.
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
         child = session_db.get_session(cli_instance.session_id)
         assert child["parent_session_id"] == parent_id
-        assert child["system_prompt"] == "PARENT PROMPT\n\nWorkspace snapshot: session start"
+        assert (
+            child["system_prompt"]
+            == "PARENT PROMPT\n\nWorkspace snapshot: session start"
+        )
 
         # A live agent's cached prompt (what THIS process sends) wins over the row.
         cli_instance.agent = MagicMock(_cached_system_prompt="LIVE PROMPT")
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
-        assert session_db.get_session(cli_instance.session_id)["system_prompt"] == "LIVE PROMPT"
+        assert (
+            session_db.get_session(cli_instance.session_id)["system_prompt"]
+            == "LIVE PROMPT"
+        )
 
 
 REASONING_DETAILS = [

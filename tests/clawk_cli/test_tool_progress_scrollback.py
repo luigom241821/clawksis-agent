@@ -46,13 +46,18 @@ def _make_cli(tool_progress="all", verbose=_UNSET):
         "prompt_toolkit.formatted_text": MagicMock(),
         "prompt_toolkit.auto_suggest": MagicMock(),
     }
-    with patch.dict(sys.modules, prompt_toolkit_stubs), \
-         patch.dict("os.environ", clean_env, clear=False):
+    with (
+        patch.dict(sys.modules, prompt_toolkit_stubs),
+        patch.dict("os.environ", clean_env, clear=False),
+    ):
         import cli as mod
+
         mod = importlib.reload(mod)
         _cli_mod = mod
-        with patch.object(mod, "get_tool_definitions", return_value=[]), \
-             patch.dict(mod.__dict__, {"CLI_CONFIG": _clean_config}):
+        with (
+            patch.object(mod, "get_tool_definitions", return_value=[]),
+            patch.dict(mod.__dict__, {"CLI_CONFIG": _clean_config}),
+        ):
             if verbose is _UNSET:
                 inst = mod.ClawksisCLI()
             else:
@@ -72,10 +77,14 @@ class TestToolProgressScrollback:
         """In 'all' mode, tool.completed prints a stacked line."""
         cli = _make_cli(tool_progress="all")
         # Simulate tool.started
-        cli._on_tool_progress("tool.started", "terminal", "git log", {"command": "git log"})
+        cli._on_tool_progress(
+            "tool.started", "terminal", "git log", {"command": "git log"}
+        )
         # Simulate tool.completed
         with patch.object(_cli_mod, "_cprint") as mock_print:
-            cli._on_tool_progress("tool.completed", "terminal", None, None, duration=1.5, is_error=False)
+            cli._on_tool_progress(
+                "tool.completed", "terminal", None, None, duration=1.5, is_error=False
+            )
 
         mock_print.assert_called_once()
         line = mock_print.call_args[0][0]
@@ -87,41 +96,53 @@ class TestToolProgressScrollback:
         cli = _make_cli(tool_progress="all")
         with patch.object(_cli_mod, "_cprint") as mock_print:
             # First call
-            cli._on_tool_progress("tool.started", "read_file", "cli.py", {"path": "cli.py"})
-            cli._on_tool_progress("tool.completed", "read_file", None, None, duration=0.1, is_error=False)
+            cli._on_tool_progress(
+                "tool.started", "read_file", "cli.py", {"path": "cli.py"}
+            )
+            cli._on_tool_progress(
+                "tool.completed", "read_file", None, None, duration=0.1, is_error=False
+            )
             # Second call (same tool)
-            cli._on_tool_progress("tool.started", "read_file", "run_agent.py", {"path": "run_agent.py"})
-            cli._on_tool_progress("tool.completed", "read_file", None, None, duration=0.2, is_error=False)
+            cli._on_tool_progress(
+                "tool.started", "read_file", "run_agent.py", {"path": "run_agent.py"}
+            )
+            cli._on_tool_progress(
+                "tool.completed", "read_file", None, None, duration=0.2, is_error=False
+            )
 
         assert mock_print.call_count == 2
-
-
 
     def test_off_mode_no_scrollback(self):
         """In 'off' mode, no stacked lines are printed."""
         cli = _make_cli(tool_progress="off")
         with patch.object(_cli_mod, "_cprint") as mock_print:
             cli._on_tool_progress("tool.started", "terminal", "ls", {"command": "ls"})
-            cli._on_tool_progress("tool.completed", "terminal", None, None, duration=0.5, is_error=False)
+            cli._on_tool_progress(
+                "tool.completed", "terminal", None, None, duration=0.5, is_error=False
+            )
 
         mock_print.assert_not_called()
-
-
-
 
     def test_concurrent_tools_produce_stacked_lines(self):
         """Multiple tool.started followed by multiple tool.completed all produce lines."""
         cli = _make_cli(tool_progress="all")
         with patch.object(_cli_mod, "_cprint") as mock_print:
             # All start first (concurrent pattern)
-            cli._on_tool_progress("tool.started", "web_search", "query 1", {"query": "test 1"})
-            cli._on_tool_progress("tool.started", "web_search", "query 2", {"query": "test 2"})
+            cli._on_tool_progress(
+                "tool.started", "web_search", "query 1", {"query": "test 1"}
+            )
+            cli._on_tool_progress(
+                "tool.started", "web_search", "query 2", {"query": "test 2"}
+            )
             # All complete
-            cli._on_tool_progress("tool.completed", "web_search", None, None, duration=1.0, is_error=False)
-            cli._on_tool_progress("tool.completed", "web_search", None, None, duration=1.5, is_error=False)
+            cli._on_tool_progress(
+                "tool.completed", "web_search", None, None, duration=1.0, is_error=False
+            )
+            cli._on_tool_progress(
+                "tool.completed", "web_search", None, None, duration=1.5, is_error=False
+            )
 
         assert mock_print.call_count == 2
-
 
     def test_verbose_mode_commits_every_call(self):
         """In 'verbose' mode, consecutive same-tool calls each commit a line.
@@ -131,17 +152,20 @@ class TestToolProgressScrollback:
         """
         cli = _make_cli(tool_progress="verbose")
         with patch.object(_cli_mod, "_cprint") as mock_print:
-            cli._on_tool_progress("tool.started", "terminal", "echo one", {"command": "echo one"})
-            cli._on_tool_progress("tool.completed", "terminal", None, None, duration=0.1, is_error=False)
-            cli._on_tool_progress("tool.started", "terminal", "echo two", {"command": "echo two"})
-            cli._on_tool_progress("tool.completed", "terminal", None, None, duration=0.1, is_error=False)
+            cli._on_tool_progress(
+                "tool.started", "terminal", "echo one", {"command": "echo one"}
+            )
+            cli._on_tool_progress(
+                "tool.completed", "terminal", None, None, duration=0.1, is_error=False
+            )
+            cli._on_tool_progress(
+                "tool.started", "terminal", "echo two", {"command": "echo two"}
+            )
+            cli._on_tool_progress(
+                "tool.completed", "terminal", None, None, duration=0.1, is_error=False
+            )
 
         assert mock_print.call_count == 2
-
-
-
-
-
 
 
 class TestMoAReferenceBlocks:
@@ -172,15 +196,21 @@ class TestMoAReferenceBlocks:
         cli = _make_cli(tool_progress="off")
         with patch.object(_cli_mod, "_cprint") as mock_print:
             cli._on_tool_progress(
-                "moa.reference", "openrouter:anthropic/claude-opus-4.8", "Four.", None,
-                moa_index=2, moa_count=2,
+                "moa.reference",
+                "openrouter:anthropic/claude-opus-4.8",
+                "Four.",
+                None,
+                moa_index=2,
+                moa_count=2,
             )
         assert mock_print.called
 
     def test_aggregating_event_updates_spinner_only(self):
         cli = _make_cli(tool_progress="all")
         with patch.object(_cli_mod, "_cprint") as mock_print:
-            cli._on_tool_progress("moa.aggregating", "openrouter:anthropic/claude-opus-4.8", None, None)
+            cli._on_tool_progress(
+                "moa.aggregating", "openrouter:anthropic/claude-opus-4.8", None, None
+            )
         assert "aggregating" in cli._spinner_text
         # aggregating is a spinner-only transition; no committed scrollback line.
         mock_print.assert_not_called()

@@ -115,6 +115,12 @@ CONTENT_MAP = [
     # Fallbacks blanket: el rebrand historico del fork reemplazo tambien las
     # menciones a secas (verificado contra el arbol real: class ClawksisACPAgent,
     # CLAWK_ALLOW_PRIVATE_URLS, docs "run Clawksis", etc.).
+    # Simbolo de marca: el fork reemplazo el caduceo de Hermes (⚕, y ☤ desde
+    # v0.2x) por la nabla de Gradient AI en todo el proyecto.
+    ("⚕\ufe0f", "∇"),
+    ("☤\ufe0f", "∇"),
+    ("⚕", "∇"),
+    ("☤", "∇"),
     ("HERMES_", "CLAWK_"),
     ("HERMES", "CLAWKSIS"),
     ("Hermes", "Clawksis"),

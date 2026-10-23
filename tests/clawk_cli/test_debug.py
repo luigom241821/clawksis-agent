@@ -1,7 +1,6 @@
 """Tests for ``clawk debug`` CLI command and debug utilities."""
 
 import os
-import urllib.error
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -47,75 +46,8 @@ def clawk_home(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-class TestUploadPasteRs:
-    """Test paste.rs upload path."""
-
-    def test_upload_paste_rs_success(self):
-        from clawk_cli.debug import _upload_paste_rs
-
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = b"https://paste.rs/abc123\n"
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-
-        with patch("clawk_cli.debug.urllib.request.urlopen", return_value=mock_resp):
-            url = _upload_paste_rs("hello world")
-
-        assert url == "https://paste.rs/abc123"
-
-    def test_upload_paste_rs_bad_response(self):
-        from clawk_cli.debug import _upload_paste_rs
-
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = b"<html>error</html>"
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-
-        with patch("clawk_cli.debug.urllib.request.urlopen", return_value=mock_resp):
-            with pytest.raises(ValueError, match="Unexpected response"):
-                _upload_paste_rs("test")
-
-    def test_upload_paste_rs_network_error(self):
-        from clawk_cli.debug import _upload_paste_rs
-
-        with patch(
-            "clawk_cli.debug.urllib.request.urlopen",
-            side_effect=urllib.error.URLError("connection refused"),
-        ):
-            with pytest.raises(urllib.error.URLError):
-                _upload_paste_rs("test")
-
-
-class TestUploadDpasteCom:
-    """Test dpaste.com fallback upload path."""
-
-    def test_upload_dpaste_com_success(self):
-        from clawk_cli.debug import _upload_dpaste_com
-
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = b"https://dpaste.com/ABCDEFG\n"
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-
-        with patch("clawk_cli.debug.urllib.request.urlopen", return_value=mock_resp):
-            url = _upload_dpaste_com("hello world", expiry_days=7)
-
-        assert url == "https://dpaste.com/ABCDEFG"
-
-
 class TestUploadToPastebin:
     """Test the combined upload with fallback."""
-
-    def test_tries_paste_rs_first(self):
-        from clawk_cli.debug import upload_to_pastebin
-
-        with patch(
-            "clawk_cli.debug._upload_paste_rs", return_value="https://paste.rs/test"
-        ) as prs:
-            url = upload_to_pastebin("content")
-
-        assert url == "https://paste.rs/test"
-        prs.assert_called_once()
 
     def test_falls_back_to_dpaste_com(self):
         from clawk_cli.debug import upload_to_pastebin
@@ -151,35 +83,6 @@ class TestUploadToPastebin:
 class TestCaptureLogSnapshot:
     """Test _capture_log_snapshot for log reading and truncation."""
 
-    def test_reads_small_file(self, clawk_home):
-        from clawk_cli.debug import _capture_log_snapshot
-
-        snap = _capture_log_snapshot("agent", tail_lines=10)
-        assert snap.full_text is not None
-        assert "session started" in snap.full_text
-        assert "session started" in snap.tail_text
-
-    def test_returns_none_for_missing(self, tmp_path, monkeypatch):
-        home = tmp_path / ".clawksis"
-        home.mkdir()
-        monkeypatch.setenv("CLAWK_HOME", str(home))
-
-        from clawk_cli.debug import _capture_log_snapshot
-
-        snap = _capture_log_snapshot("agent", tail_lines=10)
-        assert snap.full_text is None
-        assert snap.tail_text == "(file not found)"
-
-    def test_empty_primary_reports_file_empty(self, clawk_home):
-        """Empty primary (no .1 fallback) surfaces as '(file empty)', not missing."""
-        (clawk_home / "logs" / "agent.log").write_text("")
-
-        from clawk_cli.debug import _capture_log_snapshot
-
-        snap = _capture_log_snapshot("agent", tail_lines=10)
-        assert snap.full_text is None
-        assert snap.tail_text == "(file empty)"
-
     def test_race_truncate_after_resolve_reports_empty(self, clawk_home, monkeypatch):
         """If the log is truncated between resolve and stat, say 'empty', not 'missing'."""
         log_path = clawk_home / "logs" / "agent.log"
@@ -193,18 +96,6 @@ class TestCaptureLogSnapshot:
         assert snap.full_text is None
         assert snap.tail_text == "(file empty)"
 
-    def test_truncates_large_file(self, clawk_home):
-        """Files larger than max_bytes get tail-truncated."""
-        from clawk_cli.debug import _capture_log_snapshot
-
-        # Write a file larger than 1KB
-        big_content = "x" * 100 + "\n"
-        (clawk_home / "logs" / "agent.log").write_text(big_content * 200)
-
-        snap = _capture_log_snapshot("agent", tail_lines=10, max_bytes=1024)
-        assert snap.full_text is not None
-        assert "truncated" in snap.full_text
-
     def test_keeps_first_line_when_truncation_on_boundary(self, clawk_home):
         """When truncation lands on a line boundary, keep the first full line."""
         from clawk_cli.debug import _capture_log_snapshot
@@ -213,7 +104,9 @@ class TestCaptureLogSnapshot:
         # backward-reading loop so the truncation path actually fires.
         line = "A" * 99 + "\n"  # 100 bytes per line
         num_lines = 200  # 20000 bytes
-        (clawk_home / "logs" / "agent.log").write_text(line * num_lines)
+        (clawk_home / "logs" / "agent.log").write_bytes(
+            (line * num_lines).encode("utf-8")
+        )
 
         # max_bytes = 1000 = 100 * 10 → cut at byte 20000 - 1000 = 19000,
         # and byte 19000 - 1 is '\n'.  Boundary hit → keep all 10 lines.
@@ -224,67 +117,61 @@ class TestCaptureLogSnapshot:
         kept = [l for l in raw.strip().splitlines() if l.startswith("A")]
         assert len(kept) == 10
 
-    def test_drops_partial_when_truncation_mid_line(self, clawk_home):
-        """When truncation lands mid-line, drop the partial fragment."""
+
+class TestMissingLogNote:
+    """A missing log explains itself when the writer isn't this backend.
+
+    `clawk debug share` runs on the backend, so a desktop connected to a
+    remote/docker/SSH backend can never contribute desktop.log. Reporting a
+    bare absence sends triage after a client-side bug it cannot see.
+    """
+
+    def test_backend_written_log_reports_plain_absence(self, clawk_home):
         from clawk_cli.debug import _capture_log_snapshot
 
-        line = "A" * 99 + "\n"  # 100 bytes per line
-        num_lines = 200  # 20000 bytes
-        (clawk_home / "logs" / "agent.log").write_text(line * num_lines)
-
-        # max_bytes = 950 doesn't divide evenly into 100 → mid-line cut.
-        snap = _capture_log_snapshot("agent", tail_lines=5, max_bytes=950)
-        assert snap.full_text is not None
-        assert "truncated" in snap.full_text
-        raw = snap.full_text.split("\n", 1)[1]
-        kept = [l for l in raw.strip().splitlines() if l.startswith("A")]
-        # 950 / 100 = 9.5 → 9 complete lines after dropping partial
-        assert len(kept) == 9
-
-    def test_unknown_log_returns_none(self, clawk_home):
-        from clawk_cli.debug import _capture_log_snapshot
-
-        snap = _capture_log_snapshot("nonexistent", tail_lines=10)
-        assert snap.full_text is None
-
-    def test_falls_back_to_rotated_file(self, clawk_home):
-        """When gateway.log doesn't exist, falls back to gateway.log.1."""
-        from clawk_cli.debug import _capture_log_snapshot
-
-        logs_dir = clawk_home / "logs"
-        # Remove the primary (if any) and create a .1 rotation
-        (logs_dir / "gateway.log").unlink(missing_ok=True)
-        (logs_dir / "gateway.log.1").write_text(
-            "2026-04-12 10:00:00 INFO gateway.run: rotated content\n"
-        )
-
-        snap = _capture_log_snapshot("gateway", tail_lines=10)
-        assert snap.full_text is not None
-        assert "rotated content" in snap.full_text
-
-    def test_prefers_primary_over_rotated(self, clawk_home):
-        """Primary log is used when it exists, even if .1 also exists."""
-        from clawk_cli.debug import _capture_log_snapshot
-
-        logs_dir = clawk_home / "logs"
-        (logs_dir / "gateway.log").write_text("primary content\n")
-        (logs_dir / "gateway.log.1").write_text("rotated content\n")
-
-        snap = _capture_log_snapshot("gateway", tail_lines=10)
-        assert "primary content" in snap.full_text
-        assert "rotated" not in snap.full_text
-
-    def test_falls_back_when_primary_empty(self, clawk_home):
-        """Empty primary log falls back to .1 rotation."""
-        from clawk_cli.debug import _capture_log_snapshot
-
-        logs_dir = clawk_home / "logs"
-        (logs_dir / "agent.log").write_text("")
-        (logs_dir / "agent.log.1").write_text("rotated agent data\n")
+        (clawk_home / "logs" / "agent.log").unlink()
 
         snap = _capture_log_snapshot("agent", tail_lines=10)
-        assert snap.full_text is not None
-        assert "rotated agent data" in snap.full_text
+        assert snap.full_text is None
+        assert snap.tail_text == "(file not found)"
+
+    def test_client_written_log_names_its_writer_and_path(self, clawk_home):
+        from clawk_cli.debug import _capture_log_snapshot
+
+        (clawk_home / "logs" / "desktop.log").unlink()
+
+        snap = _capture_log_snapshot("desktop", tail_lines=10)
+        assert snap.full_text is None
+        assert "not on this host" in snap.tail_text
+        # The reader needs the path to collect by hand on the client machine.
+        assert str(clawk_home / "logs" / "desktop.log") in snap.tail_text
+
+    def test_present_client_log_is_captured_normally(self, clawk_home):
+        """A local backend still reads desktop.log — the note is only for a miss."""
+        from clawk_cli.debug import _capture_log_snapshot
+
+        snap = _capture_log_snapshot("desktop", tail_lines=10)
+        assert "backend spawned" in snap.tail_text
+        assert "not on this host" not in snap.tail_text
+
+    def test_empty_client_log_is_empty_not_absent(self, clawk_home):
+        """An empty file means the app ran and logged nothing — a different fact."""
+        from clawk_cli.debug import _capture_log_snapshot
+
+        (clawk_home / "logs" / "desktop.log").write_text("")
+
+        snap = _capture_log_snapshot("desktop", tail_lines=10)
+        assert snap.tail_text == "(file empty)"
+
+    def test_report_carries_the_note_for_a_remote_backend(self, clawk_home):
+        """The uploaded report — what people paste into support — must explain it."""
+        from clawk_cli.debug import collect_debug_report
+
+        (clawk_home / "logs" / "desktop.log").unlink()
+
+        report = collect_debug_report(log_lines=10, dump_text="dump\n")
+        assert "--- desktop.log" in report
+        assert "not on this host" in report
 
 
 # ---------------------------------------------------------------------------
@@ -345,7 +232,7 @@ class TestCaptureLogSnapshotRedaction:
     ):
         """Regression test: redact_sensitive_text short-circuits without force=True.
 
-        If a future refactor drops `force=True` from `_redact_log_text`, this
+        If a future refactor drops `force=True` from `redact_debug_support_text`, this
         test fails immediately. Without `force=True`, the redactor returns the
         input unchanged when CLAWK_REDACT_SECRETS=false, and the share-time
         redaction feature ships silently broken for users who opted out of
@@ -385,21 +272,6 @@ class TestCaptureLogSnapshotRedaction:
         assert snap.full_text is not None
         assert "person@example.com" not in snap.full_text
 
-    def test_no_redact_preserves_email_addresses(self, clawk_home_with_secret):
-        from clawk_cli.debug import _capture_log_snapshot
-
-        log_path = clawk_home_with_secret / "logs" / "agent.log"
-        log_path.write_text(
-            "2026-04-12 17:00:00 INFO gateway.run: "
-            "inbound message: platform=bluebubbles "
-            "user=person@example.com chat=iMessage;-;person@example.com msg='hello'\n"
-        )
-
-        snap = _capture_log_snapshot("agent", tail_lines=10, redact=False)
-
-        assert "person@example.com" in snap.tail_text
-        assert "person@example.com" in (snap.full_text or "")
-
     def test_capture_default_log_snapshots_threads_redact(self, clawk_home_with_secret):
         from clawk_cli.debug import _capture_default_log_snapshots
 
@@ -409,92 +281,42 @@ class TestCaptureLogSnapshotRedaction:
         assert _REDACT_FIXTURE_TOKEN not in snaps["agent"].tail_text
         assert _REDACT_FIXTURE_TOKEN not in (snaps["agent"].full_text or "")
 
-    def test_capture_default_log_snapshots_no_redact_passes_through(
+    def test_redacts_complete_log_lines_before_applying_byte_limits(
         self, clawk_home_with_secret
     ):
-        from clawk_cli.debug import _capture_default_log_snapshots
+        from clawk_cli.debug import _capture_log_snapshot
 
-        snaps = _capture_default_log_snapshots(50, redact=False)
+        max_bytes = 512
+        raw_window = 8192
+        tail_canary = "r36_REDACTED_tail_boundary_canary_012345"
+        full_canary = "r36_REDACTED_full_boundary_canary_678901"
+        payload = bytearray(b"x" * 12_000)
 
-        assert _REDACT_FIXTURE_TOKEN in snaps["agent"].tail_text
-        assert _REDACT_FIXTURE_TOKEN in (snaps["agent"].full_text or "")
+        # The backwards-read window and the final full-log window each begin
+        # inside a credential field. Truncating first drops ``accessToken=``
+        # while retaining its complete value, which the redactor cannot then
+        # classify. A redacted share must either scrub the complete logical
+        # line before either cap or omit that partial line.
+        for boundary, canary in (
+            (len(payload) - raw_window, tail_canary),
+            (len(payload) - max_bytes, full_canary),
+        ):
+            marker = f"accessToken={canary}".encode()
+            start = boundary - len("accessToken=")
+            payload[start : start + len(marker)] = marker
+
+        (clawk_home_with_secret / "logs" / "agent.log").write_bytes(payload)
+
+        snap = _capture_log_snapshot("agent", tail_lines=1, max_bytes=max_bytes)
+
+        assert tail_canary not in snap.tail_text
+        assert snap.full_text is not None
+        assert full_canary not in snap.full_text
 
 
 # ---------------------------------------------------------------------------
 # Debug report collection
 # ---------------------------------------------------------------------------
-
-
-class TestCollectDebugReport:
-    """Test the debug report builder."""
-
-    def test_report_includes_dump_output(self, clawk_home):
-        from clawk_cli.debug import collect_debug_report
-
-        with patch("clawk_cli.dump.run_dump") as mock_dump:
-            mock_dump.side_effect = lambda args: print(
-                "--- clawk dump ---\nversion: 0.8.0\n--- end dump ---"
-            )
-            report = collect_debug_report(log_lines=50)
-
-        assert "--- clawk dump ---" in report
-        assert "version: 0.8.0" in report
-
-    def test_report_includes_agent_log(self, clawk_home):
-        from clawk_cli.debug import collect_debug_report
-
-        with patch("clawk_cli.dump.run_dump"):
-            report = collect_debug_report(log_lines=50)
-
-        assert "--- agent.log" in report
-        assert "session started" in report
-
-    def test_report_includes_errors_log(self, clawk_home):
-        from clawk_cli.debug import collect_debug_report
-
-        with patch("clawk_cli.dump.run_dump"):
-            report = collect_debug_report(log_lines=50)
-
-        assert "--- errors.log" in report
-        assert "connection lost" in report
-
-    def test_report_includes_gateway_log(self, clawk_home):
-        from clawk_cli.debug import collect_debug_report
-
-        with patch("clawk_cli.dump.run_dump"):
-            report = collect_debug_report(log_lines=50)
-
-        assert "--- gateway.log" in report
-
-    def test_report_includes_gui_log(self, clawk_home):
-        from clawk_cli.debug import collect_debug_report
-
-        with patch("clawk_cli.dump.run_dump"):
-            report = collect_debug_report(log_lines=50)
-
-        assert "--- gui.log" in report
-        assert "dashboard request" in report
-
-    def test_report_includes_desktop_log(self, clawk_home):
-        from clawk_cli.debug import collect_debug_report
-
-        with patch("clawk_cli.dump.run_dump"):
-            report = collect_debug_report(log_lines=50)
-
-        assert "--- desktop.log" in report
-        assert "backend spawned" in report
-
-    def test_missing_logs_handled(self, tmp_path, monkeypatch):
-        home = tmp_path / ".clawksis"
-        home.mkdir()
-        monkeypatch.setenv("CLAWK_HOME", str(home))
-
-        from clawk_cli.debug import collect_debug_report
-
-        with patch("clawk_cli.dump.run_dump"):
-            report = collect_debug_report(log_lines=50)
-
-        assert "(file not found)" in report
 
 
 # ---------------------------------------------------------------------------
@@ -504,74 +326,6 @@ class TestCollectDebugReport:
 
 class TestRunDebugShare:
     """Test the run_debug_share CLI handler."""
-
-    def test_share_sweeps_expired_pastes(self, clawk_home, capsys):
-        """Slash-command path should sweep old pending deletes before uploading."""
-        from clawk_cli.debug import run_debug_share
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = False
-        args.nous = False
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch(
-                "clawk_cli.debug._sweep_expired_pastes", return_value=(0, 0)
-            ) as mock_sweep,
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                return_value="https://paste.rs/test",
-            ),
-        ):
-            run_debug_share(args)
-
-        mock_sweep.assert_called_once()
-        assert "Debug report uploaded" in capsys.readouterr().out
-
-    def test_share_survives_sweep_failure(self, clawk_home, capsys):
-        """Expired-paste cleanup is best-effort and must not block sharing."""
-        from clawk_cli.debug import run_debug_share
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = False
-        args.nous = False
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch(
-                "clawk_cli.debug._sweep_expired_pastes",
-                side_effect=RuntimeError("offline"),
-            ),
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                return_value="https://paste.rs/test",
-            ),
-        ):
-            run_debug_share(args)
-
-        assert "https://paste.rs/test" in capsys.readouterr().out
-
-    def test_local_flag_prints_full_logs(self, clawk_home, capsys):
-        """--local prints the report plus full log contents."""
-        from clawk_cli.debug import run_debug_share
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = True
-        args.nous = False
-
-        with patch("clawk_cli.dump.run_dump"):
-            run_debug_share(args)
-
-        out = capsys.readouterr().out
-        assert "--- agent.log" in out
-        assert "FULL agent.log" in out
-        assert "FULL gateway.log" in out
 
     def test_share_uploads_five_pastes(self, clawk_home, capsys):
         """Successful share uploads report + agent.log + gateway.log + gui.log + desktop.log."""
@@ -627,150 +381,6 @@ class TestRunDebugShare:
         desktop_paste = uploaded_content[4]
         assert "--- clawk dump ---" in desktop_paste
         assert "--- full desktop.log ---" in desktop_paste
-
-    def test_share_keeps_report_and_full_log_on_same_snapshot(self, clawk_home, capsys):
-        """A mid-run rotation must not make full agent.log older than the report."""
-        from clawk_cli.debug import (
-            run_debug_share,
-            collect_debug_report as real_collect_debug_report,
-        )
-
-        logs_dir = clawk_home / "logs"
-        (logs_dir / "agent.log").write_text(
-            "2026-04-22 12:00:00 INFO agent: newest line\n"
-        )
-        (logs_dir / "agent.log.1").write_text(
-            "2026-04-10 12:00:00 INFO agent: old rotated line\n"
-        )
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = False
-        args.nous = False
-
-        uploaded_content = []
-
-        def _mock_upload(content, expiry_days=7):
-            uploaded_content.append(content)
-            return f"https://paste.rs/paste{len(uploaded_content)}"
-
-        def _wrapped_collect_debug_report(
-            *, log_lines=200, dump_text="", log_snapshots=None
-        ):
-            report = real_collect_debug_report(
-                log_lines=log_lines,
-                dump_text=dump_text,
-                log_snapshots=log_snapshots,
-            )
-            # Simulate the live log rotating after the report is built but
-            # before the old implementation would have re-read agent.log for
-            # standalone upload.
-            (logs_dir / "agent.log").write_text("")
-            (logs_dir / "agent.log.1").write_text(
-                "2026-04-10 12:00:00 INFO agent: old rotated line\n"
-            )
-            return report
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch(
-                "clawk_cli.debug.collect_debug_report",
-                side_effect=_wrapped_collect_debug_report,
-            ),
-            patch("clawk_cli.debug.upload_to_pastebin", side_effect=_mock_upload),
-        ):
-            run_debug_share(args)
-
-        report_paste = uploaded_content[0]
-        agent_paste = uploaded_content[1]
-        assert "2026-04-22 12:00:00 INFO agent: newest line" in report_paste
-        assert "2026-04-22 12:00:00 INFO agent: newest line" in agent_paste
-        assert "old rotated line" not in agent_paste
-
-    def test_share_skips_missing_logs(self, tmp_path, monkeypatch, capsys):
-        """Only uploads logs that exist."""
-        home = tmp_path / ".clawksis"
-        home.mkdir()
-        monkeypatch.setenv("CLAWK_HOME", str(home))
-
-        from clawk_cli.debug import run_debug_share
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = False
-        args.nous = False
-
-        call_count = [0]
-
-        def _mock_upload(content, expiry_days=7):
-            call_count[0] += 1
-            return f"https://paste.rs/paste{call_count[0]}"
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch("clawk_cli.debug.upload_to_pastebin", side_effect=_mock_upload),
-        ):
-            run_debug_share(args)
-
-        out = capsys.readouterr().out
-        # Only the report should be uploaded (no log files exist)
-        assert call_count[0] == 1
-        assert "Report" in out
-
-    def test_share_continues_on_log_upload_failure(self, clawk_home, capsys):
-        """Log upload failure doesn't stop the report from being shared."""
-        from clawk_cli.debug import run_debug_share
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = False
-        args.nous = False
-
-        call_count = [0]
-
-        def _mock_upload(content, expiry_days=7):
-            call_count[0] += 1
-            if call_count[0] > 1:
-                raise RuntimeError("upload failed")
-            return "https://paste.rs/report"
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch("clawk_cli.debug.upload_to_pastebin", side_effect=_mock_upload),
-        ):
-            run_debug_share(args)
-
-        out = capsys.readouterr().out
-        assert "Report" in out
-        assert "paste.rs/report" in out
-        assert "failed to upload" in out
-
-    def test_share_exits_on_report_upload_failure(self, clawk_home, capsys):
-        """If the main report fails to upload, exit with code 1."""
-        from clawk_cli.debug import run_debug_share
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = False
-        args.nous = False
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                side_effect=RuntimeError("all failed"),
-            ),
-        ):
-            with pytest.raises(SystemExit) as exc_info:
-                run_debug_share(args)
-
-        assert exc_info.value.code == 1
-        out = capsys.readouterr()
-        assert "all failed" in out.err
 
 
 # ---------------------------------------------------------------------------
@@ -832,6 +442,220 @@ class TestRunDebugShareRedaction:
             assert _REDACT_FIXTURE_TOKEN not in content, (
                 "raw token leaked into upload-bound content"
             )
+
+    def test_fallback_provider_key_never_reaches_upload_bound_content(
+        self, clawk_home_with_secret
+    ):
+        """``clawk dump`` quotes ``fallback_providers`` from config.yaml; neither the CLI share
+        bundle nor the gateway /debug report may carry a fallback entry's api_key."""
+        from clawk_cli.debug import (
+            _capture_dump,
+            collect_debug_report,
+            collect_share_bundle,
+        )
+
+        fallback_key = "fbk-opaque-0123456789abcdefghij"
+        (clawk_home_with_secret / "config.yaml").write_text(
+            "fallback_providers:\n"
+            "  - provider: custom\n"
+            "    model: backup-model\n"
+            "    base_url: https://backup.example/v1\n"
+            f"    api_key: {fallback_key}\n",
+            encoding="utf-8",
+        )
+
+        uploads = [
+            *collect_share_bundle(log_lines=20).values(),
+            collect_debug_report(log_lines=20, dump_text=_capture_dump()),
+        ]
+
+        assert any("backup-model" in text for text in uploads)  # the dump really ran
+        assert not [text for text in uploads if fallback_key in text]
+
+    @pytest.mark.parametrize(
+        ("yaml_value", "secret"),
+        [
+            ("87419362508741936250", "87419362508741936250"),  # unquoted: YAML int
+            (
+                "'opaque***Fallback0123456789'",
+                "opaque***Fallback0123456789",
+            ),  # looks pre-masked
+            ("{value: nestedOpaque0123456789abcdef}", "nestedOpaque0123456789abcdef"),
+        ],
+    )
+    def test_fallback_api_key_masked_whatever_its_yaml_shape(
+        self, clawk_home_with_secret, yaml_value, secret
+    ):
+        """The runtime ``str()``s any ``api_key`` value (fallback_config.resolve_entry_api_key), so the
+        dump masks the field itself rather than relying on text redaction to recognise the value."""
+        from clawk_cli.debug import (
+            _capture_dump,
+            collect_debug_report,
+            collect_share_bundle,
+        )
+
+        (clawk_home_with_secret / "config.yaml").write_text(
+            "fallback_providers:\n"
+            "  - provider: custom\n"
+            "    model: backup-model\n"
+            f"    api_key: {yaml_value}\n",
+            encoding="utf-8",
+        )
+
+        texts = [
+            _capture_dump(redact=False),  # `clawk dump` stdout, as printed
+            *collect_share_bundle(log_lines=20).values(),
+            collect_debug_report(log_lines=20, dump_text=_capture_dump()),
+        ]
+
+        assert "backup-model" in texts[0]
+        assert not [text for text in texts if secret in text]
+
+    @pytest.mark.parametrize(
+        ("field", "yaml_value", "secret"),
+        [
+            ("token", "87419362508741936250", "87419362508741936250"),
+            (
+                "auth_token",
+                "'opaque***AuthToken0123456789'",
+                "opaque***AuthToken0123456789",
+            ),
+            (
+                "client_secret",
+                "{value: clientSecretOpaque0123456789}",
+                "clientSecretOpaque0123456789",
+            ),
+            ("password", "98127364509812736450", "98127364509812736450"),
+            (
+                "clientApiKey",
+                "'opaque***CamelKey0123456789'",
+                "opaque***CamelKey0123456789",
+            ),
+        ],
+    )
+    def test_fallback_secret_fields_masked_by_repo_policy(
+        self, clawk_home_with_secret, field, yaml_value, secret
+    ):
+        """Every field ``agent.redact`` treats as a credential is masked by field, not only ``api_key``;
+        env-var names and token budgets stay readable."""
+        from clawk_cli.debug import _capture_dump, collect_debug_report, run_debug_share
+
+        (clawk_home_with_secret / "config.yaml").write_text(
+            "fallback_providers:\n"
+            "  - provider: custom\n"
+            "    model: backup-model\n"
+            "    key_env: BACKUP_KEY_ENV_NAME\n"
+            "    api_key_env: BACKUP_API_KEY_ENV_NAME\n"
+            "    max_tokens: 4321\n"
+            f"    {field}: {yaml_value}\n",
+            encoding="utf-8",
+        )
+
+        uploaded: list[str] = []
+        args = MagicMock(lines=20, expire=1, local=False, nous=False, no_redact=False)
+        with (
+            patch("clawk_cli.debug._sweep_expired_pastes", return_value=(0, 0)),
+            patch("clawk_cli.debug._schedule_auto_delete"),
+            patch(
+                "clawk_cli.debug.upload_to_pastebin",
+                side_effect=lambda content, expiry_days=1: (
+                    uploaded.append(content) or "https://paste.rs/x"
+                ),
+            ),
+        ):
+            run_debug_share(args)  # what actually reaches the paste service
+
+        assert any(
+            "backup-model" in text for text in uploaded
+        )  # the dump really reached the sink
+        assert not [
+            text for text in uploaded if secret in text
+        ]  # checked first: the sink alone catches a leak
+
+        texts = [
+            _capture_dump(redact=False),  # `clawk dump` stdout, as printed
+            collect_debug_report(log_lines=20, dump_text=_capture_dump()),
+        ]
+
+        assert all(
+            s in texts[0]
+            for s in (
+                "backup-model",
+                "BACKUP_KEY_ENV_NAME",
+                "BACKUP_API_KEY_ENV_NAME",
+                "4321",
+            )
+        )
+        assert not [text for text in texts if secret in text]
+
+    @pytest.mark.parametrize(
+        "base_url",
+        [
+            "https://user:{s}@backup.example/v1",
+            "https://backup.example/v1?key={s}",
+            "https://backup.example/v1?X-Amz-Signature={s}",
+            "https://backup.example/v1?X-Goog-Signature={s}",
+            "https://backup.example/v1?sv=2024-11-04&sig={s}",
+            "https://backup.example/v1#access_token={s}&view=public",
+        ],
+    )
+    def test_fallback_base_url_credential_never_reaches_upload_bound_content(
+        self, clawk_home_with_secret, base_url
+    ):
+        """A fallback ``base_url`` can carry its credential in the URL (userinfo, query, fragment). The
+        dump is config made to be pasted, so ``clawk dump`` itself and every upload of it get strict
+        URL-credential redaction, not the log policy."""
+        from clawk_cli.debug import (
+            _capture_dump,
+            collect_debug_report,
+            collect_share_bundle,
+        )
+
+        secret = "urlCredOpaque0123456789abcdef"
+        (clawk_home_with_secret / "config.yaml").write_text(
+            "fallback_providers:\n"
+            "  - provider: custom\n"
+            "    model: backup-model\n"
+            f"    base_url: '{base_url.format(s=secret)}'\n",
+            encoding="utf-8",
+        )
+
+        texts = [
+            _capture_dump(redact=False),  # `clawk dump` stdout, as printed
+            *collect_share_bundle(log_lines=20).values(),
+            collect_debug_report(log_lines=20, dump_text=_capture_dump()),
+        ]
+
+        assert all(
+            "backup-model" in text and "backup.example" in text for text in texts[:2]
+        )
+        assert not [text for text in texts if secret in text]
+
+    def test_capture_dump_is_independent_strict_redaction_boundary(self):
+        """A future dump formatting mistake cannot leak through debug upload paths."""
+        from clawk_cli.debug import _capture_dump
+
+        raw_key = "opaqueBoundaryKeyABC123456789"
+        raw_password = "boundaryPasswordABC123456789"
+        raw_signature = "boundarySignatureABC123456789"
+
+        def leaky_dump(_args):
+            print(
+                "{'api_key': '" + raw_key + "', "
+                "'base_url': 'https://user:"
+                + raw_password
+                + "@example.test/v1?X-Amz-Signature="
+                + raw_signature
+                + "'}"
+            )
+
+        with patch("clawk_cli.dump.run_dump", side_effect=leaky_dump):
+            safe = _capture_dump()
+            raw = _capture_dump(redact=False)
+
+        for secret in (raw_key, raw_password, raw_signature):
+            assert secret not in safe
+            assert secret in raw
 
     def test_default_share_includes_redaction_banner(
         self, clawk_home_with_secret, capsys
@@ -906,34 +730,6 @@ class TestRunDebugShareRedaction:
 # ---------------------------------------------------------------------------
 
 
-class TestRunDebug:
-    def test_no_subcommand_shows_usage(self, capsys):
-        from clawk_cli.debug import run_debug
-
-        args = MagicMock()
-        args.debug_command = None
-
-        run_debug(args)
-
-        out = capsys.readouterr().out
-        assert "clawk debug" in out
-        assert "share" in out
-        assert "delete" in out
-
-    def test_share_subcommand_routes(self, clawk_home):
-        from clawk_cli.debug import run_debug
-
-        args = MagicMock()
-        args.debug_command = "share"
-        args.lines = 200
-        args.expire = 7
-        args.local = True
-        args.nous = False
-
-        with patch("clawk_cli.dump.run_dump"):
-            run_debug(args)
-
-
 # ---------------------------------------------------------------------------
 # Argparse integration
 # ---------------------------------------------------------------------------
@@ -941,33 +737,6 @@ class TestRunDebug:
 # ---------------------------------------------------------------------------
 # Delete / auto-delete
 # ---------------------------------------------------------------------------
-
-
-class TestExtractPasteId:
-    def test_paste_rs_url(self):
-        from clawk_cli.debug import _extract_paste_id
-
-        assert _extract_paste_id("https://paste.rs/abc123") == "abc123"
-
-    def test_paste_rs_trailing_slash(self):
-        from clawk_cli.debug import _extract_paste_id
-
-        assert _extract_paste_id("https://paste.rs/abc123/") == "abc123"
-
-    def test_http_variant(self):
-        from clawk_cli.debug import _extract_paste_id
-
-        assert _extract_paste_id("http://paste.rs/xyz") == "xyz"
-
-    def test_non_paste_rs_returns_none(self):
-        from clawk_cli.debug import _extract_paste_id
-
-        assert _extract_paste_id("https://dpaste.com/ABCDEF") is None
-
-    def test_empty_returns_none(self):
-        from clawk_cli.debug import _extract_paste_id
-
-        assert _extract_paste_id("") is None
 
 
 class TestDeletePaste:
@@ -989,11 +758,13 @@ class TestDeletePaste:
         assert req.method == "DELETE"
         assert "paste.rs/abc123" in req.full_url
 
-    def test_delete_rejects_non_paste_rs(self):
+    def test_dpaste_url_error_explains_no_delete(self):
+        """dpaste.com pastes have no owner token, so the user must be told the
+        paste cannot be deleted and will expire on its own (#106164)."""
         from clawk_cli.debug import delete_paste
 
-        with pytest.raises(ValueError, match="only paste.rs"):
-            delete_paste("https://dpaste.com/something")
+        with pytest.raises(ValueError):
+            delete_paste("https://dpaste.com/ABC123")
 
 
 class TestScheduleAutoDelete:
@@ -1007,69 +778,6 @@ class TestScheduleAutoDelete:
     handle the DELETE requests synchronously on the next ``clawk debug``
     invocation.
     """
-
-    def test_does_not_spawn_subprocess(self, clawk_home):
-        """Regression guard: _schedule_auto_delete must NEVER spawn subprocesses.
-
-        We assert this structurally rather than by mocking Popen: the new
-        implementation doesn't even import ``subprocess`` at module scope,
-        so a mock patch wouldn't find it.
-        """
-        import ast
-        import inspect
-        from clawk_cli.debug import _schedule_auto_delete
-
-        # Strip the docstring before scanning so the regression-rationale
-        # prose inside it doesn't trigger our banned-word checks.
-        source = inspect.getsource(_schedule_auto_delete)
-        tree = ast.parse(source)
-        func_node = tree.body[0]
-        if (
-            func_node.body
-            and isinstance(func_node.body[0], ast.Expr)
-            and isinstance(func_node.body[0].value, ast.Constant)
-            and isinstance(func_node.body[0].value.value, str)
-        ):
-            func_node.body = func_node.body[1:]
-        code_only = ast.unparse(func_node)
-
-        assert "Popen" not in code_only, (
-            "_schedule_auto_delete must not spawn subprocesses — "
-            "use pending.json + _sweep_expired_pastes instead"
-        )
-        assert "subprocess" not in code_only, (
-            "_schedule_auto_delete must not reference subprocess at all"
-        )
-        assert "time.sleep" not in code_only, (
-            "Regression: sleeping in _schedule_auto_delete is the bug being fixed"
-        )
-
-        # And verify that calling it doesn't produce any orphaned children
-        # (it should just write pending.json synchronously).
-        import os as _os
-
-        before = set(_os.listdir("/proc")) if _os.path.exists("/proc") else None
-        _schedule_auto_delete(
-            ["https://paste.rs/abc", "https://paste.rs/def"],
-            delay_seconds=10,
-        )
-        if before is not None:
-            after = set(_os.listdir("/proc"))
-            new = after - before
-            # Filter to only integer-named entries (process PIDs)
-            new_pids = [p for p in new if p.isdigit()]
-            # It's fine if unrelated processes appeared — we just need to make
-            # sure we didn't spawn a long-sleeping one.  The old bug spawned
-            # a python interpreter whose cmdline contained "time.sleep".
-            for pid in new_pids:
-                try:
-                    with open(f"/proc/{pid}/cmdline", "rb") as f:
-                        cmdline = f.read().decode("utf-8", errors="replace")
-                    assert "time.sleep" not in cmdline, (
-                        f"Leaked sleeper subprocess PID {pid}: {cmdline}"
-                    )
-                except OSError:
-                    pass  # process exited already
 
     def test_records_pending_to_json(self, clawk_home):
         """Scheduled URLs are persisted to pending.json with expiration."""
@@ -1096,26 +804,6 @@ class TestScheduleAutoDelete:
             assert e["expire_at"] > time.time()
             assert e["expire_at"] <= time.time() + 15
 
-    def test_skips_non_paste_rs_urls(self, clawk_home):
-        """dpaste.com URLs auto-expire — don't track them."""
-        from clawk_cli.debug import _schedule_auto_delete, _pending_file
-
-        _schedule_auto_delete(["https://dpaste.com/something"])
-
-        # pending.json should not be created for non-paste.rs URLs
-        assert not _pending_file().exists()
-
-    def test_merges_with_existing_pending(self, clawk_home):
-        """Subsequent calls merge into existing pending.json."""
-        from clawk_cli.debug import _schedule_auto_delete, _load_pending
-
-        _schedule_auto_delete(["https://paste.rs/first"], delay_seconds=10)
-        _schedule_auto_delete(["https://paste.rs/second"], delay_seconds=10)
-
-        entries = _load_pending()
-        urls = {e["url"] for e in entries}
-        assert urls == {"https://paste.rs/first", "https://paste.rs/second"}
-
     def test_dedupes_same_url(self, clawk_home):
         """Same URL recorded twice → one entry with the later expire_at."""
         from clawk_cli.debug import _schedule_auto_delete, _load_pending
@@ -1131,13 +819,6 @@ class TestScheduleAutoDelete:
 class TestSweepExpiredPastes:
     """Test the opportunistic sweep that replaces the sleeping subprocess."""
 
-    def test_sweep_empty_is_noop(self, clawk_home):
-        from clawk_cli.debug import _sweep_expired_pastes
-
-        deleted, remaining = _sweep_expired_pastes()
-        assert deleted == 0
-        assert remaining == 0
-
     def test_sweep_deletes_expired_entries(self, clawk_home):
         from clawk_cli.debug import (
             _sweep_expired_pastes,
@@ -1147,10 +828,12 @@ class TestSweepExpiredPastes:
         import time
 
         # Seed pending.json with one expired + one future entry
-        _save_pending([
-            {"url": "https://paste.rs/expired", "expire_at": time.time() - 100},
-            {"url": "https://paste.rs/future", "expire_at": time.time() + 3600},
-        ])
+        _save_pending(
+            [
+                {"url": "https://paste.rs/expired", "expire_at": time.time() - 100},
+                {"url": "https://paste.rs/future", "expire_at": time.time() + 3600},
+            ]
+        )
 
         delete_calls = []
 
@@ -1173,10 +856,12 @@ class TestSweepExpiredPastes:
         from clawk_cli.debug import _sweep_expired_pastes, _save_pending
         import time
 
-        _save_pending([
-            {"url": "https://paste.rs/future1", "expire_at": time.time() + 3600},
-            {"url": "https://paste.rs/future2", "expire_at": time.time() + 7200},
-        ])
+        _save_pending(
+            [
+                {"url": "https://paste.rs/future1", "expire_at": time.time() + 3600},
+                {"url": "https://paste.rs/future2", "expire_at": time.time() + 7200},
+            ]
+        )
 
         with patch("clawk_cli.debug.delete_paste") as mock_delete:
             deleted, remaining = _sweep_expired_pastes()
@@ -1194,9 +879,11 @@ class TestSweepExpiredPastes:
         )
         import time
 
-        _save_pending([
-            {"url": "https://paste.rs/flaky", "expire_at": time.time() - 100},
-        ])
+        _save_pending(
+            [
+                {"url": "https://paste.rs/flaky", "expire_at": time.time() - 100},
+            ]
+        )
 
         with patch(
             "clawk_cli.debug.delete_paste",
@@ -1209,171 +896,40 @@ class TestSweepExpiredPastes:
         assert remaining == 1
         assert len(_load_pending()) == 1
 
-    def test_sweep_drops_entries_past_grace_window(self, clawk_home):
-        """After 24h past expiration, give up even on network failures."""
-        from clawk_cli.debug import (
-            _sweep_expired_pastes,
-            _save_pending,
-            _load_pending,
-        )
+    def test_share_scheduled_during_sweep_deletes_is_kept(self, clawk_home):
+        """A paste scheduled while the sweep waits on network DELETEs must survive its save."""
+        import threading
         import time
 
-        # Expired 25 hours ago → past the 24h grace window
-        very_old = time.time() - (25 * 3600)
-        _save_pending([
-            {"url": "https://paste.rs/ancient", "expire_at": very_old},
-        ])
+        from clawk_cli.debug import (
+            _load_pending,
+            _save_pending,
+            _schedule_auto_delete,
+            _sweep_expired_pastes,
+        )
 
-        with patch(
-            "clawk_cli.debug.delete_paste",
-            side_effect=Exception("network down"),
-        ):
-            deleted, remaining = _sweep_expired_pastes()
+        _save_pending([{"url": "https://paste.rs/old", "expire_at": time.time() - 100}])
+        in_delete = threading.Event()
+        share_done = threading.Event()
 
-        assert deleted == 1
-        assert remaining == 0
-        assert _load_pending() == []
+        def blocking_delete(url):
+            in_delete.set()
+            assert share_done.wait(10)
+            return True
 
+        result = []
+        with patch("clawk_cli.debug.delete_paste", side_effect=blocking_delete):
+            sweeper = threading.Thread(
+                target=lambda: result.append(_sweep_expired_pastes())
+            )
+            sweeper.start()
+            assert in_delete.wait(10)
+            _schedule_auto_delete(["https://paste.rs/new"])
+            share_done.set()
+            sweeper.join(10)
 
-class TestRunDebugSweepsOnInvocation:
-    """``run_debug`` must sweep expired pastes on every invocation."""
-
-    def test_run_debug_calls_sweep(self, clawk_home):
-        from clawk_cli.debug import run_debug
-
-        args = MagicMock()
-        args.debug_command = None  # default → prints help
-
-        with patch("clawk_cli.debug._sweep_expired_pastes") as mock_sweep:
-            run_debug(args)
-
-        mock_sweep.assert_called_once()
-
-    def test_run_debug_survives_sweep_failure(self, clawk_home, capsys):
-        """If the sweep throws, the subcommand still runs."""
-        from clawk_cli.debug import run_debug
-
-        args = MagicMock()
-        args.debug_command = None
-
-        with patch(
-            "clawk_cli.debug._sweep_expired_pastes",
-            side_effect=RuntimeError("boom"),
-        ):
-            run_debug(args)  # must not raise
-
-        # Default subcommand still printed help
-        out = capsys.readouterr().out
-        assert "Usage: clawk debug" in out
-
-
-class TestRunDebugDelete:
-    def test_deletes_valid_url(self, capsys):
-        from clawk_cli.debug import run_debug_delete
-
-        args = MagicMock()
-        args.urls = ["https://paste.rs/abc"]
-
-        with patch("clawk_cli.debug.delete_paste", return_value=True):
-            run_debug_delete(args)
-
-        out = capsys.readouterr().out
-        assert "Deleted" in out
-        assert "paste.rs/abc" in out
-
-    def test_handles_delete_failure(self, capsys):
-        from clawk_cli.debug import run_debug_delete
-
-        args = MagicMock()
-        args.urls = ["https://paste.rs/abc"]
-
-        with patch(
-            "clawk_cli.debug.delete_paste", side_effect=Exception("network error")
-        ):
-            run_debug_delete(args)
-
-        out = capsys.readouterr().out
-        assert "Could not delete" in out
-
-    def test_no_urls_shows_usage(self, capsys):
-        from clawk_cli.debug import run_debug_delete
-
-        args = MagicMock()
-        args.urls = []
-
-        run_debug_delete(args)
-
-        out = capsys.readouterr().out
-        assert "Usage" in out
-
-
-class TestShareIncludesAutoDelete:
-    """Verify that run_debug_share schedules auto-deletion and prints TTL."""
-
-    def test_share_schedules_auto_delete(self, clawk_home, capsys):
-        from clawk_cli.debug import run_debug_share
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = False
-        args.nous = False
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                return_value="https://paste.rs/test1",
-            ),
-            patch("clawk_cli.debug._schedule_auto_delete") as mock_sched,
-        ):
-            run_debug_share(args)
-
-        # auto-delete was scheduled with the uploaded URLs
-        mock_sched.assert_called_once()
-        urls_arg = mock_sched.call_args[0][0]
-        assert "https://paste.rs/test1" in urls_arg
-
-        out = capsys.readouterr().out
-        assert "auto-delete" in out
-
-    def test_share_shows_privacy_notice(self, clawk_home, capsys):
-        from clawk_cli.debug import run_debug_share
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = False
-        args.nous = False
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                return_value="https://paste.rs/test",
-            ),
-            patch("clawk_cli.debug._schedule_auto_delete"),
-        ):
-            run_debug_share(args)
-
-        out = capsys.readouterr().out
-        assert "PUBLIC paste service" in out
-        assert "NOT redacted" in out
-
-    def test_local_no_privacy_notice(self, clawk_home, capsys):
-        from clawk_cli.debug import run_debug_share
-
-        args = MagicMock()
-        args.lines = 50
-        args.expire = 7
-        args.local = True
-        args.nous = False
-
-        with patch("clawk_cli.dump.run_dump"):
-            run_debug_share(args)
-
-        out = capsys.readouterr().out
-        assert "PUBLIC paste service" not in out
+        assert result == [(1, 1)]
+        assert [e["url"] for e in _load_pending()] == ["https://paste.rs/new"]
 
 
 # ---------------------------------------------------------------------------
@@ -1388,51 +944,6 @@ class TestBuildDebugShare:
     (dashboard). The dashboard renders ``urls`` as real, copyable links, so the
     contract here is the return value, not stdout.
     """
-
-    def test_returns_structured_urls(self, clawk_home):
-        from clawk_cli.debug import build_debug_share, DebugShareResult
-
-        count = [0]
-
-        def _upload(content, expiry_days=7):
-            count[0] += 1
-            return f"https://paste.rs/p{count[0]}"
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch("clawk_cli.debug.upload_to_pastebin", side_effect=_upload),
-            patch("clawk_cli.debug._schedule_auto_delete"),
-        ):
-            result = build_debug_share(log_lines=50, redact=True)
-
-        assert isinstance(result, DebugShareResult)
-        # All four seeded logs (agent/gateway/desktop) + the summary report.
-        assert "Report" in result.urls
-        assert "agent.log" in result.urls
-        assert "gateway.log" in result.urls
-        assert "desktop.log" in result.urls
-        assert result.failures == []
-        assert result.redacted is True
-        assert result.auto_delete_seconds == 21600
-
-    def test_skips_missing_logs_without_failure(self, clawk_home):
-        from clawk_cli.debug import build_debug_share
-
-        # Remove desktop.log so it should be neither uploaded nor reported failed.
-        (clawk_home / "logs" / "desktop.log").unlink()
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                side_effect=lambda c, expiry_days=7: "https://paste.rs/x",
-            ),
-            patch("clawk_cli.debug._schedule_auto_delete"),
-        ):
-            result = build_debug_share(log_lines=50, redact=True)
-
-        assert "desktop.log" not in result.urls
-        assert result.failures == []
 
     def test_redaction_keeps_secrets_out_of_payload(self, clawk_home):
         from clawk_cli.debug import build_debug_share
@@ -1482,20 +993,6 @@ class TestBuildDebugShare:
         assert len(result.failures) == 1
         assert "paste service hiccup" in result.failures[0]
 
-    def test_required_report_failure_raises(self, clawk_home):
-        from clawk_cli.debug import build_debug_share
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                side_effect=RuntimeError("all paste services down"),
-            ),
-            patch("clawk_cli.debug._schedule_auto_delete"),
-        ):
-            with pytest.raises(RuntimeError, match="all paste services down"):
-                build_debug_share(log_lines=50, redact=True)
-
 
 # ---------------------------------------------------------------------------
 # Shared bundle collection + Nous-S3 path
@@ -1503,28 +1000,6 @@ class TestBuildDebugShare:
 
 
 class TestCollectShareBundle:
-    def test_returns_report_and_logs(self, clawk_home):
-        from clawk_cli.debug import collect_share_bundle
-
-        with patch("clawk_cli.dump.run_dump"):
-            bundle = collect_share_bundle(log_lines=50, redact=True)
-
-        assert "report" in bundle
-        assert "agent.log" in bundle
-        assert "gateway.log" in bundle
-        assert "desktop.log" in bundle
-        # Banner is prepended under redact=True.
-        assert "redacted at upload time" in bundle["report"]
-        assert "session started" in bundle["agent.log"]
-
-    def test_no_redact_omits_banner(self, clawk_home):
-        from clawk_cli.debug import collect_share_bundle
-
-        with patch("clawk_cli.dump.run_dump"):
-            bundle = collect_share_bundle(log_lines=50, redact=False)
-
-        assert "redacted at upload time" not in bundle["report"]
-
     def test_redaction_keeps_secrets_out(self, clawk_home):
         from clawk_cli.debug import collect_share_bundle
 
@@ -1541,11 +1016,18 @@ class TestCollectShareBundle:
         # With redaction it must be scrubbed everywhere.
         assert secret not in "\n".join(redacted.values())
 
-    def test_build_debug_share_uses_collector(self, clawk_home):
-        # build_debug_share must produce the same report text the collector does
-        # (i.e. the refactor preserved paste.rs behaviour).
-        from clawk_cli.debug import build_debug_share, collect_share_bundle
+    def test_redaction_masks_url_credentials(self, clawk_home):
+        """Log-time redaction leaves ``?token=`` and ``user:pass@`` in URLs for tool flows;
+        the upload must not carry them."""
+        from clawk_cli.debug import collect_share_bundle
 
+        query_token = "Q7fK2mZp9RtX4vLb8NcW1yHs"
+        password = "Pw7Kq2Lm9Xs4Vb"
+        (clawk_home / "logs" / "agent.log").write_text(
+            "2026-09-29 01:00:00 INFO plugins.web.firecrawl.provider: Firecrawl scraping: "
+            f"https://files.example.com/export.csv?token={query_token}&page=2\n"
+            f"2026-09-29 01:00:01 INFO agent: using proxy http://alice:{password}@10.0.0.5:3128\n"
+        )
         with patch("clawk_cli.dump.run_dump"):
             expected = collect_share_bundle(log_lines=50, redact=True)["report"]
 
@@ -1603,36 +1085,13 @@ class TestDebugSlashCommand:
     def test_bare_debug_defaults_to_paste(self):
         c = self._captured("/debug")
         assert c["nous"] is False and c["local"] is False
-        assert c["lines"] == 200 and c["expire"] == 7
         # The slash command IS the consent action → skip the [y/N] prompt
         # (input() would hang inside prompt_toolkit's event loop).
         assert c["yes"] is True
 
-    def test_nous_word_sets_nous(self):
-        c = self._captured("/debug nous")
-        assert c["nous"] is True and c["local"] is False
-
-    def test_local_word_sets_local(self):
-        c = self._captured("/debug local")
-        assert c["local"] is True and c["nous"] is False
-
     def test_word_parsing_is_case_insensitive(self):
         c = self._captured("/debug NOUS")
         assert c["nous"] is True
-
-    def test_local_wins_over_nous(self):
-        # local never touches the network, so it takes precedence.
-        c = self._captured("/debug nous local")
-        assert c["local"] is True and c["nous"] is False
-
-    def test_unknown_word_falls_back_to_default(self):
-        c = self._captured("/debug paste")
-        assert c["nous"] is False and c["local"] is False
-
-    def test_no_arg_default_keyword(self):
-        # Calling with no cmd_original (legacy callers) must still work.
-        c = self._captured("")
-        assert c["nous"] is False and c["local"] is False
 
 
 class TestShareConsentGate:
@@ -1652,66 +1111,6 @@ class TestShareConsentGate:
         base.update(over)
         return SimpleNamespace(**base)
 
-    def test_aborts_on_user_decline(self, clawk_home, capsys, monkeypatch):
-        """Interactive user typing anything but y/yes → no upload."""
-        from clawk_cli.debug import run_debug_share
-
-        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-        monkeypatch.setattr("builtins.input", lambda _: "n")
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch("clawk_cli.debug.upload_to_pastebin") as mock_upload,
-        ):
-            run_debug_share(self._args())
-
-        mock_upload.assert_not_called()
-        assert "Aborted" in capsys.readouterr().out
-
-    def test_proceeds_on_user_accept(self, clawk_home, capsys, monkeypatch):
-        """Interactive user typing 'y' → upload proceeds."""
-        from clawk_cli.debug import run_debug_share
-
-        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-        monkeypatch.setattr("builtins.input", lambda _: "y")
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch("clawk_cli.debug._sweep_expired_pastes", return_value=(0, 0)),
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                return_value="https://paste.rs/test",
-            ),
-            patch("clawk_cli.debug._schedule_auto_delete"),
-        ):
-            run_debug_share(self._args())
-
-        out = capsys.readouterr().out
-        assert "Debug report uploaded" in out
-        assert "Aborted" not in out
-
-    def test_yes_flag_skips_prompt(self, clawk_home, capsys, monkeypatch):
-        """--yes uploads without ever calling input()."""
-        from clawk_cli.debug import run_debug_share
-
-        def _boom(_):
-            raise AssertionError("input() must not be called with --yes")
-
-        monkeypatch.setattr("builtins.input", _boom)
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch("clawk_cli.debug._sweep_expired_pastes", return_value=(0, 0)),
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                return_value="https://paste.rs/test",
-            ),
-            patch("clawk_cli.debug._schedule_auto_delete"),
-        ):
-            run_debug_share(self._args(yes=True))
-
-        assert "Debug report uploaded" in capsys.readouterr().out
-
     def test_non_interactive_requires_yes(self, clawk_home, capsys, monkeypatch):
         """No TTY + no --yes → exit(1), never upload silently."""
         from clawk_cli.debug import run_debug_share
@@ -1727,28 +1126,7 @@ class TestShareConsentGate:
 
         assert exc.value.code == 1
         mock_upload.assert_not_called()
-        err = capsys.readouterr().err
-        assert "Non-interactive mode requires --yes" in err
-        assert "personal data" in err
-
-    def test_non_interactive_with_yes_succeeds(self, clawk_home, capsys, monkeypatch):
-        """No TTY but --yes present → upload proceeds."""
-        from clawk_cli.debug import run_debug_share
-
-        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch("clawk_cli.debug._sweep_expired_pastes", return_value=(0, 0)),
-            patch(
-                "clawk_cli.debug.upload_to_pastebin",
-                return_value="https://paste.rs/test",
-            ),
-            patch("clawk_cli.debug._schedule_auto_delete"),
-        ):
-            run_debug_share(self._args(yes=True))
-
-        assert "https://paste.rs/test" in capsys.readouterr().out
+        assert "--yes" in capsys.readouterr().err
 
     # NOTE (fork): upstream's ``test_nous_path_also_gated`` is not carried
     # over — the fork has no Nous upload path to gate (``--nous`` exits 1

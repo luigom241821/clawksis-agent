@@ -672,7 +672,7 @@
 
       const tierPart = achievement.tier ? (achievement.tier + " tier ") : "";
 
-      const tmpl = tx(t, "share.tweet_text", "Just unlocked {tier_part}\"{name}\" in Clawksis ☤", {
+      const tmpl = tx(t, "share.tweet_text", "Just unlocked {tier_part}\"{name}\" in Clawksis ∇", {
 
         tier_part: tierPart,
 

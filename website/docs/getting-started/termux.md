@@ -1,7 +1,7 @@
 ---
 sidebar_position: 3
 title: "Android / Termux"
-description: "Run Clawksis directly on an Android phone with Termux"
+description: "Install Clawksis on Android from its signed Termux APT repository"
 ---
 
 # Clawksis on Android with Termux
@@ -66,171 +66,68 @@ If you want the explicit commands or need to debug a failed install, use the man
 
 ```bash
 pkg update
-pkg install -y git python clang rust make pkg-config libffi openssl nodejs ripgrep ffmpeg
+pkg upgrade clawksis-agent
 ```
 
-Why these packages?
-- `python` — runtime + venv support
-- `git` — clone/update the repo
-- `clang`, `rust`, `make`, `pkg-config`, `libffi`, `openssl` — needed to build a few Python dependencies on Android
-- `nodejs` — optional Node runtime for experiments beyond the tested core path
-- `ripgrep` — fast file search
-- `ffmpeg` — media / TTS conversions
+`clawk update` refuses to modify an APT-owned installation.
+It prints the package-manager command instead.
+Canary versions contain `~canary.<timestamp>` and sort before the corresponding
+stable version. Each suite only lists its own channel's packages; to move
+between channels, edit the channel path and suite in `clawksis-agent.list`, then
+`pkg update && pkg upgrade clawksis-agent`.
 
-### 2. Clone Clawksis
+## Gateway
+
+This APT installation does not use systemd, launchd, or Windows Scheduled Tasks.
+Run the gateway in a Termux session:
 
 ```bash
-git clone https://github.com/samuelgradientai-sys/clawksis-agent.git
-cd clawksis-agent
+clawk gateway run
 ```
 
-### 3. Create a virtual environment
+For a background process:
 
 ```bash
-python -m venv venv
-source venv/bin/activate
-export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
-python -m pip install --upgrade pip setuptools wheel
+mkdir -p "${CLAWK_HOME:-$HOME/.clawk}/logs"
+nohup clawk gateway run >> "${CLAWK_HOME:-$HOME/.clawk}/logs/gateway.log" 2>&1 &
 ```
 
-`ANDROID_API_LEVEL` is important for Rust / maturin-based packages such as `jiter`.
+:::warning Android process limits
+Android can suspend or terminate background Termux processes.
+Battery optimization exemptions and `termux-wake-lock` can help, but do not guarantee persistent operation.
+:::
 
-### 4. Install the tested Termux bundle
+## Limits
+
+The package does not include the `nemo-relay` exporter. Its vendored build
+toolchain does not support this target.
+
+The package does not include Electron, local Chromium, or desktop computer-use
+tools. A local Docker daemon is not part of the Termux environment. Remote
+services have their own requirements and connectivity limits.
+
+Phone-native Termux:API microphone and clipboard adapters are not provided by
+this package path. The prebuilt CLI/TUI is not proof of local voice or wake-word
+support. Optional integrations and third-party plugins can require dependencies
+that do not support Android.
+
+Python 3.14 on this target reports `sys.platform == "android"`. A dependency
+or skill gated only to `linux` is not automatically available on Android.
+
+## Uninstall
 
 ```bash
-python -m pip install -e '.[termux]' -c constraints-termux.txt
+pkg uninstall clawksis-agent
 ```
 
-If you only want the minimal core agent, this also works:
-
-```bash
-python -m pip install -e '.' -c constraints-termux.txt
-```
-
-### 5. Put `clawk` on your Termux PATH
-
-```bash
-ln -sf "$PWD/venv/bin/clawk" "$PREFIX/bin/clawk"
-```
-
-`$PREFIX/bin` is already on PATH in Termux, so this makes the `clawk` command persist across new shells without re-activating the venv every time.
-
-### 6. Verify the install
-
-```bash
-clawk version
-clawk doctor
-```
-
-### 7. Start Clawksis
-
-```bash
-clawk
-```
-
----
-
-## Recommended follow-up setup
-
-### Configure a model
-
-```bash
-clawk model
-```
-
-Or set keys directly in `~/.clawksis/.env`.
-
-### Re-run the full interactive setup wizard later
-
-```bash
-clawk setup
-```
-
-### Install optional Node dependencies manually
-
-The tested Termux path skips Node/browser bootstrap on purpose. If you want to experiment with browser tooling later:
-
-```bash
-pkg install nodejs-lts
-npm install
-```
-
-The browser tool automatically includes Termux directories (`/data/data/com.termux/files/usr/bin`) in its PATH search, so `agent-browser` and `npx` are discovered without any extra PATH configuration.
-
-Treat browser / WhatsApp tooling on Android as experimental until documented otherwise.
-
----
+APT removes the package and its command symlinks. It preserves your configuration, sessions, skills, and memories.
 
 ## Troubleshooting
 
-### `No solution found` when installing `.[all]`
+- **Package not found:** verify the repository entry, then run `pkg update`.
+- **Signature error:** verify the public key fingerprint. Do not use an unsigned repository or bypass the error.
+- **Missing command:** verify that `$PREFIX/bin` is on `PATH`, or reinstall the package.
+- **Missing library or TUI bundle:** report `clawk --version` and the complete error. The core package must not require a local rebuild.
+- **Gateway stops with the screen off:** review Android's battery and background-process limits.
 
-Use the tested Termux bundle instead:
-
-```bash
-python -m pip install -e '.[termux]' -c constraints-termux.txt
-```
-
-The blocker is currently the `voice` extra:
-- `voice` pulls `faster-whisper`
-- `faster-whisper` depends on `ctranslate2`
-- `ctranslate2` does not publish Android wheels
-
-### `uv pip install` fails on Android
-
-Use the Termux path with the stdlib venv + `pip` instead:
-
-```bash
-python -m venv venv
-source venv/bin/activate
-export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install -e '.[termux]' -c constraints-termux.txt
-```
-
-### `jiter` / `maturin` complains about `ANDROID_API_LEVEL`
-
-Set the API level explicitly before installing:
-
-```bash
-export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
-python -m pip install -e '.[termux]' -c constraints-termux.txt
-```
-
-### `clawk doctor` says ripgrep or Node is missing
-
-Install them with Termux packages:
-
-```bash
-pkg install ripgrep nodejs
-```
-
-### Build failures while installing Python packages
-
-Make sure the build toolchain is installed:
-
-```bash
-pkg install clang rust make pkg-config libffi openssl
-```
-
-Then retry:
-
-```bash
-python -m pip install -e '.[termux]' -c constraints-termux.txt
-```
-
----
-
-## Known limitations on phones
-
-- Docker backend is unavailable
-- local voice transcription via `faster-whisper` is unavailable in the tested path
-- browser automation setup is intentionally skipped by the installer
-- some optional extras may work, but only `.[termux]` and `.[termux-all]` are currently documented as the tested Android bundles
-
-If you hit a new Android-specific issue, please open a GitHub issue with:
-- your Android version
-- `termux-info`
-- `python --version`
-- `clawk doctor`
-- the exact install command and full error output
+For general diagnostics, run `clawk doctor`.

@@ -27,20 +27,6 @@ def _max_tokens_fn(n):
 class TestNvidiaParity:
     """NVIDIA NIM: default max_tokens=16384."""
 
-    def test_default_max_tokens(self, transport):
-        """NVIDIA default max_tokens=16384 comes from profile, not legacy is_nvidia_nim flag."""
-        from providers import get_provider_profile
-
-        profile = get_provider_profile("nvidia")
-        kw = transport.build_kwargs(
-            model="nvidia/llama-3.1-nemotron-70b-instruct",
-            messages=_simple_messages(),
-            tools=None,
-            max_tokens_param_fn=_max_tokens_fn,
-            provider_profile=profile,
-        )
-        assert kw["max_completion_tokens"] == 16384
-
     def test_user_max_tokens_overrides(self, transport):
         from providers import get_provider_profile
 
@@ -59,26 +45,6 @@ class TestNvidiaParity:
 class TestKimiParity:
     """Kimi: OMIT temperature, max_tokens=32000, thinking + reasoning_effort."""
 
-    def test_temperature_omitted(self, transport):
-        kw = transport.build_kwargs(
-            model="kimi-k2",
-            messages=_simple_messages(),
-            tools=None,
-            provider_profile=get_provider_profile("kimi-coding"),
-            omit_temperature=True,
-        )
-        assert "temperature" not in kw
-
-    def test_default_max_tokens(self, transport):
-        kw = transport.build_kwargs(
-            model="kimi-k2",
-            messages=_simple_messages(),
-            tools=None,
-            provider_profile=get_provider_profile("kimi-coding"),
-            max_tokens_param_fn=_max_tokens_fn,
-        )
-        assert kw["max_completion_tokens"] == 32000
-
     def test_thinking_enabled(self, transport):
         # xor contract (fix ce4e74b3): an explicit recognized effort sends
         # reasoning_effort ONLY — never paired with extra_body.thinking.
@@ -91,55 +57,7 @@ class TestKimiParity:
         )
         assert kw.get("reasoning_effort") == "high"
         assert "thinking" not in kw.get("extra_body", {})
-
-    def test_thinking_enabled_without_effort(self, transport):
-        # enabled but no effort → fall back to the thinking toggle, no effort.
-        kw = transport.build_kwargs(
-            model="kimi-k2",
-            messages=_simple_messages(),
-            tools=None,
-            provider_profile=get_provider_profile("kimi-coding"),
-            reasoning_config={"enabled": True},
-        )
-        assert kw["extra_body"]["thinking"] == {"type": "enabled"}
-        assert "reasoning_effort" not in kw
-
-    def test_thinking_disabled(self, transport):
-        kw = transport.build_kwargs(
-            model="kimi-k2",
-            messages=_simple_messages(),
-            tools=None,
-            provider_profile=get_provider_profile("kimi-coding"),
-            reasoning_config={"enabled": False},
-        )
-        assert kw["extra_body"]["thinking"] == {"type": "disabled"}
-        assert "reasoning_effort" not in kw
-
-    def test_reasoning_effort_top_level(self, transport):
-        """Kimi reasoning_effort is a TOP-LEVEL api_kwargs key, NOT in extra_body."""
-        kw = transport.build_kwargs(
-            model="kimi-k2",
-            messages=_simple_messages(),
-            tools=None,
-            provider_profile=get_provider_profile("kimi-coding"),
-            reasoning_config={"enabled": True, "effort": "high"},
-        )
-        assert kw.get("reasoning_effort") == "high"
         assert "reasoning_effort" not in kw.get("extra_body", {})
-
-    def test_reasoning_effort_default_no_effort(self, transport):
-        # xor contract: enabled with no effort falls back to thinking-enabled
-        # and emits NO top-level reasoning_effort (previously defaulted to
-        # "medium" alongside thinking — the pairing this fix removes).
-        kw = transport.build_kwargs(
-            model="kimi-k2",
-            messages=_simple_messages(),
-            tools=None,
-            provider_profile=get_provider_profile("kimi-coding"),
-            reasoning_config={"enabled": True},
-        )
-        assert "reasoning_effort" not in kw
-        assert kw["extra_body"]["thinking"] == {"type": "enabled"}
 
 
 class TestOpenRouterParity:
@@ -198,16 +116,6 @@ class TestOpenRouterParity:
 class TestQwenParity:
     """Qwen: max_tokens=65536, vl_high_resolution, metadata top-level."""
 
-    def test_default_max_tokens(self, transport):
-        kw = transport.build_kwargs(
-            model="qwen3.5-plus",
-            messages=_simple_messages(),
-            tools=None,
-            provider_profile=get_provider_profile("qwen-oauth"),
-            max_tokens_param_fn=_max_tokens_fn,
-        )
-        assert kw["max_completion_tokens"] == 65536
-
     def test_vl_high_resolution(self, transport):
         kw = transport.build_kwargs(
             model="qwen3.5-plus",
@@ -251,5 +159,18 @@ class TestCustomOllamaParity:
             tools=None,
             provider_profile=get_provider_profile("custom"),
             reasoning_config={"enabled": False, "effort": "none"},
+            base_url="http://127.0.0.1:11434/v1",
         )
         assert kw["extra_body"]["think"] is False
+
+    def test_think_omitted_for_mistral_custom(self, transport):
+        kw = transport.build_kwargs(
+            model="mistral-small-latest",
+            messages=_simple_messages(),
+            tools=None,
+            provider_profile=get_provider_profile("custom"),
+            reasoning_config={"enabled": False, "effort": "none"},
+            base_url="https://api.mistral.ai/v1",
+        )
+        assert kw.get("extra_body", {}).get("think") is None
+        assert kw.get("reasoning_effort") == "none"

@@ -15,9 +15,11 @@ from clawk_cli import model_switch
 # ---------------------------------------------------------------------------
 # Module isolation: _import_cli() wipes tools.* / cli / run_agent from
 # sys.modules so it can re-import cli fresh.  Without cleanup the wiped
-# modules leak into subsequent tests, breaking
+
+# modules leak into subsequent tests on the same xdist worker, breaking
 # mock patches that target "tools.file_tools._get_file_ops" etc.
 # ---------------------------------------------------------------------------
+
 
 def _reset_modules(prefixes: tuple[str, ...]):
     for name in list(sys.modules):
@@ -112,7 +114,12 @@ def _install_prompt_toolkit_stubs():
 
 def _import_cli():
     for name in list(sys.modules):
-        if name == "cli" or name == "run_agent" or name == "tools" or name.startswith("tools."):
+        if (
+            name == "cli"
+            or name == "run_agent"
+            or name == "tools"
+            or name.startswith("tools.")
+        ):
             sys.modules.pop(name, None)
 
     if "firecrawl" not in sys.modules:
@@ -185,7 +192,6 @@ def test_explicit_model_wins_over_provider_default_model(monkeypatch):
     assert shell.model == "explicit-id"
 
 
-
 @pytest.mark.parametrize(
     ("explicit_base_url", "expected_base_url"),
     [
@@ -235,7 +241,9 @@ def test_startup_alias_base_url_reaches_runtime_resolution(
     assert shell.base_url == expected_base_url
 
 
-def test_provider_flag_logs_when_custom_default_model_cannot_resolve(monkeypatch, caplog):
+def test_provider_flag_logs_when_custom_default_model_cannot_resolve(
+    monkeypatch, caplog
+):
     """A named --provider that fails to resolve must not fail silently."""
     cli = _import_cli()
     monkeypatch.setitem(
@@ -262,8 +270,6 @@ def test_provider_flag_logs_when_custom_default_model_cannot_resolve(monkeypatch
     )
 
 
-
-
 def test_runtime_resolution_failure_is_not_sticky(monkeypatch):
     cli = _import_cli()
     calls = {"count": 0}
@@ -284,10 +290,16 @@ def test_runtime_resolution_failure_is_not_sticky(monkeypatch):
         def __init__(self, *args, **kwargs):
             self.kwargs = kwargs
 
-    monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _runtime_resolve)
-    monkeypatch.setattr("clawk_cli.runtime_provider.format_runtime_provider_error", lambda exc: str(exc))
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.resolve_runtime_provider", _runtime_resolve
+    )
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.format_runtime_provider_error", lambda exc: str(exc)
+    )
     monkeypatch.setattr("clawk_cli.gateway_agent.GatewayAgent", _DummyAgent)
-    monkeypatch.setattr("clawk_cli.gateway_session_store.session_store", lambda: None)  # no live gateway
+    monkeypatch.setattr(
+        "clawk_cli.gateway_session_store.session_store", lambda: None
+    )  # no live gateway
 
     shell = cli.ClawksisCLI(model="gpt-5", compact=True, max_turns=1)
 
@@ -314,14 +326,16 @@ def test_ensure_runtime_credentials_passes_cli_model_as_target_model(monkeypatch
             "source": "env",
         }
 
-    monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _runtime_resolve)
-    shell = cli.ClawksisCLI(model="mimo-v2.5", provider="opencode-go", compact=True, max_turns=1)
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.resolve_runtime_provider", _runtime_resolve
+    )
+    shell = cli.ClawksisCLI(
+        model="mimo-v2.5", provider="opencode-go", compact=True, max_turns=1
+    )
 
     assert shell._ensure_runtime_credentials() is True
     assert seen["requested"] == "opencode-go"
     assert seen["target_model"] == "mimo-v2.5"
-
-
 
 
 def test_fallback_runtime_resolves_the_fallback_entry_model(monkeypatch, tmp_path):
@@ -334,14 +348,17 @@ def test_fallback_runtime_resolves_the_fallback_entry_model(monkeypatch, tmp_pat
     home = tmp_path / "clawk"
     home.mkdir()
     (home / "config.yaml").write_text(
-        "model:\n  default: mimo-v2.5-free\n  provider: opencode\n  base_url: https://opencode.ai/zen/v1\n")
+        "model:\n  default: mimo-v2.5-free\n  provider: opencode\n  base_url: https://opencode.ai/zen/v1\n"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("OPENCODE_GO_API_KEY", "sk-test-go")
     monkeypatch.setattr("cli._cprint", lambda *a, **k: None, raising=False)
 
     shell = CLIAgentSetupMixin.__new__(CLIAgentSetupMixin)
     shell._fallback_model = [{"provider": "opencode-go", "model": "mimo-v2.5"}]
-    runtime = shell._resolve_fallback_runtime(AuthError("no key", provider="opencode-zen", code="missing_api_key"))
+    runtime = shell._resolve_fallback_runtime(
+        AuthError("no key", provider="opencode-zen", code="missing_api_key")
+    )
 
     assert runtime is not None
     assert shell.model == "mimo-v2.5"
@@ -350,6 +367,7 @@ def test_fallback_runtime_resolves_the_fallback_entry_model(monkeypatch, tmp_pat
 
 def _quota_auth_error():
     from clawk_cli.auth import CODEX_RATE_LIMITED_CODE, AuthError
+
     return AuthError(
         "Codex provider quota exhausted (429); retry after 1839s. Credentials are still valid.",
         provider="openai-codex",
@@ -358,12 +376,22 @@ def _quota_auth_error():
     )
 
 
-@pytest.mark.parametrize(("exc_factory", "expected", "absent"), [
-    (_quota_auth_error, "quota exhausted", "auth failed"),
-    (lambda: __import__("clawk_cli.auth", fromlist=["AuthError"]).AuthError(
-        "no key", provider="openai-codex", code="missing_api_key"), "Primary auth failed", "quota exhausted"),
-])
-def test_fallback_runtime_labels_quota_outage_and_bad_credentials_distinctly(monkeypatch, tmp_path, exc_factory, expected, absent):
+@pytest.mark.parametrize(
+    ("exc_factory", "expected", "absent"),
+    [
+        (_quota_auth_error, "quota exhausted", "auth failed"),
+        (
+            lambda: __import__("clawk_cli.auth", fromlist=["AuthError"]).AuthError(
+                "no key", provider="openai-codex", code="missing_api_key"
+            ),
+            "Primary auth failed",
+            "quota exhausted",
+        ),
+    ],
+)
+def test_fallback_runtime_labels_quota_outage_and_bad_credentials_distinctly(
+    monkeypatch, tmp_path, exc_factory, expected, absent
+):
     """A 429 at credential resolution is quota, not bad credentials (#117482); a real
     credential failure keeps the auth-failed wording."""
     from clawk_cli.cli_agent_setup_mixin import CLIAgentSetupMixin
@@ -377,7 +405,9 @@ def test_fallback_runtime_labels_quota_outage_and_bad_credentials_distinctly(mon
         "clawk_cli.runtime_provider.resolve_runtime_provider",
         lambda **kw: {"provider": "custom", "base_url": "http://x/v1", "api_key": "k"},
     )
-    monkeypatch.setattr("clawk_cli.fallback_config.resolve_entry_api_key", lambda entry: "k")
+    monkeypatch.setattr(
+        "clawk_cli.fallback_config.resolve_entry_api_key", lambda entry: "k"
+    )
 
     shell = CLIAgentSetupMixin.__new__(CLIAgentSetupMixin)
     shell._fallback_model = [{"provider": "custom", "model": "local-model"}]
@@ -402,7 +432,9 @@ def test_ensure_runtime_credentials_records_quota_vs_bad_key(monkeypatch, tmp_pa
     def _raise_quota(**kw):
         raise _quota_auth_error()
 
-    monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _raise_quota)
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.resolve_runtime_provider", _raise_quota
+    )
 
     quota_shell = CLIAgentSetupMixin.__new__(CLIAgentSetupMixin)
     quota_shell.model = "gpt-x"
@@ -417,7 +449,9 @@ def test_ensure_runtime_credentials_records_quota_vs_bad_key(monkeypatch, tmp_pa
     def _raise_missing(**kw):
         raise AuthError("no key", provider="openai-codex", code="missing_api_key")
 
-    monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _raise_missing)
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.resolve_runtime_provider", _raise_missing
+    )
     bad_shell = CLIAgentSetupMixin.__new__(CLIAgentSetupMixin)
     bad_shell.model = "gpt-x"
     bad_shell.requested_provider = "openai-codex"
@@ -427,18 +461,6 @@ def test_ensure_runtime_credentials_records_quota_vs_bad_key(monkeypatch, tmp_pa
     bad_shell.tool_progress_mode = "off"
     assert bad_shell._ensure_runtime_credentials() is False
     assert bad_shell._credentials_rate_limited is False
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_model_flow_nous_does_not_restore_stale_custom_api_key(tmp_path, monkeypatch):
@@ -485,7 +507,9 @@ def test_model_flow_nous_does_not_restore_stale_custom_api_key(tmp_path, monkeyp
         "clawk_cli.models.get_curated_nous_model_ids",
         lambda: [selected_model],
     )
-    monkeypatch.setattr("clawk_cli.models_pricing.get_pricing_for_provider", lambda provider: {})
+    monkeypatch.setattr(
+        "clawk_cli.models_pricing.get_pricing_for_provider", lambda provider: {}
+    )
     monkeypatch.setattr("clawk_cli.models.check_nous_free_tier", lambda **kwargs: False)
     monkeypatch.setattr(
         "clawk_cli.models.union_with_portal_paid_recommendations",
@@ -537,12 +561,6 @@ def _seed_stale_custom_model(tmp_path, monkeypatch):
     return config_path
 
 
-
-
-
-
-
-
 def test_codex_provider_uses_config_model(monkeypatch):
     """Model comes from config.yaml, not LLM_MODEL env var.
     Config.yaml is the single source of truth to avoid multi-agent conflicts."""
@@ -553,11 +571,15 @@ def test_codex_provider_uses_config_model(monkeypatch):
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
 
     # Set model via config
-    monkeypatch.setitem(cli.CLI_CONFIG, "model", {
-        "default": "gpt-5.2-codex",
-        "provider": "openai-codex",
-        "base_url": "https://chatgpt.com/backend-api/codex",
-    })
+    monkeypatch.setitem(
+        cli.CLI_CONFIG,
+        "model",
+        {
+            "default": "gpt-5.2-codex",
+            "provider": "openai-codex",
+            "base_url": "https://chatgpt.com/backend-api/codex",
+        },
+    )
 
     def _runtime_resolve(**kwargs):
         return {
@@ -568,8 +590,12 @@ def test_codex_provider_uses_config_model(monkeypatch):
             "source": "env/config",
         }
 
-    monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _runtime_resolve)
-    monkeypatch.setattr("clawk_cli.runtime_provider.format_runtime_provider_error", lambda exc: str(exc))
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.resolve_runtime_provider", _runtime_resolve
+    )
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.format_runtime_provider_error", lambda exc: str(exc)
+    )
     # Prevent live API call from overriding the config model
     monkeypatch.setattr(
         "clawk_cli.codex_models.get_codex_model_ids",
@@ -591,27 +617,54 @@ def test_codex_provider_uses_config_model(monkeypatch):
     [(None, "high"), ("low", "low")],
     ids=["fallback_model_override_applies", "explicit_cli_flag_outranks"],
 )
-def test_startup_fallback_re_resolves_reasoning_for_the_fallback_model(monkeypatch, reasoning_flag, expected_effort):
+def test_startup_fallback_re_resolves_reasoning_for_the_fallback_model(
+    monkeypatch, reasoning_flag, expected_effort
+):
     """Startup auth fallback swaps the model, so the CLI-level reasoning_config must follow it
     (per-model override for the fallback model, not the launch model's effort); an explicit
     ``--reasoning`` is the user's intent for this run and survives the swap."""
     cli = _import_cli()
     monkeypatch.setattr(cli, "_cprint", lambda *a, **k: None)
-    monkeypatch.setitem(cli.CLI_CONFIG, "model", {"default": "primary-model", "provider": "openai-codex"})
-    monkeypatch.setitem(cli.CLI_CONFIG, "fallback_providers", [{"provider": "zai", "model": "glm-5.3-flash"}])
-    monkeypatch.setitem(cli.CLI_CONFIG, "agent", {
-        **cli.CLI_CONFIG.get("agent", {}), "reasoning_effort": "medium",
-        "reasoning_overrides": {"glm-5.3-flash": "high"}})
+    monkeypatch.setitem(
+        cli.CLI_CONFIG,
+        "model",
+        {"default": "primary-model", "provider": "openai-codex"},
+    )
+    monkeypatch.setitem(
+        cli.CLI_CONFIG,
+        "fallback_providers",
+        [{"provider": "zai", "model": "glm-5.3-flash"}],
+    )
+    monkeypatch.setitem(
+        cli.CLI_CONFIG,
+        "agent",
+        {
+            **cli.CLI_CONFIG.get("agent", {}),
+            "reasoning_effort": "medium",
+            "reasoning_overrides": {"glm-5.3-flash": "high"},
+        },
+    )
 
     def _runtime_resolve(requested=None, **kwargs):
         if requested == "openai-codex":
-            raise AuthError("quota exhausted", provider="openai-codex", code="auth_failed")
-        return {"provider": "zai", "api_mode": "chat_completions",
-                "base_url": "https://api.z.ai/api/coding/paas/v4", "api_key": "sk-zai", "source": "env"}
+            raise AuthError(
+                "quota exhausted", provider="openai-codex", code="auth_failed"
+            )
+        return {
+            "provider": "zai",
+            "api_mode": "chat_completions",
+            "base_url": "https://api.z.ai/api/coding/paas/v4",
+            "api_key": "sk-zai",
+            "source": "env",
+        }
 
-    monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _runtime_resolve)
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.resolve_runtime_provider", _runtime_resolve
+    )
     shell = cli.ClawksisCLI(compact=True, max_turns=1, reasoning=reasoning_flag)
-    assert shell.reasoning_config["effort"] == ("medium" if reasoning_flag is None else reasoning_flag)
+    assert shell.reasoning_config["effort"] == (
+        "medium" if reasoning_flag is None else reasoning_flag
+    )
 
     assert shell._ensure_runtime_credentials() is True
     assert (shell.model, shell.provider) == ("glm-5.3-flash", "zai")
@@ -623,13 +676,27 @@ def test_custom_entry_model_swap_re_resolves_reasoning(monkeypatch):
     slug, so the CLI-level reasoning_config must follow to that model's per-model override."""
     cli = _import_cli()
     monkeypatch.setattr(cli, "_cprint", lambda *a, **k: None)
-    monkeypatch.setitem(cli.CLI_CONFIG, "agent", {
-        **cli.CLI_CONFIG.get("agent", {}), "reasoning_effort": "medium",
-        "reasoning_overrides": {"real-model": "high"}})
+    monkeypatch.setitem(
+        cli.CLI_CONFIG,
+        "agent",
+        {
+            **cli.CLI_CONFIG.get("agent", {}),
+            "reasoning_effort": "medium",
+            "reasoning_overrides": {"real-model": "high"},
+        },
+    )
     monkeypatch.setattr(
         "clawk_cli.runtime_provider.resolve_runtime_provider",
-        lambda **kw: {"provider": "custom", "name": "my-lan", "model": "real-model", "api_mode": "chat_completions",
-                      "base_url": "http://10.0.0.7:11434/v1", "api_key": "sk-lan", "source": "custom"})
+        lambda **kw: {
+            "provider": "custom",
+            "name": "my-lan",
+            "model": "real-model",
+            "api_mode": "chat_completions",
+            "base_url": "http://10.0.0.7:11434/v1",
+            "api_key": "sk-lan",
+            "source": "custom",
+        },
+    )
     shell = cli.ClawksisCLI(model="my-lan", compact=True, max_turns=1)
     assert shell.reasoning_config["effort"] == "medium"
 
@@ -638,21 +705,22 @@ def test_custom_entry_model_swap_re_resolves_reasoning(monkeypatch):
     assert shell.reasoning_config["effort"] == "high"
 
 
-
-
-
-
-
-
-
-
 def test_model_flow_custom_saves_verified_v1_base_url(monkeypatch):
     monkeypatch.setattr("clawk_cli.config.get_env_value", lambda key: "")
     saved_env = {}
-    monkeypatch.setattr("clawk_cli.config.save_env_value", lambda key, value: saved_env.__setitem__(key, value))
-    monkeypatch.setattr("clawk_cli.auth._save_model_choice", lambda model: saved_env.__setitem__("MODEL", model))
+    monkeypatch.setattr(
+        "clawk_cli.config.save_env_value",
+        lambda key, value: saved_env.__setitem__(key, value),
+    )
+    monkeypatch.setattr(
+        "clawk_cli.auth._save_model_choice",
+        lambda model: saved_env.__setitem__("MODEL", model),
+    )
     monkeypatch.setattr("clawk_cli.auth.deactivate_provider", lambda: None)
-    monkeypatch.setattr("clawk_cli.main_provider_setup._save_custom_provider", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_cli.main_provider_setup._save_custom_provider",
+        lambda *args, **kwargs: None,
+    )
     monkeypatch.setattr(
         "clawk_cli.models.probe_api_models",
         lambda api_key, base_url: {
@@ -674,7 +742,9 @@ def test_model_flow_custom_saves_verified_v1_base_url(monkeypatch):
     # then display name. The api_mode prompt also runs before model selection.
     answers = iter(["http://localhost:8000", "local-key", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
-    monkeypatch.setattr("clawk_cli.secret_prompt.masked_secret_prompt", lambda _prompt="": next(answers))
+    monkeypatch.setattr(
+        "clawk_cli.secret_prompt.masked_secret_prompt", lambda _prompt="": next(answers)
+    )
 
     caller_cfg = {}
     clawk_main._model_flow_custom(caller_cfg)
@@ -704,23 +774,27 @@ def test_model_flow_custom_persists_selected_api_mode(monkeypatch):
     )
     saved_env = {}
     monkeypatch.setattr("clawk_cli.config.load_config", lambda: saved_cfg)
-    monkeypatch.setattr("clawk_cli.config.save_config", lambda cfg: saved_cfg.update(cfg))
+    monkeypatch.setattr(
+        "clawk_cli.config.save_config", lambda cfg: saved_cfg.update(cfg)
+    )
     monkeypatch.setattr(
         "clawk_cli.config.save_env_value",
         lambda key, value: saved_env.__setitem__(key, value),
     )
     monkeypatch.setattr(
         "clawk_cli.main_provider_setup._save_custom_provider",
-        lambda base_url, api_key="", model="", context_length=None, name=None, api_mode=None, key_env="": captured_provider.update(
-            {
-                "base_url": base_url,
-                "api_key": api_key,
-                "model": model,
-                "context_length": context_length,
-                "name": name,
-                "api_mode": api_mode,
-                "key_env": key_env,
-            }
+        lambda base_url, api_key="", model="", context_length=None, name=None, api_mode=None, key_env="": (
+            captured_provider.update(
+                {
+                    "base_url": base_url,
+                    "api_key": api_key,
+                    "model": model,
+                    "context_length": context_length,
+                    "name": name,
+                    "api_mode": api_mode,
+                    "key_env": key_env,
+                }
+            )
         ),
     )
 
@@ -734,7 +808,9 @@ def test_model_flow_custom_persists_selected_api_mode(monkeypatch):
         ]
     )
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
-    monkeypatch.setattr("clawk_cli.secret_prompt.masked_secret_prompt", lambda _prompt="": "test-key")
+    monkeypatch.setattr(
+        "clawk_cli.secret_prompt.masked_secret_prompt", lambda _prompt="": "test-key"
+    )
 
     clawk_main._model_flow_custom({"model": {"provider": "custom"}})
 
@@ -758,10 +834,20 @@ def test_cmd_model_forwards_nous_login_tls_options(monkeypatch):
     monkeypatch.setattr("clawk_cli.config.save_config", lambda cfg: None)
     monkeypatch.setattr("clawk_cli.config.get_env_value", lambda key: "")
     monkeypatch.setattr("clawk_cli.config.save_env_value", lambda key, value: None)
-    monkeypatch.setattr("clawk_cli.auth.resolve_provider", lambda requested, **kwargs: "nous")
-    monkeypatch.setattr("clawk_cli.auth.get_provider_auth_state", lambda provider_id: None)
-    monkeypatch.setattr(clawk_main, "_prompt_provider_choice", lambda choices, **kwargs: 0)
-    monkeypatch.setattr(clawk_cli_main_provider_setup, "_prompt_provider_choice", lambda choices, **kwargs: 0)
+    monkeypatch.setattr(
+        "clawk_cli.auth.resolve_provider", lambda requested, **kwargs: "nous"
+    )
+    monkeypatch.setattr(
+        "clawk_cli.auth.get_provider_auth_state", lambda provider_id: None
+    )
+    monkeypatch.setattr(
+        clawk_main, "_prompt_provider_choice", lambda choices, **kwargs: 0
+    )
+    monkeypatch.setattr(
+        clawk_cli_main_provider_setup,
+        "_prompt_provider_choice",
+        lambda choices, **kwargs: 0,
+    )
 
     captured = {}
 
@@ -807,11 +893,6 @@ def test_cmd_model_forwards_nous_login_tls_options(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
 def test_save_custom_provider_uses_provided_name(monkeypatch, tmp_path):
     """When a display name is passed, it should appear in the saved entry."""
     import clawk_yaml as yaml
@@ -821,11 +902,14 @@ def test_save_custom_provider_uses_provided_name(monkeypatch, tmp_path):
     cfg_path.write_text(yaml.safe_dump({}))
 
     monkeypatch.setattr(
-        "clawk_cli.config.load_config", lambda: yaml.safe_load(cfg_path.read_text()) or {},
+        "clawk_cli.config.load_config",
+        lambda: yaml.safe_load(cfg_path.read_text()) or {},
     )
     saved = {}
+
     def _save(cfg):
         saved.update(cfg)
+
     monkeypatch.setattr("clawk_cli.config.save_config", _save)
 
     _save_custom_provider("http://localhost:11434/v1", name="Ollama")
@@ -834,7 +918,9 @@ def test_save_custom_provider_uses_provided_name(monkeypatch, tmp_path):
     assert entries[0]["name"] == "Ollama"
 
 
-def test_save_custom_provider_references_the_key_instead_of_inlining_it(monkeypatch, tmp_path):
+def test_save_custom_provider_references_the_key_instead_of_inlining_it(
+    monkeypatch, tmp_path
+):
     """With key_env set the entry must not carry the secret (#69449)."""
     import clawk_yaml as yaml
     from clawk_cli.main_provider_setup import _save_custom_provider
@@ -842,7 +928,8 @@ def test_save_custom_provider_references_the_key_instead_of_inlining_it(monkeypa
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.safe_dump({}))
     monkeypatch.setattr(
-        "clawk_cli.config.load_config", lambda: yaml.safe_load(cfg_path.read_text()) or {},
+        "clawk_cli.config.load_config",
+        lambda: yaml.safe_load(cfg_path.read_text()) or {},
     )
     saved = {}
     monkeypatch.setattr("clawk_cli.config.save_config", lambda cfg: saved.update(cfg))
@@ -860,8 +947,6 @@ def test_save_custom_provider_references_the_key_instead_of_inlining_it(monkeypa
     assert "sk-secret" not in yaml.safe_dump(saved)
 
 
-
-
 def test_custom_endpoint_key_env_is_a_valid_posix_name_for_ip_endpoints():
     """Every IP-based local endpoint slugs to a digit-leading name.
 
@@ -875,4 +960,3 @@ def test_custom_endpoint_key_env_is_a_valid_posix_name_for_ip_endpoints():
 
     for identity in ("127.0.0.1_8080", "0.0.0.0", "10.0.0.7:11434", "", "-–-"):
         assert _ENV_VAR_NAME_RE.match(custom_endpoint_key_env(identity)), identity
-

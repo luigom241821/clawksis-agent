@@ -25,10 +25,22 @@ def _make_cli():
 class TestCliResumeCommand:
     def test_show_recent_sessions_includes_indexes_and_resume_hint(self, capsys):
         cli_obj = _make_cli()
-        cli_obj._list_recent_sessions = MagicMock(return_value=[
-            {"id": "sess_002", "title": "Coding", "preview": "build feature", "last_active": None},
-            {"id": "sess_001", "title": "Research", "preview": "read docs", "last_active": None},
-        ])
+        cli_obj._list_recent_sessions = MagicMock(
+            return_value=[
+                {
+                    "id": "sess_002",
+                    "title": "Coding",
+                    "preview": "build feature",
+                    "last_active": None,
+                },
+                {
+                    "id": "sess_001",
+                    "title": "Research",
+                    "preview": "read docs",
+                    "last_active": None,
+                },
+            ]
+        )
 
         shown = cli_obj._show_recent_sessions(reason="resume")
         output = capsys.readouterr().out
@@ -37,22 +49,28 @@ class TestCliResumeCommand:
         assert "Coding" in output
         assert "Research" in output
 
-
-
     def test_handle_resume_by_index_switches_to_numbered_session(self):
         cli_obj = _make_cli()
-        cli_obj._list_recent_sessions = MagicMock(return_value=[
-            {"id": "sess_002", "title": "Coding"},
-            {"id": "sess_001", "title": "Research"},
-        ])
-        cli_obj._session_db.get_session.return_value = {"id": "sess_001", "title": "Research"}
-        cli_obj._session_db.get_resume_conversations.return_value = [
-            {"role": "user", "content": "hello"},
-            {"role": "assistant", "content": "hi"},
-        ], [
-            {"role": "user", "content": "hello"},
-            {"role": "assistant", "content": "hi"},
-        ]
+        cli_obj._list_recent_sessions = MagicMock(
+            return_value=[
+                {"id": "sess_002", "title": "Coding"},
+                {"id": "sess_001", "title": "Research"},
+            ]
+        )
+        cli_obj._session_db.get_session.return_value = {
+            "id": "sess_001",
+            "title": "Research",
+        }
+        cli_obj._session_db.get_resume_conversations.return_value = (
+            [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ],
+            [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ],
+        )
         # resolve_resume_session_id passes the id through when no compression chain.
         cli_obj._session_db.resolve_resume_session_id.return_value = "sess_001"
 
@@ -68,17 +86,17 @@ class TestCliResumeCommand:
 
     def test_handle_resume_by_index_out_of_range(self):
         cli_obj = _make_cli()
-        cli_obj._list_recent_sessions = MagicMock(return_value=[
-            {"id": "sess_002", "title": "Coding"},
-        ])
+        cli_obj._list_recent_sessions = MagicMock(
+            return_value=[
+                {"id": "sess_002", "title": "Coding"},
+            ]
+        )
 
         with patch("cli._cprint") as mock_cprint:
             cli_obj._handle_resume_command("/resume 9")
 
         assert mock_cprint.called
         assert cli_obj.session_id == "current_session"
-
-
 
 
 class TestCliResumeRestoresCwd:
@@ -97,20 +115,27 @@ class TestCliResumeRestoresCwd:
     def _resumable_cli(self, session_meta):
         cli_obj = _make_cli()
         cli_obj._session_db.get_session.return_value = session_meta
-        cli_obj._session_db.get_resume_conversations.return_value = [
-            {"role": "user", "content": "hello"},
-        ], [
-            {"role": "user", "content": "hello"},
-        ]
+        cli_obj._session_db.get_resume_conversations.return_value = (
+            [
+                {"role": "user", "content": "hello"},
+            ],
+            [
+                {"role": "user", "content": "hello"},
+            ],
+        )
         cli_obj._session_db.resolve_resume_session_id.return_value = session_meta["id"]
         return cli_obj
 
     def test_handle_resume_restores_recorded_cwd(self, tmp_path):
         recorded = str(tmp_path)
-        cli_obj = self._resumable_cli({"id": "sess_dir", "title": "Dir", "cwd": recorded})
+        cli_obj = self._resumable_cli(
+            {"id": "sess_dir", "title": "Dir", "cwd": recorded}
+        )
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"
+            ),
             patch("cli._cprint"),
             patch.object(cli_obj, "_console_print"),
             patch("os.chdir") as mock_chdir,
@@ -122,14 +147,17 @@ class TestCliResumeRestoresCwd:
 
         mock_chdir.assert_called_once_with(recorded)
 
-
     def test_sessions_command_restores_recorded_cwd(self, tmp_path):
         # /sessions <id> delegates to the resume flow, so it restores cwd too.
         recorded = str(tmp_path)
-        cli_obj = self._resumable_cli({"id": "sess_dir", "title": "Dir", "cwd": recorded})
+        cli_obj = self._resumable_cli(
+            {"id": "sess_dir", "title": "Dir", "cwd": recorded}
+        )
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"
+            ),
             patch("cli._cprint"),
             patch.object(cli_obj, "_console_print"),
             patch("os.chdir") as mock_chdir,
@@ -165,7 +193,6 @@ class TestPendingResumeNumberedSelection:
 
         assert cli_obj._pending_resume_sessions == sessions
 
-
     def test_pending_number_resumes_selected_session(self):
         cli_obj = _make_cli()
         sessions = [
@@ -176,12 +203,18 @@ class TestPendingResumeNumberedSelection:
         # _handle_resume_command("/resume 2") re-resolves the index via
         # _list_recent_sessions, so it must return the same list.
         cli_obj._list_recent_sessions = MagicMock(return_value=sessions)
-        cli_obj._session_db.get_session.return_value = {"id": "sess_001", "title": "Research"}
-        cli_obj._session_db.get_resume_conversations.return_value = [
-            {"role": "user", "content": "hello"},
-        ], [
-            {"role": "user", "content": "hello"},
-        ]
+        cli_obj._session_db.get_session.return_value = {
+            "id": "sess_001",
+            "title": "Research",
+        }
+        cli_obj._session_db.get_resume_conversations.return_value = (
+            [
+                {"role": "user", "content": "hello"},
+            ],
+            [
+                {"role": "user", "content": "hello"},
+            ],
+        )
         cli_obj._session_db.resolve_resume_session_id.return_value = "sess_001"
 
         with (
@@ -195,9 +228,6 @@ class TestPendingResumeNumberedSelection:
         # One-shot: prompt is disarmed after consuming.
         assert cli_obj._pending_resume_sessions is None
 
-
-
-
     def test_pending_disarmed_by_other_command(self):
         cli_obj = _make_cli()
         cli_obj._pending_resume_sessions = [{"id": "sess_002", "title": "Coding"}]
@@ -208,8 +238,6 @@ class TestPendingResumeNumberedSelection:
 
         # A non-resume command disarms the one-shot prompt (#34584).
         assert cli_obj._pending_resume_sessions is None
-
-
 
 
 class TestResumeFlushesBeforeEndSession:
@@ -231,14 +259,22 @@ class TestResumeFlushesBeforeEndSession:
         cli_obj._session_db.resolve_resume_session_id.return_value = "target"
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="target"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id", return_value="target"
+            ),
             patch("cli._cprint"),
         ):
             cli_obj._handle_resume_command("/resume target")
 
         agent._flush_messages_to_session_db.assert_called_once_with(
-            [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}],
-            conversation_history=[{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}],
+            [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ],
+            conversation_history=[
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ],
         )
         cli_obj._session_db.end_session.assert_called_once()
 
@@ -257,11 +293,19 @@ class TestResumeOpensTheTargetOnTheGateway:
 
         def gateway(method, **params):
             calls.append((method, params))
-            if method == "session.resume" and params["session_id"] == "target" and refusal:
+            if (
+                method == "session.resume"
+                and params["session_id"] == "target"
+                and refusal
+            ):
                 raise GatewayRPCError(refusal)
             if method == "session.resume":
                 sid = params["session_id"]
-                return {"stored_session_id": sid, "subscription_id": f"sub-{sid}", "info": {}}
+                return {
+                    "stored_session_id": sid,
+                    "subscription_id": f"sub-{sid}",
+                    "info": {},
+                }
             return {}
 
         conn = GatewayConnection()
@@ -277,7 +321,9 @@ class TestResumeOpensTheTargetOnTheGateway:
         cli_obj = _make_cli()
         cli_obj._session_db = store
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="target"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id", return_value="target"
+            ),
             patch("cli._cprint") as mock_cprint,
         ):
             cli_obj._handle_resume_command("/resume target")
@@ -292,7 +338,9 @@ class TestResumeOpensTheTargetOnTheGateway:
         assert [method for method, _ in calls] == ["session.resume", "session.detach"]
         assert conn.states["current_session"].subscription_id is None
 
-    @pytest.mark.parametrize("refusal", ["not_found", "permission_denied", "profile_mismatch"])
+    @pytest.mark.parametrize(
+        "refusal", ["not_found", "permission_denied", "profile_mismatch"]
+    )
     def test_a_refused_target_keeps_the_current_session(self, refusal):
         from agent.i18n import t
 
@@ -300,5 +348,7 @@ class TestResumeOpensTheTargetOnTheGateway:
 
         assert cli_obj.session_id == "current_session"
         assert conn.states["current_session"].subscription_id == "sub-current_session"
-        assert calls == [("session.resume", {"session_id": "target"})]  # asked once, nothing detached
+        assert calls == [
+            ("session.resume", {"session_id": "target"})
+        ]  # asked once, nothing detached
         assert t("gateway.resume.switch_failed") in printed and refusal in printed

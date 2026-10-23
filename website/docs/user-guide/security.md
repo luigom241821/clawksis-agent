@@ -1,1349 +1,861 @@
 ---
-
 sidebar_position: 8
-
 title: "Security"
-
 description: "Security model, dangerous command approval, user authorization, container isolation, and production deployment best practices"
-
 ---
-
-
 
 # Security
 
-
-
 Clawksis is designed with a defense-in-depth security model. This page covers every security boundary — from command approval to container isolation to user authorization on messaging platforms.
-
-
 
 ## Overview
 
 
-
 The security model has seven layers:
 
-
-
 1. **User authorization** — who can talk to the agent (allowlists, DM pairing)
-
 2. **Dangerous command approval** — human-in-the-loop for destructive operations
-
-3. **Container isolation** — Docker/Singularity/Modal sandboxing with hardened settings
-
-4. **MCP credential filtering** — environment variable isolation for MCP subprocesses
-
-5. **Context file scanning** — prompt injection detection in project files
-
-6. **Cross-session isolation** — sessions cannot access each other's data or state; cron job storage paths are hardened against path traversal attacks
-
-7. **Input sanitization** — working directory parameters in terminal tool backends are validated against an allowlist to prevent shell injection
-
-
+3. **File write safety** — denylist and optional write sandbox for `write_file`/`patch`
+4. **Container isolation** — Docker/Modal (and the Singularity plugin) sandboxing with hardened settings
+5. **MCP credential filtering** — environment variable isolation for MCP subprocesses
+6. **Context file scanning** — prompt injection detection in project files
+7. **Cross-session isolation** — sessions cannot access each other's data or state; cron job storage paths are hardened against path traversal attacks
+8. **Input sanitization** — working directory parameters in terminal tool backends are validated against an allowlist to prevent shell injection
 
 ## Dangerous Command Approval
 
-
-
 Before executing any command, Clawksis checks it against a curated list of dangerous patterns. If a match is found, the user must explicitly approve it.
-
-
 
 ### Approval Modes
 
-
-
 The approval system supports three modes, configured via `approvals.mode` in `~/.clawksis/config.yaml`:
 
-
-
 ```yaml
-
 approvals:
-
-  mode: manual                    # manual | smart | off
-
-  timeout: 60                     # seconds to wait for user response (default: 60)
-
+  mode: smart                     # smart | manual | off
+  timeout: 300                    # seconds to wait for user response (default: 300)
   cron_mode: deny                 # deny | approve — what cron jobs do when they hit a dangerous command
-
+  single_query_mode: deny         # deny | approve — what single-query (-q) sessions do on a dangerous command
+  unattended_mode: deny           # deny | approve — what webhook/API sessions do on a dangerous command
   mcp_reload_confirm: true        # /reload-mcp asks before invalidating the MCP tool cache
-
   destructive_slash_confirm: true # /clear, /new, /reset, /undo prompt before discarding state
-
 ```
-
-
 
 The full set of keys:
 
-
-
 | Key | Default | What it controls |
-
 |---|---|---|
-
-| `mode` | `manual` | Approval policy for dangerous shell commands — see the table below. |
-
-| `timeout` | `60` | Seconds Clawksis waits for an approval reply before timing out. |
-
+| `mode` | `smart` | Approval policy for dangerous shell commands — see the table below. |
+| `timeout` | `300` | Seconds Clawksis waits for an approval reply before timing out. |
 | `cron_mode` | `deny` | How [cron jobs](./features/cron.md) behave headlessly when they trigger a dangerous-command prompt. `deny` blocks the command (the agent must find another path); `approve` auto-approves everything in cron context. |
-
+| `single_query_mode` | `deny` | How one-shot [`clawk chat -q`](./cli.md) sessions behave when they trigger a dangerous-command prompt. A `-q` session runs a single turn and exits with no user waiting to answer prompts; `deny` blocks the command (the agent must find another path), `approve` auto-approves everything in single-query context. Mirrors `cron_mode`. |
+| `unattended_mode` | `deny` | How sessions on unattended programmatic platforms (webhook, msgraph_webhook, api_server) behave when they trigger a dangerous-command prompt. These surfaces have no human who can answer `/approve`, so instead of blocking for the full approval timeout, `deny` blocks the command instantly (the agent must find another path) and `approve` auto-approves everything in unattended context. Exception: an api_server session whose client can answer the card (`/v1/runs` and streaming chat completions, via `POST /v1/runs/{id}/approval`) still gets the approval request. Mirrors `cron_mode`. |
 | `mcp_reload_confirm` | `true` | When true, `/reload-mcp` asks before rebuilding the MCP tool set. Rebuilding invalidates the provider prompt cache (tool schemas live in the system prompt), so the next message re-sends full input tokens. Users who click **Always Approve** flip this key to `false`. |
-
-| `destructive_slash_confirm` | `true` | When true, destructive session slash commands (`/clear`, `/new`, `/reset`, `/undo`) prompt before discarding conversation state. Three-option dialog (Approve Once / Always Approve / Cancel) routed through native yes/no buttons on Telegram, Discord, and Slack; text fallback elsewhere. Users who click **Always Approve** flip this key to `false`. TUI uses its own modal overlay (set `CLAWK_TUI_NO_CONFIRM=1` to opt out there). |
-
-
+| `destructive_slash_confirm` | `true` | When true, destructive session slash commands (`/clear`, `/new`, `/reset`, `/undo`) prompt before discarding conversation state. Three-option dialog (Approve Once / Always Approve / Cancel) routed through native yes/no buttons on Telegram, Discord, and Slack; text fallback elsewhere. Users who click **Always Approve** flip this key to `false`. The TUI also honors this setting for its `/clear`, `/new`, and `/reset` modal; `CLAWK_TUI_NO_CONFIRM=1` force-skips that modal regardless of the configured value. |
 
 | Mode | Behavior |
-
 |------|----------|
 
 | **manual** (default) | Always prompt the user for approval on dangerous commands |
 
 | **smart** | Use an auxiliary LLM to assess risk. Low-risk commands (e.g., `python -c "print('hello')"`) are auto-approved. Genuinely dangerous commands are auto-denied. Uncertain cases escalate to a manual prompt. |
-
 | **off** | Disable all approval checks — equivalent to running with `--yolo`. All commands execute without prompts. |
 
-
-
 :::warning
-
 Setting `approvals.mode: off` disables all safety prompts. Use only in trusted environments (CI/CD, containers, etc.).
-
 :::
-
-
 
 ### YOLO Mode
 
-
-
 YOLO mode bypasses **all** dangerous command approval prompts for the current session. It can be activated three ways:
 
-
-
 1. **CLI flag**: Start a session with `clawk --yolo` or `clawk chat --yolo`
-
 2. **Slash command**: Type `/yolo` during a session to toggle it on/off
-
 3. **Environment variable**: Set `CLAWK_YOLO_MODE=1`
-
-
 
 The `/yolo` command is a **toggle** — each use flips the mode on or off:
 
-
-
 ```
-
 > /yolo
-
   ⚡ YOLO mode ON — all commands auto-approved. Use with caution.
 
-
-
 > /yolo
-
   ⚠ YOLO mode OFF — dangerous commands will require approval.
-
 ```
 
-
-
-YOLO mode is available in both CLI and gateway sessions. Internally, it sets the `CLAWK_YOLO_MODE` environment variable which is checked before every command execution.
-
-
+YOLO mode is available in both CLI and gateway sessions. `/yolo` applies only to the session it was typed in. It is saved with the session, so it survives a restart: a messaging chat keeps it across gateway restarts, and the TUI and the Desktop app keep it when you reopen or resume the session. On a messaging platform, `/new` and `/resume` start the next conversation with approvals back on.
 
 When YOLO is active, Clawksis shows two persistent visual reminders so it's hard to forget that approval prompts are bypassed:
 
-
-
 - A red banner line at session start when YOLO is already active: `⚠ YOLO mode — all approval prompts bypassed`. Hidden when YOLO is off so the default banner stays uncluttered.
-
 - A `⚠ YOLO` fragment in the status bar across all width tiers, updated live as you toggle YOLO on or off (rich-text renderer and plain-text fallback).
 
-
-
 :::danger
-
 YOLO mode disables **all** dangerous command safety checks for the session — **except** the hardline blocklist (see below). Use only when you fully trust the commands being generated (e.g., well-tested automation scripts in disposable environments).
-
 :::
-
-
 
 For destructive session slash commands (`/clear`, `/new` / `/reset`, `/undo`, `/quit --delete` — `/exit --delete` is an alias), the CLI also prompts for confirmation before running them. See [Slash Commands — Confirmation prompts for destructive commands](../reference/slash-commands.md#confirmation-prompts-for-destructive-commands).
 
+### Supervised-gateway lifecycle restriction
 
+The terminal tool has a separate, non-overridable guard against stopping or
+restarting the gateway from inside its own supervised process. A self-restart can
+terminate the tool before it finishes and cause a supervisor/auto-resume loop.
+User approval, YOLO mode, and `force=True` do not bypass this guard.
+
+The guard also refuses process killers aimed at the interpreter image the gateway
+runs as — `taskkill /F /IM python.exe`, `taskkill /FI "IMAGENAME eq python.exe"`,
+`Stop-Process -Name python`, `pkill -9 python3`, `killall python`, `pkill -f python`,
+and name-derived kills such as `pgrep python | xargs kill` — because a supervised
+gateway is literally a `python` process and such a command takes it (and the agent's
+own turn) down. Kills scoped to a process the agent owns pass: the `proc_*` id of a
+background job (`process(action="kill", …)`) or an explicit PID
+(`taskkill /F /PID <pid>`, `kill <pid>`). Other image names (`taskkill /F /IM notepad.exe`)
+are unaffected. The guard is active under every generated launcher — systemd unit,
+launchd plist, s6 run script and the Windows Scheduled Task — via the
+`CLAWK_SUPERVISED_CHILD` marker they export.
+
+On macOS, executed `launchctl submit` and `launchctl bootstrap` commands are
+restricted **regardless of the job label**. This is a conservative registration
+restriction intended to catch indirect restart helpers with neutral labels, not
+an inspection of the target plist. It also rejects independent scheduled jobs
+with `RunAtLoad=false` and no `KeepAlive` key; rejection does **not** establish that
+the job uses KeepAlive or controls Clawksis.
+
+For authorized LaunchAgent maintenance, use a separate shell outside the running
+gateway. Some independent `load`/`unload` commands currently pass the label-based
+checks, but that is not a target-verified exemption or a supported way to evade a
+`bootstrap` rejection. Read-only `launchctl print` is not a lifecycle operation.
+After external maintenance, distinguish the on-disk plist from the loaded job:
+validate the plist and read back the loaded schedule before reporting activation.
+
+A tool rejection means the command did not execute through that tool call. An
+assistant declining to issue a call is a separate model decision; changing models
+does not change the terminal guard's policy.
 
 ### Hardline Blocklist (Always-On Floor)
 
-
-
 Some commands are so catastrophic — irreversible filesystem wipes, fork bombs, direct block-device writes — that Clawksis refuses to run them **regardless** of:
 
-
-
 - `--yolo` / `/yolo` toggled on
-
 - `approvals.mode: off`
-
 - Cron jobs running in headless `approve` mode
-
 - User explicitly clicking "allow always"
-
-
 
 The blocklist is the floor below `--yolo`. It trips **before** the approval layer even sees the command, and there's no override flag. Patterns currently covered (not exhaustive; kept in sync with `tools/approval.py::UNRECOVERABLE_BLOCKLIST`):
 
-
-
 | Pattern | Why it's hardline |
-
 |---|---|
-
 | `rm -rf /` and obvious variants | Wipes the filesystem root |
-
 | `rm -rf --no-preserve-root /` | The explicit "yes I mean root" variant |
-
 | `:(){ :\|:& };:` (bash fork bomb) | Pegs the host until reboot |
-
 | `mkfs.*` on a mounted root device | Formats the live system |
-
 | `dd if=/dev/zero of=/dev/sd*` | Zeroes a physical disk |
-
 | Piping untrusted URLs to `sh` at the rootfs top level | Remote-code-execution attack vector too broad to approve |
-
-
 
 If you hit the blocklist, the tool call returns an explanatory error to the agent and nothing runs. If a legitimate workflow needs one of these commands (you're the operator of a wipe-and-reinstall pipeline, for example), run it outside the agent.
 
-
-
 ### Approval Timeout
-
-
 
 When a dangerous command prompt appears, the user has a configurable amount of time to respond. If no response is given within the timeout, the command is **denied** by default (fail-closed).
 
-
+An expired prompt cannot be reopened: the pending entry is discarded and the agent is told not to retry on its own within that turn. To run the operation after all, send a new message asking for it (for example "go ahead and run that now") — the agent issues a fresh tool call, which raises a fresh approval card, and a "once" approval applies only to that call. A timeout is not counted as a denial, so asking again is never penalized.
 
 Configure the timeout in `~/.clawksis/config.yaml`:
 
-
-
 ```yaml
-
 approvals:
-
-  timeout: 60  # seconds (default: 60)
-
+  timeout: 300  # seconds (default: 300)
 ```
-
-
 
 ### What Triggers Approval
 
-
-
 The following patterns trigger approval prompts (defined in `tools/approval.py`):
 
-
-
 | Pattern | Description |
-
 |---------|-------------|
-
 | `rm -r` / `rm --recursive` | Recursive delete |
-
 | `rm ... /` | Delete in root path |
-
 | `chmod 777/666` / `o+w` / `a+w` | World/other-writable permissions |
-
 | `chmod --recursive` with unsafe perms | Recursive world/other-writable (long flag) |
-
 | `chown -R root` / `chown --recursive root` | Recursive chown to root |
-
 | `mkfs` | Format filesystem |
-
 | `dd if=` | Disk copy |
-
 | `> /dev/sd` | Write to block device |
-
 | `DROP TABLE/DATABASE` | SQL DROP |
-
 | `DELETE FROM` (without WHERE) | SQL DELETE without WHERE |
-
 | `TRUNCATE TABLE` | SQL TRUNCATE |
-
 | `> /etc/` | Overwrite system config |
-
 | `systemctl stop/restart/disable/mask` | Stop/restart/disable system services |
-
 | `kill -9 -1` | Kill all processes |
-
 | `pkill -9` | Force kill processes |
-
 | Fork bomb patterns | Fork bombs |
-
 | `bash -c` / `sh -c` / `zsh -c` / `ksh -c` | Shell command execution via `-c` flag (including combined flags like `-lc`) |
-
 | `python -e` / `perl -e` / `ruby -e` / `node -c` | Script execution via `-e`/`-c` flag |
-
 | `curl ... \| sh` / `wget ... \| sh` | Pipe remote content to shell |
-
 | `bash <(curl ...)` / `sh <(wget ...)` | Execute remote script via process substitution |
-
 | `tee` to `/etc/`, `~/.ssh/`, `~/.clawksis/.env` | Overwrite sensitive file via tee |
-
 | `>` / `>>` to `/etc/`, `~/.ssh/`, `~/.clawksis/.env` | Overwrite sensitive file via redirection |
-
 | `xargs rm` | xargs with rm |
-
 | `find -exec rm` / `find -delete` | Find with destructive actions |
-
 | `cp`/`mv`/`install` to `/etc/` | Copy/move file into system config |
-
 | `sed -i` / `sed --in-place` on `/etc/` | In-place edit of system config |
-
 | `pkill`/`killall` clawk/gateway | Self-termination prevention |
-
 | `gateway run` with `&`/`disown`/`nohup`/`setsid` | Prevents starting gateway outside service manager |
-
-
+| `docker stop/kill/restart`, `docker compose down/stop/kill/restart` | Container lifecycle (also catches global flags and `docker-compose`) |
+| `docker -H`/`--host`/`--context`, `DOCKER_HOST=`/`DOCKER_CONTEXT=` | Docker daemon redirect — the command targets a different (often remote) daemon |
+| `docker context use` | Switches the default daemon for all future docker commands |
+| `podman --remote`/`-r`/`--url`/`--connection`/`--identity`, `CONTAINER_HOST=` | Podman remote daemon redirect |
 
 :::info
-
-**Container bypass**: When running in `docker`, `singularity`, `modal`, or `daytona` backends, dangerous command checks are **skipped** because the container itself is the security boundary. Destructive commands inside a container can't harm the host.
-
+**Container bypass**: When running in `docker`, `modal`, `daytona`, or `vercel_sandbox` backends (or a container plugin backend such as `singularity`), dangerous command checks are **skipped** because the container itself is the security boundary. Destructive commands inside a container can't harm the host.
 :::
 
+### `execute_code` Scripts {#execute-code-scripts}
 
+A script run by [`execute_code`](./features/code-execution.md) can call `subprocess`, `os` or `shutil` directly, and those calls never pass through the patterns above. Messaging, API and other gateway sessions therefore ask once for the whole script before it starts; a denied or unanswered script never runs. `cron_mode`, `single_query_mode` and `unattended_mode` decide the script at once, as they decide a command; YOLO and `mode: off` skip the prompt.
+
+Local sessions (classic CLI, TUI, Desktop, ACP editor) follow the interactive CLI's rule instead. Under `manual` (and `smart`), a turn the session's viewer typed gets **no whole-script approval**: Python-level file and process operations inside the script run without a prompt, and only the script's `terminal()` calls ask, each on the session's own prompt, as in the CLI before the one-gateway runtime. The exemption needs both a turn the viewer submitted and a viewer attached who can answer approvals when the script starts. These keep the whole-script approval in a local session:
+
+- turns nobody typed in it: plugin `inject_message` turns, delegation completions, background-process and watch-pattern notices, `/loop` ticks, heartbeats, hosted-room tasks
+- `delegate_task` children and `/bg` / `/btw` side tasks
+- a viewer's turn that runs while no viewer who can approve is attached
 
 ### Approval Flow (CLI)
 
-
-
 In the interactive CLI, dangerous commands show an inline approval prompt:
 
-
-
 ```
-
   ⚠️  DANGEROUS COMMAND: recursive delete
-
-      rm -rf /tmp/old-project
-
-
+      rm -rf ~/old-project
 
       [o]nce  |  [s]ession  |  [a]lways  |  [d]eny
 
-
-
       Choice [o/s/a/D]:
-
 ```
-
-
 
 The four options:
 
-
-
 - **once** — allow this single execution
-
 - **session** — allow this pattern for the rest of the session
-
 - **always** — add to permanent allowlist (saved to `config.yaml`)
-
 - **deny** (default) — block the command
-
-
 
 ### Approval Flow (Gateway/Messaging)
 
-
-
 On messaging platforms, the agent sends the dangerous command details to the chat and waits for the user to reply:
 
-
-
 - Reply **yes**, **y**, **approve**, **ok**, or **go** to approve
-
 - Reply **no**, **n**, **deny**, or **cancel** to deny
-
-
 
 The `CLAWK_EXEC_ASK=1` environment variable is automatically set when running the gateway.
 
-
-
 ### Permanent Allowlist
-
-
 
 Commands approved with "always" are saved to `~/.clawksis/config.yaml`:
 
-
-
 ```yaml
-
 # Permanently allowed dangerous command patterns
-
 command_allowlist:
-
   - rm
-
   - systemctl
-
 ```
-
-
 
 These patterns are loaded at startup and silently approved in all future sessions.
 
+Entries can be exact command text, a shell-style glob (`podman *`), or a
+dangerous-pattern rule key such as `script execution via heredoc` (the key shown
+in the approval prompt). Rule keys are honored on every surface, including
+unattended ones: a cron job, `clawk chat -q` run or webhook session under
+`cron_mode`/`single_query_mode`/`unattended_mode: deny` still runs a command whose
+detected rule key is in `command_allowlist`.
 
+The setting must be a list of strings. Legacy installs that stored a list as a
+quoted YAML/JSON string recover that list at load time and log a warning to
+re-save it with `clawk config edit`. Other malformed values are ignored with
+a warning; they never become per-character approvals. Loading does not rewrite
+your configuration file.
 
 :::tip
-
 Use `clawk config edit` to review or remove patterns from your permanent allowlist.
-
 :::
-
-
 
 ## User Authorization (Gateway)
 
-
-
 When running the messaging gateway, Clawksis controls who can interact with the bot through a layered authorization system.
-
-
 
 ### Authorization Check Order
 
-
-
 The `_is_user_authorized()` method checks in this order:
 
-
-
 1. **Per-platform allow-all flag** (e.g., `DISCORD_ALLOW_ALL_USERS=true`)
-
 2. **DM pairing approved list** (users approved via pairing codes)
-
 3. **Platform-specific allowlists** (e.g., `TELEGRAM_ALLOWED_USERS=12345,67890`)
-
 4. **Global allowlist** (`GATEWAY_ALLOWED_USERS=12345,67890`)
-
 5. **Global allow-all** (`GATEWAY_ALLOW_ALL_USERS=true`)
-
 6. **Default: deny**
-
-
 
 ### Platform Allowlists
 
-
-
 Set allowed user IDs as comma-separated values in `~/.clawksis/.env`:
 
-
-
 ```bash
-
 # Platform-specific allowlists
-
 TELEGRAM_ALLOWED_USERS=123456789,987654321
-
 DISCORD_ALLOWED_USERS=111222333444555666
-
 WHATSAPP_ALLOWED_USERS=15551234567
-
 SLACK_ALLOWED_USERS=U01ABC123
 
-
-
 # Cross-platform allowlist (checked for all platforms)
-
 GATEWAY_ALLOWED_USERS=123456789
 
-
-
 # Per-platform allow-all (use with caution)
-
 DISCORD_ALLOW_ALL_USERS=true
 
-
-
 # Global allow-all (use with extreme caution)
-
 GATEWAY_ALLOW_ALL_USERS=true
-
 ```
 
-
+The global allow-all can also live in `config.yaml` as `gateway.allow_all_users: true` (or top-level `allow_all_users: true`); a true value is bridged to `GATEWAY_ALLOW_ALL_USERS` at gateway startup (re-derived on every config load and restart, so flipping it back to `false` closes the gate), an explicit env var wins, and the gateway logs a warning naming `config.yaml` as the grant source. In a multi-profile gateway a secondary profile sets `GATEWAY_ALLOW_ALL_USERS` in its own `.env` (its `config.yaml` is never bridged into the process environment).
 
 :::warning
-
 If **no allowlists are configured** and `GATEWAY_ALLOW_ALL_USERS` is not set, **all users are denied**. The gateway logs a warning at startup:
 
-
-
 ```
-
 No user allowlists configured. All unauthorized users will be denied.
-
 Set GATEWAY_ALLOW_ALL_USERS=true in ~/.clawksis/.env to allow open access,
-
 or configure platform allowlists (e.g., TELEGRAM_ALLOWED_USERS=your_id).
-
 ```
-
 :::
-
-
 
 ### DM Pairing System
 
-
-
 For more flexible authorization, Clawksis includes a code-based pairing system. Instead of requiring user IDs upfront, unknown users receive a one-time pairing code that the bot owner approves via the CLI.
-
-
 
 **How it works:**
 
-
-
 1. An unknown user sends a DM to the bot
-
 2. The bot replies with an 8-character pairing code
-
 3. The bot owner runs `clawk pairing approve <platform> <code>` on the CLI
-
 4. The user is permanently approved for that platform
-
-
 
 Control how unauthorized direct messages are handled in `~/.clawksis/config.yaml`:
 
-
-
 ```yaml
-
 unauthorized_dm_behavior: pair
 
-
-
 whatsapp:
-
   unauthorized_dm_behavior: ignore
-
 ```
-
 
 
 - `pair` is the default. Unauthorized DMs get a pairing code reply.
-
 - `ignore` silently drops unauthorized DMs.
-
 - Platform sections override the global default, so you can keep pairing on Telegram while keeping WhatsApp silent.
-
-
 
 **Security features** (based on OWASP + NIST SP 800-63-4 guidance):
 
-
-
 | Feature | Details |
-
 |---------|---------|
-
 | Code format | 8-char from 32-char unambiguous alphabet (no 0/O/1/I) |
-
 | Randomness | Cryptographic (`secrets.choice()`) |
-
 | Code TTL | 1 hour expiry |
-
 | Rate limiting | 1 request per user per 10 minutes |
-
 | Pending limit | Max 3 pending codes per platform |
-
 | Lockout | 5 failed approval attempts → 1-hour lockout |
-
 | File security | `chmod 0600` on all pairing data files |
-
 | Logging | Codes are never logged to stdout |
-
-
 
 **Pairing CLI commands:**
 
-
-
 ```bash
-
 # List pending and approved users
-
 clawk pairing list
 
-
-
 # Approve a pairing code
-
 clawk pairing approve telegram ABC12DEF
 
-
-
 # Revoke a user's access
-
 clawk pairing revoke telegram 123456789
 
-
-
 # Clear all pending codes
-
 clawk pairing clear-pending
-
 ```
 
-
-
 **Storage:** Pairing data is stored in `~/.clawksis/pairing/` with per-platform JSON files:
-
 - `{platform}-pending.json` — pending pairing requests
-
 - `{platform}-approved.json` — approved users
-
 - `_rate_limits.json` — rate limit and lockout tracking
-
-
 
 ## Container Isolation
 
-
-
 When using the `docker` terminal backend, Clawksis applies strict security hardening to every container.
-
-
 
 ### Docker Security Flags
 
-
-
 Every container runs with these flags (defined in `tools/environments/docker.py`):
 
-
-
 ```python
-_SECURITY_ARGS = [
-    "--cap-drop",
-    "ALL",  # Drop ALL Linux capabilities
-    "--cap-add",
-    "DAC_OVERRIDE",  # Root can write to bind-mounted dirs
-    "--cap-add",
-    "CHOWN",  # Package managers need file ownership
-    "--cap-add",
-    "FOWNER",  # Package managers need file ownership
-    "--security-opt",
-    "no-new-privileges",  # Block privilege escalation
-    "--pids-limit",
-    "256",  # Limit process count
-    "--tmpfs",
-    "/tmp:rw,nosuid,size=512m",  # Size-limited /tmp
-    "--tmpfs",
-    "/var/tmp:rw,noexec,nosuid,size=256m",  # No-exec /var/tmp
-    "--tmpfs",
-    "/run:rw,noexec,nosuid,size=64m",  # No-exec /run
+_BASE_SECURITY_ARGS = [
+    "--cap-drop", "ALL",                          # Drop ALL Linux capabilities
+    "--cap-add", "DAC_OVERRIDE",                  # Root can write to bind-mounted dirs
+    "--cap-add", "CHOWN",                         # Package managers need file ownership
+    "--cap-add", "FOWNER",                        # Package managers need file ownership
+    "--security-opt", "no-new-privileges",         # Block privilege escalation
+    "--pids-limit", "256",                         # Limit process count
+    # no-tmp: ok — configures the sandbox's own tmpfs
+    "--tmpfs", "/tmp:rw,nosuid,size=512m",         # Size-limited /tmp
+    "--tmpfs", "/var/tmp:rw,noexec,nosuid,size=256m",  # No-exec /var/tmp
 ]
 ```
 
-
-
 ### Resource Limits
-
-
 
 Container resources are configurable in `~/.clawksis/config.yaml`:
 
-
-
 ```yaml
-
 terminal:
-
   backend: docker
-
-  docker_image: "nikolaik/python-nodejs:python3.11-nodejs20"
-
+  docker_image: "nousresearch/clawk-sandbox:desktop"
   docker_forward_env: []  # Explicit allowlist only; empty keeps secrets out of the container
-
   container_cpu: 1        # CPU cores
-
   container_memory: 5120  # MB (default 5GB)
-
   container_disk: 51200   # MB (default 50GB, requires overlay2 on XFS)
-
   container_persistent: true  # Persist filesystem across sessions
-
 ```
-
-
 
 ### Filesystem Persistence
 
-
-
 - **Persistent mode** (`container_persistent: true`): Bind-mounts `/workspace` and `/root` from `~/.clawksis/sandboxes/docker/<task_id>/`
-
 - **Ephemeral mode** (`container_persistent: false`): Uses tmpfs for workspace — everything is lost on cleanup
 
-
-
 :::tip
-
-For production gateway deployments, use `docker`, `modal`, or `daytona` backend to isolate agent commands from your host system. This eliminates the need for dangerous command approval entirely.
-
+For production gateway deployments, use `docker`, `modal`, `daytona`, or `vercel_sandbox` backend to isolate agent commands from your host system. This eliminates the need for dangerous command approval entirely.
 :::
-
-
 
 :::warning
-
 If you add names to `terminal.docker_forward_env`, those variables are intentionally injected into the container for terminal commands. This is useful for task-specific credentials like `GITHUB_TOKEN`, but it also means code running in the container can read and exfiltrate them.
-
 :::
-
-
 
 ## Terminal Backend Security Comparison
 
-
-
 | Backend | Isolation | Dangerous Cmd Check | Best For |
-
 |---------|-----------|-------------------|----------|
-
 | **local** | None — runs on host | ✅ Yes | Development, trusted users |
-
 | **ssh** | Remote machine | ✅ Yes | Running on a separate server |
-
 | **docker** | Container | ❌ Skipped (container is boundary) | Production gateway |
-
-| **singularity** | Container | ❌ Skipped | HPC environments |
-
+| **singularity** (plugin) | Container | ❌ Skipped | HPC environments |
 | **modal** | Cloud sandbox | ❌ Skipped | Scalable cloud isolation |
-
 | **daytona** | Cloud sandbox | ❌ Skipped | Persistent cloud workspaces |
-
-
+| **vercel_sandbox** | Cloud microVM | ❌ Skipped | Cloud execution with snapshot persistence |
 
 ## Environment Variable Passthrough {#environment-variable-passthrough}
 
-
-
 Both `execute_code` and `terminal` strip sensitive environment variables from child processes to prevent credential exfiltration by LLM-generated code. However, skills that declare `required_environment_variables` legitimately need access to those vars.
 
-
+First-party platform credentials — the `BUZZ_*` variables used by the Buzz messaging platform — are passed through to `terminal` children (foreground and background/PTY spawns) **only when the session is actually operating as a Buzz agent**: the process is a Buzz-ACP managed agent (`BUZZ_MANAGED_AGENT` set by the Buzz Desktop harness) or the live gateway session's platform is `buzz`. This lets a Buzz platform agent invoke its platform-mandated CLI (e.g. `buzz`) from the terminal tool, while Telegram/CLI/cron sessions on the same host keep the variables stripped. Because `_sanitize_subprocess_env` also feeds search workers (e.g. the ddgs web-search subprocess), the computer-use driver binary, and user-script runners (bang `!` commands, quick commands, cron scripts, webhook-filter scripts), those children receive the variables too when spawned from a Buzz session. The carve-out is **terminal-only**: it does not apply to `execute_code`, browser/TUI-host spawns (`clawk_subprocess_env`), Docker/Modal children, or `env_passthrough` registration, which remain sealed.
 
 ### How It Works
 
-
-
 Two mechanisms allow specific variables through the sandbox filters:
-
-
 
 **1. Skill-scoped passthrough (automatic)**
 
-
-
 When a skill is loaded (via `skill_view` or the `/skill` command) and declares `required_environment_variables`, any of those vars that are actually set in the environment are automatically registered as passthrough. Missing vars (still in setup-needed state) are **not** registered.
 
-
-
 ```yaml
-
 # In a skill's SKILL.md frontmatter
-
 required_environment_variables:
-
   - name: TENOR_API_KEY
-
     prompt: Tenor API key
-
     help: Get a key from https://developers.google.com/tenor
-
 ```
-
-
 
 After loading this skill, `TENOR_API_KEY` passes through to `execute_code`, `terminal` (local), **and remote backends (Docker, Modal)** — no manual configuration needed.
 
-
-
 :::info Docker & Modal
-
 Prior to v0.5.1, Docker's `forward_env` was a separate system from the skill passthrough. They are now merged — skill-declared env vars are automatically forwarded into Docker containers and Modal sandboxes without needing to add them to `docker_forward_env` manually.
-
 :::
-
-
 
 **2. Config-based passthrough (manual)**
 
-
-
 For env vars not declared by any skill, add them to `terminal.env_passthrough` in `config.yaml`:
 
-
-
 ```yaml
-
 terminal:
-
   env_passthrough:
-
     - MY_CUSTOM_KEY
-
     - ANOTHER_TOKEN
-
 ```
 
-
+Both lists apply to `terminal`, `execute_code` and `no_agent` cron scripts alike. A declared variable is forwarded with the value of the profile the child runs for: when one process serves several profiles (multi-profile gateway, Desktop/dashboard backend) each profile's declared value comes from its own `.env` / secret sources, never from the process environment the launch profile populated, and the launch profile's `.env` credentials are dropped from a served profile's children.
 
 ### Credential File Passthrough (OAuth tokens, etc.) {#credential-file-passthrough}
 
-
-
 Some skills need **files** (not just env vars) in the sandbox — for example, Google Workspace stores OAuth tokens as `google_token.json` under the active profile's `CLAWK_HOME`. Skills declare these in frontmatter:
 
-
-
 ```yaml
-
 required_credential_files:
-
   - path: google_token.json
-
     description: Google OAuth2 token (created by setup script)
-
   - path: google_client_secret.json
-
     description: Google OAuth2 client credentials
-
 ```
-
-
 
 When loaded, Clawksis checks if these files exist in the active profile's `CLAWK_HOME` and registers them for mounting:
 
-
-
 - **Docker**: Read-only bind mounts (`-v host:container:ro`)
-
 - **Modal**: Mounted at sandbox creation + synced before each command (handles mid-session OAuth setup)
-
 - **Local**: No action needed (files already accessible)
-
-
 
 You can also list credential files manually in `config.yaml`:
 
-
-
 ```yaml
-
 terminal:
-
   credential_files:
-
     - google_token.json
-
     - my_custom_oauth_token.json
-
 ```
 
+Paths are relative to `~/.clawksis/`. Files are mounted to `/root/.clawk/` inside the container. This list is read by `tools/credential_files.py` (`terminal.credential_files`) — it lives under the `terminal:` block but is loaded by the credential-files module, not the core terminal backend, so it isn't part of the bundled `DEFAULT_CONFIG` snapshot.
 
+### Borrowed CLI logins (Codex CLI, Claude Code) {#borrowed-cli-logins}
 
-Paths are relative to `~/.clawksis/`. Files are mounted to `/root/.clawksis/` inside the container. This list is read by `tools/credential_files.py` (`terminal.credential_files`) — it lives under the `terminal:` block but is loaded by the credential-files module, not the core terminal backend, so it isn't part of the bundled `DEFAULT_CONFIG` snapshot.
+When Clawksis has no usable login of its own for `openai-codex` or `anthropic`, it can borrow the Codex CLI's `~/.codex/auth.json` and Claude Code's `~/.claude/.credentials.json` (or Keychain entry) and refresh them on your behalf. Both use single-use, rotating refresh tokens: once two programs hold one token family, whichever refreshes first invalidates the other's copy, which shows up as "I logged in once in the terminal and Clawksis keeps failing" (or the reverse). If you run those CLIs alongside Clawksis, give Clawksis its own login and turn adoption off:
 
+```yaml
+auth:
+  adopt_external_logins: false   # default: true
+```
 
+With the switch off Clawksis never reads or refreshes those files: the `claude_code` credential-pool row disappears, `clawk auth list` prints one line saying so, and the log carries one INFO line per process. Only automatic adoption is affected — `clawk auth add openai-codex` still asks before importing an existing Codex CLI login. Automatic recovery also only repairs the credential Clawksis already holds: a Codex CLI/Desktop login into a different ChatGPT workspace is refused with a warning (re-authenticate with `clawk auth add openai-codex`), and a login you complete while recovery is running is never overwritten. Add your own logins with `clawk auth add anthropic` / `clawk auth add openai-codex`.
 
 ### What Each Sandbox Filters
 
-
-
 | Sandbox | Default Filter | Passthrough Override |
-
 |---------|---------------|---------------------|
-
 | **execute_code** | Blocks vars containing `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`, `PASSWD`, `AUTH` in name; only allows safe-prefix vars through | ✅ Passthrough vars bypass both checks |
-
 | **terminal** (local) | Blocks explicit Clawksis infrastructure vars (provider keys, gateway tokens, tool API keys) | ✅ Passthrough vars bypass the blocklist |
-
 | **terminal** (Docker) | No host env vars by default | ✅ Passthrough vars + `docker_forward_env` forwarded via `-e` |
-
+| **terminal** (SSH) | No host env vars by default | ✅ Passthrough vars forwarded via `SendEnv`; the remote `sshd_config` needs a matching `AcceptEnv` (see [SSH backend](configuration.md#ssh-backend)) |
 | **terminal** (Modal) | No host env/files by default | ✅ Credential files mounted; env passthrough via sync |
-
 | **MCP** | Blocks everything except safe system vars + explicitly configured `env` | ❌ Not affected by passthrough (use MCP `env` config instead) |
-
-
 
 ### Security Considerations
 
-
-
 - The passthrough only affects vars you or your skills explicitly declare — the default security posture is unchanged for arbitrary LLM-generated code
-
 - Credential files are mounted **read-only** into Docker containers
-
 - Skills Guard scans skill content for suspicious env access patterns before installation
-
 - Missing/unset vars are never registered (you can't leak what doesn't exist)
-
-- Clawksis infrastructure secrets (provider API keys, gateway tokens) should never be added to `env_passthrough` — they have dedicated mechanisms
-
-
+- Clawksis infrastructure secrets (provider API keys, gateway tokens) should never be added to `env_passthrough` — they have dedicated mechanisms. Such a name is refused when declared, and a declared name that a platform adapter claims later (a plugin adapter registering after the skill loaded) stops being forwarded from then on
 
 ## MCP Credential Handling
 
-
-
 MCP (Model Context Protocol) server subprocesses receive a **filtered environment** to prevent accidental credential leakage.
-
-
 
 ### Safe Environment Variables
 
-
-
 Only these variables are passed through from the host to MCP stdio subprocesses:
 
-
-
 ```
-
 PATH, HOME, USER, LANG, LC_ALL, TERM, SHELL, TMPDIR
-
 ```
-
-
 
 Plus any `XDG_*` variables. All other environment variables (API keys, tokens, secrets) are **stripped**.
 
-
-
 Variables explicitly defined in the MCP server's `env` config are passed through:
 
-
-
 ```yaml
-
 mcp_servers:
-
   github:
-
     command: "npx"
-
     args: ["-y", "@modelcontextprotocol/server-github"]
-
     env:
-
       GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_..."  # Only this is passed
-
 ```
-
-
 
 ### Credential Redaction
 
-
-
 Error messages from MCP tools are sanitized before being returned to the LLM. The following patterns are replaced with `[REDACTED]`:
 
-
-
 - GitHub PATs (`ghp_...`)
-
 - OpenAI-style keys (`sk-...`)
-
 - Bearer tokens
-
 - `token=`, `key=`, `API_KEY=`, `password=`, `secret=` parameters
-
-
 
 ### Website Access Policy
 
-
-
 You can restrict which websites the agent can access through its web and browser tools. This is useful for preventing the agent from accessing internal services, admin panels, or other sensitive URLs.
 
-
-
 ```yaml
-
 # In ~/.clawksis/config.yaml
-
 security:
-
   website_blocklist:
-
     enabled: true
-
     domains:
-
       - "*.internal.company.com"
-
       - "admin.example.com"
-
     shared_files:
 
       - "/etc/clawksis/blocked-sites.txt"
-
 ```
-
-
 
 When a blocked URL is requested, the tool returns an error explaining the domain is blocked by policy. The blocklist is enforced across `web_search`, `web_extract`, `browser_navigate`, and all URL-capable tools.
 
-
-
-See [Website Blocklist](/user-guide/configuration#website-blocklist) in the configuration guide for full details.
-
-
+See [Website Blocklist](./configuration.md#website-blocklist) in the configuration guide for full details.
 
 ### SSRF Protection
 
-
-
 All URL-capable tools (web search, web extract, vision, browser) validate URLs before fetching them to prevent Server-Side Request Forgery (SSRF) attacks. Blocked addresses include:
 
-
-
 - **Private networks** (RFC 1918): `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
-
 - **Loopback**: `127.0.0.0/8`, `::1`
-
 - **Link-local**: `169.254.0.0/16` (includes cloud metadata at `169.254.169.254`)
-
 - **CGNAT / shared address space** (RFC 6598): `100.64.0.0/10` (Tailscale, WireGuard VPNs)
-
 - **Cloud metadata hostnames**: `metadata.google.internal`, `metadata.goog`
-
 - **Reserved, multicast, and unspecified addresses**
-
-
 
 SSRF protection is always active for internet-facing use and DNS failures are treated as blocked (fail-closed). Redirect chains are re-validated at each hop to prevent redirect-based bypasses.
 
-
+The same guard covers fetches whose URL comes from a remote party rather than from you: image/video URLs returned by a generation provider, reference-image URLs a model supplies for edits, pet spritesheets and the petdex manifest, and skills.sh sitemap entries. A provider or index that points one of those at a private or metadata address is refused before any connection opens; the operator's own provider `base_url` is not affected — a download fetched directly from your configured `base_url` (the OpenRouter video content endpoint) skips only the private-address class check on that first hop, while the cloud-metadata floor still applies and any redirect it issues is re-validated in full — and an image-generation provider hosted on your LAN needs `security.allow_private_urls: true` (below) for the *result* URLs it returns to be cached locally.
 
 #### Intentionally allowing private URLs
 
-
-
 Some setups legitimately need private/internal URL access — home networks that resolve `home.arpa` to RFC 1918 space, LAN-only Ollama/llama.cpp endpoints, internal wikis, cloud metadata debugging, and the like. For those cases there's a global opt-out:
 
-
-
 ```yaml
-
 security:
-
   allow_private_urls: true   # default: false
-
 ```
-
-
 
 When on, web tools, the browser, vision URL fetches, and gateway media downloads no longer reject RFC 1918 / loopback / link-local / CGNAT / cloud-metadata destinations. **This is a deliberate trust boundary** — only enable it on machines where the agent running arbitrary prompt-injected URLs against the local network is an acceptable risk. Public-facing gateways should leave it off.
 
-
-
 The host-substring guard (which blocks lookalike Unicode domain tricks even when the underlying IP is public) stays on regardless of this setting.
 
+#### Local proxy fake-ip ranges
 
-
-### Tirith Pre-Exec Security Scanning
-
-
-
-Clawksis integrates [tirith](https://github.com/sheeki03/tirith) for content-level command scanning before execution. Tirith detects threats that pattern matching alone misses:
-
-
-
-- Homograph URL spoofing (internationalized domain attacks)
-
-- Pipe-to-interpreter patterns (`curl | bash`, `wget | sh`)
-
-- Terminal injection attacks
-
-
-
-Tirith auto-installs from GitHub releases on first use with SHA-256 checksum verification (and cosign provenance verification if cosign is available).
-
-
+A TUN proxy in fake-ip mode (Mihomo/Clash `fake-ip`, Surge enhanced mode) answers DNS with an
+address from its own block — `198.18.0.0/15` (RFC 2544 benchmarking) by default — for every name
+outside its filter. Those answers are the proxy's sentinel, not an internal host, so the
+private-IP guard otherwise rejects every outbound fetch on such a host: `web_extract`, platform
+attachment downloads and the browser relay all fail with *URL targets a private or internal
+network address* while the request never reaches the network. Declare the block to let the
+sentinel through:
 
 ```yaml
-
-# In ~/.clawksis/config.yaml
-
 security:
-
-  tirith_enabled: true       # Enable/disable tirith scanning (default: true)
-
-  tirith_path: "tirith"      # Path to tirith binary (default: PATH lookup)
-
-  tirith_timeout: 5          # Subprocess timeout in seconds
-
-  tirith_fail_open: true     # Allow execution when tirith is unavailable (default: true)
-
+  fake_ip_ranges:
+    - 198.18.0.0/15
 ```
 
+Empty by default, and narrower than `allow_private_urls`: only the declared blocks get the
+exemption, they should be ranges the local proxy owns (the dial still goes to the proxy, which
+resolves the real target itself), and loopback, RFC 1918, link-local, CGNAT and cloud-metadata
+destinations stay blocked — an entry that overlaps one of those classes (including `0.0.0.0/0`
+or `::/0`) is ignored with a warning rather than widening the guard. On a host with a cloud
+browser provider, the declared sentinel also stops counting as private for
+`browser.auto_local_for_private_urls`, so those pages keep going to the cloud browser.
 
+### Content-Level Command Checks
 
-When `tirith_fail_open` is `true` (default), commands proceed if tirith is not installed or times out. Set to `false` in high-security environments to block commands when tirith is unavailable.
+The dangerous-command detector also flags two content-level shapes that a
+destructive-verb list misses:
 
+- A `curl`/`wget` request body that carries a secret: a secret-named variable
+  (`-d "k=$OPENAI_API_KEY"`) or a credential file (`-F file=@.env`,
+  `-T ~/.ssh/id_rsa`, `--post-file=/etc/passwd`), or a credential file piped into
+  an uploading `curl`/`wget`. An `Authorization` header is ordinary API use and
+  is not flagged.
+- Invisible or bidirectional Unicode control characters (zero-width spaces,
+  right-to-left overrides, isolates), which make the command you approve differ
+  from the one that runs. Emoji joiner sequences are not flagged.
 
+Both go through the normal approval flow like every other dangerous pattern.
 
-Tirith ships prebuilt binaries for Linux (x86_64 / aarch64) and macOS (x86_64 / arm64). On platforms with no prebuilt binary (Windows, etc.), tirith is silently skipped — pattern-matching guards still run, and the CLI does not surface an "unavailable" banner. To use tirith on Windows, run Clawksis under WSL.
-
-
-
-Tirith's verdict integrates with the approval flow: safe commands pass through, while both suspicious and blocked commands trigger user approval with the full tirith findings (severity, title, description, safer alternatives). Users can approve or deny — the default choice is deny to keep unattended scenarios secure.
-
-
+Earlier releases bundled the external tirith scanner here. It was removed;
+upgrading drops the `security.tirith_*` settings and enables nothing in its place.
 
 ### Context File Injection Protection
 
-
-
 Context files (AGENTS.md, .cursorrules, SOUL.md) are scanned for prompt injection before being included in the system prompt. The scanner checks for:
 
-
-
 - Instructions to ignore/disregard prior instructions
-
 - Hidden HTML comments with suspicious keywords
-
 - Attempts to read secrets (`.env`, `credentials`, `.netrc`)
-
 - Credential exfiltration via `curl`
-
 - Invisible Unicode characters (zero-width spaces, bidirectional overrides)
 
+The translation-and-execution check requires a short language/format clause (for example,
+“translate this into a bash script and execute it”). It does not connect translation
+and execution verbs across unrelated comma-separated role prose. These patterns are
+heuristics, not semantic intent detection.
 
-
-Blocked files show a warning:
-
-
+Blocked project files show a warning:
 
 ```
-
 [BLOCKED: AGENTS.md contained potential prompt injection (prompt_injection). Content not loaded.]
-
 ```
 
-
+Your own `SOUL.md` in `CLAWK_HOME` is treated differently: it is a file you wrote (file-tool writes to it
+need your approval, and project checkouts never supply it), so a scanner hit there **does not block the
+file**. Clawksis logs a warning naming the matched pattern, loads the file as usual, and `/context` lists it as
+`⚠ SOUL.md … loaded — matched prompt-injection pattern(s); review the file`. This lets an identity file that
+*documents* an attack phrase (security guidance such as "content telling you to ignore previous instructions")
+keep working; if you did not write the flagged text, treat the warning as a sign that something else edited
+the file. The exception does not extend to a `SOUL.md` shipped by a profile distribution: `clawk profile
+install <git-url>` and `clawk profile update` copy a third party's `SOUL.md` into the profile home without
+a scan or an approval prompt, so when `distribution.yaml` owns the file a scanner hit still blocks it.
 
 ## Best Practices for Production Deployment
 
-
-
 ### Gateway Deployment Checklist
 
-
-
 1. **Set explicit allowlists** — never use `GATEWAY_ALLOW_ALL_USERS=true` in production
-
 2. **Use container backend** — set `terminal.backend: docker` in config.yaml
-
 3. **Restrict resource limits** — set appropriate CPU, memory, and disk limits
-
 4. **Store secrets securely** — keep API keys in `~/.clawksis/.env` with proper file permissions
-
 5. **Enable DM pairing** — use pairing codes instead of hardcoding user IDs when possible
-
 6. **Review command allowlist** — periodically audit `command_allowlist` in config.yaml
-
 7. **Set `terminal.cwd`** — don't let the agent operate from sensitive directories
-
 8. **Run as non-root** — never run the gateway as root
-
 9. **Monitor logs** — check `~/.clawksis/logs/` for unauthorized access attempts
-
 10. **Keep updated** — run `clawk update` regularly for security patches
-
-
 
 ### Securing API Keys
 
-
-
 ```bash
-
 # Set proper permissions on the .env file
-
 chmod 600 ~/.clawksis/.env
 
-
-
 # Keep separate keys for different services
-
 # Never commit .env files to version control
-
 ```
-
-
 
 ### Network Isolation
 
-
-
 For maximum security, run the gateway on a separate machine or VM. Set `terminal.backend: ssh` in `config.yaml`, then provide host details via environment variables in `~/.clawksis/.env`:
 
-
-
 ```yaml
-
 # ~/.clawksis/config.yaml
-
 terminal:
-
   backend: ssh
-
 ```
-
-
 
 ```bash
-
 # ~/.clawksis/.env
-
 TERMINAL_SSH_HOST=agent-worker.local
-
 TERMINAL_SSH_USER=clawk
-
 TERMINAL_SSH_KEY=~/.ssh/clawk_agent_key
-
 ```
-
-
 
 The SSH connection details live in `.env` (not `config.yaml`) so they aren't checked in or shared along with profile exports. This keeps the gateway's messaging connections separate from the agent's command execution.
 
+## TLS certificate trust
 
+Clawksis initializes the platform verifier through `truststore`. Windows uses
+its certificate store, macOS uses its system trust services, and Linux uses
+the OpenSSL system trust paths. If initialization fails, Clawksis logs the
+failure and falls back to OpenSSL defaults.
+
+For a corporate TLS proxy, install its root through your organization's
+operating-system trust procedure. Clawksis' provider resolver no longer selects
+trust through `CLAWK_CA_BUNDLE` or the old CA-environment-variable ladder.
+Sandboxed subprocesses can have their own separate CA configuration.
+
+The former startup certificate guard is gone with it: Clawksis no longer
+validates `CLAWK_CA_BUNDLE` / `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` /
+`CURL_CA_BUNDLE` at launch, so there is no `SSLConfigurationError` and the
+`CLAWK_SKIP_SSL_GUARD` escape hatch has no effect. `CLAWK_CA_BUNDLE` is
+still honoured by the Nous Portal login flow only (`clawk login`, or its
+`--ca-bundle` flag); the standard `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` / `CURL_CA_BUNDLE` variables
+are still read by the plain `requests`/`urllib` calls some tools make (and by
+`pip`, `uv`, `curl`, Node), so a stale path in one of them now fails at the
+call that uses it rather than at startup. Fix or unset the variable there.
+
+A custom provider can declare `ssl_ca_cert` for its endpoint. That bundle
+replaces platform trust for chat, model metadata, and model catalog probes.
+A missing file produces a warning and falls back to platform trust.
+`ssl_verify: false` disables certificate verification and is unsafe for
+untrusted networks. Do not use it as a permanent fix for a missing corporate root.
+
+Provider HTTP clients keep proxy configuration separate from certificate
+selection. A stale ambient CA-file path cannot prevent those clients from
+starting. PM index credentials are sent only to their exact HTTPS origin;
+redirects to another origin do not receive them.
+
+## Trusted-by-placement extension points {#trusted-by-placement}
+
+Most third-party code Clawksis can run is gated by an explicit allow-list: general plugins need `plugins.enabled`, shell hooks need a first-use approval (or `hooks_auto_accept`), MCP servers are listed in config. One surface is deliberately different:
+
+| Extension point | Loaded from | Loaded when | Opt-in |
+|-----------------|-------------|-------------|--------|
+| [Gateway event hooks](./features/hooks.md#gateway-event-hooks) | `<profile home>/hooks/<name>/` (`HOOK.yaml` + `handler.py`) | Gateway startup (`HookRegistry.discover_and_load()`), per served profile | **Placing the directory.** No `plugins.enabled` entry, no prompt; `CLAWK_SAFE_MODE` does not skip it. |
+
+The gateway imports every valid hook directory in-process, with the gateway's own privileges. This is the documented contract (since `3988c3c245f`), not an oversight: the profile home is operator-owned configuration, and anyone who can write into it can already run code as you through `config.yaml` shell hooks or by editing `plugins.enabled`, so a separate consent gate for `hooks/` would add friction without moving the trust boundary. Treat the contents of `~/.clawksis/hooks/` like the contents of `config.yaml` — review a `handler.py` before you place it, and include `ls ~/.clawksis/hooks/` whenever you audit the rest of the profile home (the directory is not on the [protected-paths denylist](#file-write-safety), so it is ordinary writable state). Full details: [gateway hook trust model](./features/hooks.md#gateway-hook-trust).
 
 ## Supply-chain advisory checking
 
-
-
 Clawksis ships with a built-in advisory scanner that flags Python packages in the active venv that match a curated catalog of known-compromised versions (supply-chain worms like the May 2026 `mistralai 2.4.6` poisoning). Implementation lives in `clawk_cli/security_advisories.py`.
-
-
 
 How it runs:
 
-
-
 - **CLI startup banner.** A one-line warning is printed if any advisory matches, with a pointer to `clawk doctor` for the full remediation.
-
 - **`clawk doctor`.** Surfaces every active advisory with version specifics and 2-4 step remediation instructions.
-
 - **Gateway startup.** Logged to `gateway.log`; the first interactive message gets a short operator banner.
-
-
 
 Each advisory carries a stable id. Once you have read and acted on it you can dismiss it for good:
 
-
-
 ```bash
-
 clawk doctor --ack <advisory-id>
-
 ```
-
-
 
 The ack is persisted to `config.security.acked_advisories` and survives restart. Old advisories are intentionally **not** removed from the catalog — leaving them in place keeps fresh installs warned about historically poisoned versions that might still be cached in a private mirror.
 
-
-
 The check itself is stdlib-only and runs from one `importlib.metadata.version()` lookup per advisory, so it's safe to run on every startup.
-
-
 
 ### Lazy install of optional dependencies
 
+PM manages optional Python features as extras from `pyproject.toml`.
+Source installers select the `all` extra. Native bundles include all extras
+supported by their target. These are different feature sets.
 
+When a backend requests an unavailable extra, `pm.ensure_import("extra-name")`
+uses the same dependency transaction as plugin admission:
 
-Many features (Mistral TTS, ElevenLabs, Honcho memory, Bedrock, Slack, Matrix, …) depend on Python packages that not every user needs. Clawksis installs these **lazily** on first use rather than eagerly under `clawksis-agent[all]`. The implementation lives in `tools/lazy_deps.py`.
+1. PM checks platform support and `security.allow_lazy_installs`.
+2. PM prepares a complete environment with the existing extras and enabled plugin requirements.
+3. Without plugin members, it uses the committed lock unchanged. With members, it resolves from the previous selection before a frozen workspace sync.
+4. It validates the candidate before publishing its selection. A failed candidate leaves the previous environment selected.
+5. If the current process uses the previous environment, PM reports that Clawksis must restart. It does not replace imported libraries in place.
 
+Shipped source, locks, and signed payloads remain unchanged. Additional tools
+and Python environments use writable storage outside the base artifact.
+Plugin dependencies share the complete environment; they are not isolated
+Python sandboxes. Compatible transitive dependencies can change, but declared
+constraints and exact pins remain binding.
 
-
-The trade-off this fixes:
-
-
-
-- **Fragility.** When one extra's transitive dependency becomes unavailable on PyPI (quarantined for malware, yanked, broken upload), the entire `[all]` resolve would fail and fresh installs would silently fall back to a stripped tier — losing 10+ unrelated extras at once. Lazy install isolates each backend so one poisoned dep can't break unrelated features.
-
-- **Bloat.** A user who only ever talks to one provider no longer pulls hundreds of packages they will never import.
-
-
-
-How it works:
-
-
-
-1. A backend module calls `ensure("feature.name")` at the top of its first-import path.
-
-2. If the deps are missing, `ensure` checks `security.allow_lazy_installs` in `config.yaml` (default `true`) and runs a venv-scoped `pip install` for the allowlisted specs.
-
-3. If the install fails or the user has disabled lazy installs, the call raises `FeatureUnavailable` with the actual pip stderr and a pointer at `clawk tools`.
-
-
-
-Security guarantees enforced by `tools/lazy_deps.py`:
-
-
-
-| Guarantee | What it means |
-
+| Control | Behavior |
 |---|---|
+| Declared extras | The helper accepts project extra names, not arbitrary pip commands. The removed `LAZY_DEPS` feature-name registry is not used. |
+| Verified tools | Managed tool archives have versions and SHA-256 hashes in `pm/lock.json`. |
+| Atomic selection | Preparation and validation precede publication of the new runtime selection. |
+| Failure reporting | Failures raise `pm.InstallError`. PM sync receipts include failed steps and policy refusals. |
+| No automatic plugin removal | A failed dependency union does not silently disable or delete installed plugins. |
 
-| Venv-scoped only | Installs target `sys.executable` in the active venv — never the system Python |
+To disable on-demand installations, run:
 
-| PyPI by name only | Specs accept `"package>=1.0,<2"` syntax. No `--index-url`, `git+https://`, or file: paths — a malicious `config.yaml` cannot redirect the install |
-
-| Allowlist | Only specs that appear in the in-tree `LAZY_DEPS` map can be installed via this path. A typo in a feature name does NOT get install-anything semantics |
-
-| Opt-out | Set `security.allow_lazy_installs: false` to disable runtime installs entirely. Useful for restricted networks or strict security postures |
-
-| No silent retries | Failures surface as `FeatureUnavailable` — no caching of bad state, no retry storms |
-
-
-
-To disable runtime installs:
-
-
-
-```yaml
-
-# ~/.clawksis/config.yaml
-
-security:
-
-  allow_lazy_installs: false
-
+```bash
+clawk config set security.allow_lazy_installs false
 ```
 
+Already installed dependencies remain usable. Explicit PM install commands
+are separate from on-demand installation. A bundle's frozen feature list,
+when present with lazy installs disabled, restricts requested Python extra
+names. This setting is not a blanket ban on explicit plugin admission or
+manual package-manager commands. The official Docker image also disables
+on-demand installs through its internal environment policy.
 
-
-When disabled, backends that need optional deps will tell the user to run the install manually (`pip install …`) or pick a different backend via `clawk tools`.
-
+For missing dependencies, use `clawk tools` and `clawk doctor` to identify
+the requirement. Do not run pip against a signed payload or the system Python.
+See [Package management](../reference/package-management.md) for installation
+ownership, diagnostics, and command boundaries.

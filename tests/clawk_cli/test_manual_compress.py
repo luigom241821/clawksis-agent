@@ -32,7 +32,9 @@ def test_manual_compress_keeps_tui_composer_editable(capsys):
         # condition. Compression must retain its status spinner without
         # preventing the user from drafting the next prompt.
         observed["running"] = shell._command_running
-        observed["blocks_input"] = getattr(shell, "_command_blocks_input", shell._command_running)
+        observed["blocks_input"] = getattr(
+            shell, "_command_blocks_input", shell._command_running
+        )
         return list(history), ""
 
     shell.agent._compress_context.side_effect = compress
@@ -41,12 +43,6 @@ def test_manual_compress_keeps_tui_composer_editable(capsys):
         shell._manual_compress()
 
     assert observed == {"running": True, "blocks_input": False}
-
-
-
-
-
-
 
 
 def test_manual_compress_syncs_session_id_after_split():
@@ -71,10 +67,12 @@ def test_manual_compress_syncs_session_id_after_split():
     shell.agent.compression_enabled = True
     shell.agent._cached_system_prompt = ""
     shell.agent.tools = None
+
     # Simulate _compress_context mutating agent.session_id as a side effect.
     def _fake_compress(*args, **kwargs):
         shell.agent.session_id = new_child_id
         return (compressed, "")
+
     shell.agent._compress_context.side_effect = _fake_compress
     shell.agent._compression_skipped_due_to_lock = False
     shell.agent.session_id = old_id  # starts in sync
@@ -127,8 +125,6 @@ def test_manual_compress_flushes_compressed_history_to_child_session_db():
     shell.agent._flush_messages_to_session_db.assert_called_once_with(compressed, None)
 
 
-
-
 def test_manual_compress_runs_when_auto_compaction_disabled(capsys):
     """compression.enabled: false disables *automatic* compaction only.
 
@@ -163,8 +159,6 @@ def test_manual_compress_runs_when_auto_compaction_disabled(capsys):
     # Manual compression bypasses the summary-failure cooldown.
     assert shell.agent._compress_context.call_args.kwargs.get("force") is True
     assert shell.conversation_history == compressed
-
-
 
 
 def test_manual_compress_shows_lock_skip_without_confirmed_holder(capsys):

@@ -37,16 +37,18 @@ def _make_background_cli_stub():
     cli._background_task_counter = 0
     cli._background_tasks = {}
     cli._ensure_runtime_credentials = MagicMock(return_value=True)
-    cli._resolve_turn_agent_config = MagicMock(return_value={
-        "model": "test-model",
-        "runtime": {
-            "api_key": "test-key",
-            "base_url": "https://example.test/v1",
-            "provider": "test",
-            "api_mode": "chat_completions",
-        },
-        "request_overrides": None,
-    })
+    cli._resolve_turn_agent_config = MagicMock(
+        return_value={
+            "model": "test-model",
+            "runtime": {
+                "api_key": "test-key",
+                "base_url": "https://example.test/v1",
+                "provider": "test",
+                "api_mode": "chat_completions",
+            },
+            "request_overrides": None,
+        }
+    )
     cli.max_turns = 90
     cli.enabled_toolsets = []
     cli._session_db = None
@@ -126,7 +128,6 @@ class TestCliApprovalUi:
         thread.join(timeout=2)
         assert result["value"] == "once"
 
-
     def test_sudo_prompt_restores_existing_draft_after_response(self):
         cli = _make_cli_stub()
         cli._app.current_buffer = _FakeBuffer("draft command", cursor_position=5)
@@ -156,7 +157,6 @@ class TestCliApprovalUi:
         assert cli._app.current_buffer.text == "draft command"
         assert cli._app.current_buffer.cursor_position == 5
 
-
     def test_handle_approval_selection_view_expands_in_place(self):
         cli = _make_cli_stub()
         cli._approval_state = {
@@ -174,11 +174,6 @@ class TestCliApprovalUi:
         assert "view" not in cli._approval_state["choices"]
         assert cli._approval_state["selected"] == 3
         assert cli._approval_state["response_queue"].empty()
-
-
-
-
-
 
     def test_approval_display_truncates_giant_command_in_view_mode(self):
         """If the user hits /view on a massive command, choices still render.
@@ -200,14 +195,21 @@ class TestCliApprovalUi:
 
         import shutil as _shutil
 
-        with patch("cli.shutil.get_terminal_size",
-                   return_value=_shutil.os.terminal_size((100, 24))):
+        with patch(
+            "cli.shutil.get_terminal_size",
+            return_value=_shutil.os.terminal_size((100, 24)),
+        ):
             fragments = cli._get_approval_display_fragments()
 
         rendered = "".join(text for _style, text in fragments)
 
         # All four choices visible even with a huge command.
-        for key in ("approval_once", "approval_session", "approval_always", "approval_deny"):
+        for key in (
+            "approval_once",
+            "approval_session",
+            "approval_always",
+            "approval_deny",
+        ):
             label = t(f"cli.tui.{key}")
             assert label in rendered, f"choice {label!r} missing"
 
@@ -246,9 +248,11 @@ class TestCliApprovalUi:
                     "failed": False,
                 }
 
-        with patch("run_agent.AIAgent", FakeAgent), \
-             patch.object(cli_module, "_cprint"), \
-             patch.object(cli_module, "ChatConsole") as chat_console:
+        with (
+            patch("run_agent.AIAgent", FakeAgent),
+            patch.object(cli_module, "_cprint"),
+            patch.object(cli_module, "ChatConsole") as chat_console,
+        ):
             chat_console.return_value.print = MagicMock()
             cli._handle_background_command("/bg check weather")
 
@@ -285,8 +289,8 @@ def _make_real_paint_cli_stub():
     # Real methods, not mocks.
     cli._paint_now = ClawksisCLI._paint_now.__get__(cli, ClawksisCLI)
     cli._invalidate = ClawksisCLI._invalidate.__get__(cli, ClawksisCLI)
-    cli._resize_recovery_pending = True       # gate 1: resize in flight
-    cli._last_invalidate = time.monotonic()   # gate 2: inside throttle window
+    cli._resize_recovery_pending = True  # gate 1: resize in flight
+    cli._last_invalidate = time.monotonic()  # gate 2: inside throttle window
     cli._app = SimpleNamespace(invalidate=MagicMock(), current_buffer=_FakeBuffer())
     return cli
 
@@ -310,7 +314,6 @@ class TestModalPaintNow:
         # ...but _paint_now() always paints.
         cli._paint_now()
         assert cli._app.invalidate.called
-
 
     def test_secret_response_teardown_paints(self):
         """_submit_secret_response tears the secret panel down via _paint_now,
@@ -438,12 +441,15 @@ class TestPersistPromptSummary:
         assert "rm -rf /tmp/scratch" in summary
         assert "allowed for session" in summary
 
-
     def test_persist_prompts_false_suppresses_summary(self):
         cli = _make_cli_stub()
         printed = []
-        with patch.dict(cli_module.CLI_CONFIG.get("display", {}), {"persist_prompts": False}), \
-             patch.object(cli_module, "_cprint", printed.append):
+        with (
+            patch.dict(
+                cli_module.CLI_CONFIG.get("display", {}), {"persist_prompts": False}
+            ),
+            patch.object(cli_module, "_cprint", printed.append),
+        ):
             verdict = self._resolve_approval(cli, "once")
         assert verdict == "once"
         assert not any("Approval" in p for p in printed)
@@ -457,9 +463,17 @@ class TestPersistPromptSummary:
         result = {}
 
         def _run():
-            result["value"] = cli._clarify_callback([{
-                "qid": "q0", "question": "Pick a path?", "choices": ["A", "B"],
-                "choices_offered": ["A", "B"], "multi_select": False}])
+            result["value"] = cli._clarify_callback(
+                [
+                    {
+                        "qid": "q0",
+                        "question": "Pick a path?",
+                        "choices": ["A", "B"],
+                        "choices_offered": ["A", "B"],
+                        "multi_select": False,
+                    }
+                ]
+            )
 
         with patch.object(cli_module, "_cprint", printed.append):
             t = threading.Thread(target=_run, daemon=True)
@@ -521,7 +535,6 @@ class TestClearOverlaysForInterrupt:
         assert sudo_q.get_nowait() == ""
         assert secret_q.get_nowait() == ""
 
-
     def test_dead_queue_does_not_block_clearing_others(self):
         """A queue that raises on put() must not prevent the remaining
         overlays from being cleared."""
@@ -560,4 +573,3 @@ class TestClearOverlaysForInterrupt:
 
         assert not t.is_alive(), "worker thread never unblocked"
         assert result["value"] == "deny"
-

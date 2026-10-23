@@ -109,14 +109,16 @@ def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
         "prompt_toolkit.formatted_text": MagicMock(),
         "prompt_toolkit.auto_suggest": MagicMock(),
     }
-    with patch.dict(sys.modules, prompt_toolkit_stubs), patch.dict(
-        "os.environ", clean_env, clear=False
+    with (
+        patch.dict(sys.modules, prompt_toolkit_stubs),
+        patch.dict("os.environ", clean_env, clear=False),
     ):
         import cli as _cli_mod
 
         _cli_mod = importlib.reload(_cli_mod)
-        with patch.object(_cli_mod, "get_tool_definitions", return_value=[]), patch.dict(
-            _cli_mod.__dict__, {"CLI_CONFIG": _clean_config}
+        with (
+            patch.object(_cli_mod, "get_tool_definitions", return_value=[]),
+            patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}),
         ):
             return _cli_mod.ClawksisCLI(**kwargs)
 
@@ -124,7 +126,9 @@ def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
 def _prepare_cli_with_active_session(tmp_path):
     cli = _make_cli()
     cli._session_db = SessionDB(db_path=tmp_path / "state.db")
-    cli._session_db.create_session(session_id=cli.session_id, source="cli", model=cli.model)
+    cli._session_db.create_session(
+        session_id=cli.session_id, source="cli", model=cli.model
+    )
 
     cli.agent = _FakeAgent(cli.session_id, cli.session_start)
     cli.conversation_history = [{"role": "user", "content": "hello"}]
@@ -175,10 +179,6 @@ def test_new_command_creates_real_fresh_session_and_resets_agent_state(tmp_path)
     cli.agent._invalidate_system_prompt.assert_called_once()
 
 
-
-
-
-
 def test_new_session_delivers_context_engine_boundary_synchronously(tmp_path):
     """The context-engine on_session_end must fire during /new itself.
 
@@ -189,8 +189,8 @@ def test_new_session_delivers_context_engine_boundary_synchronously(tmp_path):
     old_session_id = cli.session_id
 
     engine_calls = []
-    cli.agent.context_compressor.on_session_end = (
-        lambda sid, msgs: engine_calls.append((sid, list(msgs)))
+    cli.agent.context_compressor.on_session_end = lambda sid, msgs: engine_calls.append(
+        (sid, list(msgs))
     )
 
     cli.process_command("/new")
@@ -223,10 +223,6 @@ def test_run_cleanup_flushes_pending_memory_manager_work(tmp_path):
     mm.flush_pending.assert_called_once_with(timeout=10)
 
 
-
-
-
-
 def test_clear_command_starts_new_session_before_redrawing(tmp_path):
     cli = _prepare_cli_with_active_session(tmp_path)
     cli.console = MagicMock()
@@ -241,8 +237,6 @@ def test_clear_command_starts_new_session_before_redrawing(tmp_path):
     cli.console.clear.assert_called_once()
     cli.show_banner.assert_called_once()
     assert cli.conversation_history == []
-
-
 
 
 def test_new_session_resets_token_counters(tmp_path):
@@ -308,5 +302,3 @@ def test_new_session_with_title(capsys):
 
     captured = capsys.readouterr()
     assert "My Test Session" in captured.out
-
-

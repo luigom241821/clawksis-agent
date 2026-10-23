@@ -1,10 +1,14 @@
 ---
 sidebar_position: 1
-title: "Quickstart"
+title: "Clawksis Quickstart"
 description: "Your first conversation with Clawksis — from install to chatting in under 5 minutes"
 ---
 
-# Quickstart
+# Clawksis Quickstart
+
+Python dependency commands on this page use a
+[PM-prepared source checkout](../reference/package-management.md#developer-workflow).
+After a dependency change, reactivate the checkout and restart Clawksis.
 
 This guide gets you from zero to a working Clawksis setup that survives real use. Install, choose a provider, verify a working chat, and know exactly what to do when something breaks.
 
@@ -53,7 +57,9 @@ To easily install the command-line and desktop applications, [download the Clawk
 ### Without Clawksis Desktop:
 For a command-line only install without Clawksis Desktop, run:
 
-#### Linux / macOS / WSL2 / Android (Termux)
+For aarch64 Android devices, use the separate [Termux APT guide](./termux.md).
+
+#### Linux / macOS / WSL2
 ```bash
 curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
 ```
@@ -62,12 +68,8 @@ curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent
 
 Run in powershell:
 ```powershell
-iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1) 
+iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)
 ```
-
-:::tip Android / Termux
-If you're installing on a phone, see the dedicated [Termux guide](./termux.md) for the tested manual path, supported extras, and current Android-specific limitations.
-:::
 
 After it finishes, reload your shell:
 
@@ -100,7 +102,7 @@ Good defaults:
 | Provider | What it is | How to set up |
 |----------|-----------|---------------|
 | **Nous Portal** | Subscription-based, zero-config | OAuth login via `clawk model` |
-| **OpenAI Codex** | ChatGPT OAuth, uses Codex models | Device code auth via `clawk model` |
+| **OpenAI Codex** | ChatGPT or Codex subscription, uses Codex models | Device code auth via `clawk model` → **ChatGPT or Codex Subscription** |
 | **Anthropic** | Claude models directly — Max plan + extra usage credits (OAuth), or API key for pay-per-token | `clawk model` → OAuth login (requires Max + extra credits), or an Anthropic API key |
 | **OpenRouter** | Multi-provider routing across many models | Enter your API key |
 | **Z.AI** | GLM / Zhipu-hosted models | Set `GLM_API_KEY` / `ZAI_API_KEY` (also accepts `Z_AI_API_KEY`) |
@@ -108,6 +110,7 @@ Good defaults:
 | **Kimi / Moonshot China** | China-region Moonshot endpoint | Set `KIMI_CN_API_KEY` |
 | **Arcee AI** | Trinity models | Set `ARCEEAI_API_KEY` |
 | **GMI Cloud** | Multi-model direct API | Set `GMI_API_KEY` |
+| **Actual Computer** | Your own hardware as a private inference cluster — hosted relay or local daemon | Set `ACTUAL_API_KEY` (relay) or `ACTUAL_BASE_URL=http://127.0.0.1:8080` (local, no key) |
 | **MiniMax (OAuth)** | MiniMax frontier model via browser OAuth — no API key needed (model name in `clawk_cli/models.py` may change between releases) | `clawk model` → MiniMax (OAuth) |
 | **MiniMax** | International MiniMax endpoint | Set `MINIMAX_API_KEY` |
 | **MiniMax China** | China-region MiniMax endpoint | Set `MINIMAX_CN_API_KEY` |
@@ -120,9 +123,12 @@ Good defaults:
 | **xAI** | Grok models via direct API | Set `XAI_API_KEY` |
 | **xAI Grok OAuth** | SuperGrok / Premium+ subscription, no API key needed | `clawk model` → xAI Grok OAuth |
 | **NovitaAI** | Multi-model API gateway | Set `NOVITA_API_KEY` |
+| **Ramp Router** | Responses-native LLM gateway routing across OpenAI/Anthropic/xAI/... | Set `RAMP_ROUTER_API_KEY` |
+| **Nebius Token Factory** | Open models on Nebius AI cloud | Set `NEBIUS_API_KEY` |
 | **StepFun** | Step Plan models | Set `STEPFUN_API_KEY` |
 | **Xiaomi MiMo** | Xiaomi-hosted models | Set `XIAOMI_API_KEY` |
 | **Tencent TokenHub** | Tencent-hosted models | Set `TOKENHUB_API_KEY` |
+| **Tencent TokenPlan** | Tencent Hy models via Anthropic-style endpoint | Set `TOKENPLAN_API_KEY` |
 | **Ollama Cloud** | Managed Ollama-hosted models | Set `OLLAMA_API_KEY` |
 | **LM Studio** | Local desktop app exposing an OpenAI-compatible API | Set `LM_API_KEY` (and `LM_BASE_URL` if non-default) |
 | **Qwen OAuth** | Qwen Portal browser OAuth — no API key needed | `clawk model` → Qwen OAuth |
@@ -133,6 +139,7 @@ Good defaults:
 | **NVIDIA NIM** | Nemotron models via build.nvidia.com or local NIM | Set `NVIDIA_API_KEY` (optional: `NVIDIA_BASE_URL`) |
 | **GitHub Copilot** | GitHub Copilot subscription (GPT-5.x, Claude, Gemini, etc.) | OAuth via `clawk model`, or `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` |
 | **GitHub Copilot ACP** | Copilot ACP agent backend (spawns local `copilot` CLI) | `clawk model` (requires `copilot` CLI + `copilot login`) |
+| **Vercel AI Gateway** | Vercel AI Gateway routing | Set `AI_GATEWAY_API_KEY` |
 | **Custom Endpoint** | VLLM, SGLang, Ollama, or any OpenAI-compatible API | Set base URL + API key |
 
 For most first-time users: choose a provider, accept the defaults unless you know why you're changing them. The full provider catalog with env vars and setup steps lives on the [Providers](../integrations/providers.md) page.
@@ -247,7 +254,7 @@ Only after the base chat works. Pick what you need:
 clawk gateway setup    # Interactive platform configuration
 ```
 
-Connect [Telegram](/user-guide/messaging/telegram), [Discord](/user-guide/messaging/discord), [Slack](/user-guide/messaging/slack), [WhatsApp](/user-guide/messaging/whatsapp), [Signal](/user-guide/messaging/signal), [Email](/user-guide/messaging/email), or [Home Assistant](/user-guide/messaging/homeassistant), or [Microsoft Teams](/user-guide/messaging/teams).
+Connect [Telegram](../user-guide/messaging/telegram.md), [Discord](../user-guide/messaging/discord.md), [Slack](../user-guide/messaging/slack.md), [WhatsApp](../user-guide/messaging/whatsapp.md), [Signal](../user-guide/messaging/signal.md), [Email](../user-guide/messaging/email.md), [Home Assistant](../user-guide/messaging/homeassistant.md) (plugin), or [Microsoft Teams](../user-guide/messaging/teams.md).
 
 ### Automation and tools
 
@@ -264,17 +271,14 @@ clawk config set terminal.backend docker    # Docker isolation
 clawk config set terminal.backend ssh       # Remote server
 ```
 
+For Docker sandboxes, you can also enable the **egress credential-injection proxy** so the sandbox never sees your real API keys — only opaque proxy tokens that work exclusively from behind a local TLS-intercepting daemon. See [Egress proxy](../user-guide/egress/iron-proxy.md). Setup is `clawk egress setup && clawk egress start`; `clawk setup terminal` also points Docker users at it. Modal, SSH, Daytona, and Singularity are not wired yet.
+
 ### Voice mode
 
-```bash
-# From the Clawksis install directory (the curl installer placed it at
-# ~/.clawksis/clawksis-agent on Linux/macOS or %LOCALAPPDATA%\clawk\clawksis-agent on Windows):
-cd ~/.clawksis/clawksis-agent
-uv pip install -e ".[voice]"
-# Includes faster-whisper for free local speech-to-text
-```
-
-Then in the CLI: `/voice on`. Press `Ctrl+B` to record. See [Voice Mode](../user-guide/features/voice-mode.md).
+Run `clawk tools` and configure the Voice providers. Then enable `/voice on`
+in the CLI and press `Ctrl+B` to record. PM handles missing supported
+requirements; a dependency change can require a restart. Local Faster-Whisper
+is not available on every architecture. See [Voice Mode](../user-guide/features/voice-mode.md).
 
 ### Skills
 
@@ -323,7 +327,7 @@ ACP support ships with the standard `[all]` extras, so the curl installer alread
 clawk acp
 ```
 
-(If you installed without `[all]`, run `cd ~/.clawksis/clawksis-agent && uv pip install -e ".[acp]"` first.)
+(If you installed without `[all]`, run `cd ~/.clawksis/clawksis-agent && python -c "import pm; pm.sync_venv(['acp'], explicit=True)"` first.)
 
 See [ACP Editor Integration](../user-guide/features/acp.md).
 
@@ -372,6 +376,7 @@ That sequence gets you from "broken vibes" back to a known state fast.
 
 ## Next Steps
 
+- **[User Stories](../user-stories.mdx)**: real setups from the community, a good place to start if you're not sure what to hand Clawksis first
 - **[CLI Guide](../user-guide/cli.md)** — Master the terminal interface
 - **[Configuration](../user-guide/configuration.md)** — Customize your setup
 - **[Messaging Gateway](../user-guide/messaging/index.md)** — Connect Telegram, Discord, Slack, WhatsApp, Signal, Email, Home Assistant, Teams, and more
@@ -379,3 +384,4 @@ That sequence gets you from "broken vibes" back to a known state fast.
 - **[AI Providers](../integrations/providers.md)** — Full provider list and setup details
 - **[Skills System](../user-guide/features/skills.md)** — Reusable workflows and knowledge
 - **[Tips & Best Practices](../guides/tips.md)** — Power user tips
+- **[Moving to another machine](../reference/faq.md#exporting-clawk-to-another-machine)** — `clawk backup` migrates your whole setup (or [a single profile](../reference/faq.md#moving-a-single-profile-to-another-machine)); no need to rebuild from scratch

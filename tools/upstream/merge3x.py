@@ -79,37 +79,104 @@ def ruff_canon(text: str) -> str:
     return text
 
 
-class Side:
-    """Lineas no vacias + cuantas lineas en blanco preceden a cada una."""
+def py_trivia_lines(text: str) -> set[int]:
+    """Indices (0-based) de lineas que son comentario de linea completa o parte
+    de un docstring. Se tratan como 'trivia': no participan del matching."""
+    import io
+    import tokenize
 
-    def __init__(self, text: str):
-        lines = text.replace("\r\n", "\n").split("\n")
+    out: set[int] = set()
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return out
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ) or not body:
+            continue
+        first = body[0]
+        if (
+            isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)
+        ):
+            start, end = first.lineno, first.end_lineno or first.lineno
+            if not isinstance(node, ast.Module) and start == node.lineno:
+                continue  # docstring en la misma linea que el def
+            out.update(range(start - 1, end))
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.COMMENT and tok.line.lstrip().startswith("#"):
+                out.add(tok.start[0] - 1)
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        pass
+    return out
+
+
+class Side:
+    """Lineas 'clave' (no vacias y no trivia) + el bloque de trivia (blancos,
+    comentarios, docstrings) que precede a cada una."""
+
+    def __init__(self, text: str, trivia: bool = False):
+        text = text.replace("\r\n", "\n")
+        lines = text.split("\n")
         if lines and lines[-1] == "":
             lines.pop()
+        triv = py_trivia_lines(text) if trivia else set()
         self.keys: list[str] = []
         self.lines: list[str] = []
-        self.blanks: list[int] = []
-        pending = 0
-        for ln in lines:
+        self.pre: list[list[str]] = []
+        block: list[str] = []
+        for idx, ln in enumerate(lines):
             ln = ln.rstrip()
-            if not ln:
-                pending += 1
+            if not ln or idx in triv:
+                block.append(ln)
                 continue
             self.keys.append(ln)
             self.lines.append(ln)
-            self.blanks.append(pending)
-            pending = 0
-        self.trailing_blanks = pending
+            self.pre.append(block)
+            block = []
+        self.tail = block
+
+    @staticmethod
+    def _cap(block: list[str], cap: int | None) -> list[str]:
+        if cap is None:
+            return list(block)
+        out: list[str] = []
+        run = 0
+        for ln in block:
+            if ln == "":
+                run += 1
+                if run <= cap:
+                    out.append(ln)
+            else:
+                run = 0
+                out.append(ln)
+        return out
 
     def emit(self, i: int, j: int, cap: int | None = None) -> list[str]:
         out: list[str] = []
         for k in range(i, j):
-            n = self.blanks[k]
-            if cap is not None:
-                n = min(n, cap)
-            out.extend([""] * n)
+            out.extend(self._cap(self.pre[k], cap))
             out.append(self.lines[k])
         return out
+
+
+def _tkey(block: list[str]) -> list[str]:
+    return [ln.strip() for ln in block if ln.strip()]
+
+
+def merge_trivia(b: list[str], a: list[str], t: list[str]) -> list[str]:
+    """Trivia de una linea estable: si el fork no la toco -> upstream; si
+    upstream no la toco -> fork; si ambos -> upstream."""
+    kb, ka, kt = _tkey(b), _tkey(a), _tkey(t)
+    if ka == kb or ka == kt:
+        return t
+    if kt == kb:
+        return Side._cap(a, 2)
+    return t
 
 
 def _intersect(ra: tuple[int, int], rb: tuple[int, int]) -> tuple[int, int] | None:
@@ -141,9 +208,11 @@ def sync_regions(base: list[str], a: list[str], b: list[str]):
     return out
 
 
-def merge_text(base_t: str, ours_t: str, theirs_t: str) -> tuple[str, int]:
+def merge_text(
+    base_t: str, ours_t: str, theirs_t: str, trivia: bool = False
+) -> tuple[str, int]:
     """Devuelve (texto_mergeado, n_conflictos)."""
-    B, A, T = Side(base_t), Side(ours_t), Side(theirs_t)
+    B, A, T = Side(base_t, trivia), Side(ours_t, trivia), Side(theirs_t, trivia)
     out: list[str] = []
     conflicts = 0
     iz = ia = ib = 0
@@ -185,9 +254,12 @@ def merge_text(base_t: str, ours_t: str, theirs_t: str) -> tuple[str, int]:
             ia, ib = am, bm
         iz = zm
         if ze - zm > 0:
-            out += T.emit(bm, be)
+            for k in range(ze - zm):
+                out += merge_trivia(B.pre[zm + k], A.pre[am + k], T.pre[bm + k])
+                out.append(T.lines[bm + k])
             iz, ia, ib = ze, ae, be
-    text = "\n".join(out).lstrip("\n") + "\n"
+    out += merge_trivia(B.tail, A.tail, T.tail)
+    text = "\n".join(out).strip("\n") + "\n"
     return text, conflicts
 
 
@@ -225,7 +297,7 @@ def merge_file(fp: str, base_rev: str) -> tuple[str, str | None, int]:
             ruff_canon(ours_t),
             ruff_canon(theirs_t),
         )
-    text, n = merge_text(base_t, ours_t, theirs_t)
+    text, n = merge_text(base_t, ours_t, theirs_t, trivia=is_py)
     if n:
         return "conflict", text, n
     if is_py:

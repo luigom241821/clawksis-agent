@@ -3,13 +3,11 @@
 </p>
 
 <h1 align="center">Clawksis</h1>
-
 <p align="center">
   <b>Tu agente de IA autónomo, self-hosted.</b><br>
   Hablale desde Telegram, WhatsApp o Discord mientras trabaja en tu VPS.<br>
   Aprende de cada sesión, crea sus propias skills y mejora con el uso.
 </p>
-
 <p align="center">
   <a href="https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT"></a>
   <a href="https://github.com/samuelgradientai-sys/clawksis-agent/issues"><img src="https://img.shields.io/badge/Issues-GitHub-red?style=for-the-badge" alt="Issues"></a>

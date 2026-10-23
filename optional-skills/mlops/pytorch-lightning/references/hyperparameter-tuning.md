@@ -19,7 +19,6 @@ import lightning as L
 from ray import tune
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 
-
 class LitModel(L.LightningModule):
     def __init__(self, lr, batch_size):
         super().__init__()
@@ -39,7 +38,6 @@ class LitModel(L.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
 
-
 def train_fn(config):
     """Training function for Ray Tune."""
     model = LitModel(lr=config["lr"], batch_size=config["batch_size"])
@@ -51,7 +49,6 @@ def train_fn(config):
     )
 
     trainer.fit(model, train_loader, val_loader)
-
 
 # Define search space
 config = {
@@ -112,7 +109,6 @@ pip install optuna-integration
 import optuna
 from optuna.integration import PyTorchLightningPruningCallback
 
-
 def objective(trial):
     # Suggest hyperparameters
     lr = trial.suggest_loguniform("lr", 1e-5, 1e-1)
@@ -136,7 +132,6 @@ def objective(trial):
     trainer.fit(model, train_loader, val_loader)
 
     return trainer.callback_metrics["val_loss"].item()
-
 
 # Create study
 study = optuna.create_study(
@@ -162,7 +157,9 @@ optuna.visualization.plot_param_importances(study).show()
 import optuna
 
 # Shared database for distributed optimization
-storage = optuna.storages.RDBStorage(url="postgresql://user:pass@localhost/optuna")
+storage = optuna.storages.RDBStorage(
+    url='postgresql://user@localhost/optuna'  # password via ~/.pgpass or PGPASSWORD
+)
 
 study = optuna.create_study(
     study_name="distributed_study",
@@ -209,7 +206,6 @@ parameters:
 import wandb
 import lightning as L
 from lightning.pytorch.loggers import WandbLogger
-
 
 def train():
     # Initialize wandb
@@ -258,7 +254,6 @@ pip install hyperopt
 ```python
 from hyperopt import hp, fmin, tpe, Trials
 
-
 def objective(params):
     model = LitModel(
         lr=params["lr"],
@@ -272,7 +267,6 @@ def objective(params):
 
     # Return loss (minimize)
     return trainer.callback_metrics["val_loss"].item()
-
 
 # Define search space
 space = {
@@ -312,7 +306,6 @@ class LitModel(L.LightningModule):
         loss = self.model(batch).mean()
         return loss
 
-
 # Find optimal learning rate
 model = LitModel()
 trainer = L.Trainer(auto_lr_find=True)
@@ -322,7 +315,6 @@ trainer.tune(model, train_loader)
 
 # Or manually
 from lightning.pytorch.tuner import Tuner
-
 tuner = Tuner(trainer)
 lr_finder = tuner.lr_find(model, train_loader)
 
@@ -352,7 +344,6 @@ class LitModel(L.LightningModule):
 
     def train_dataloader(self):
         return DataLoader(dataset, batch_size=self.batch_size)
-
 
 model = LitModel()
 trainer = L.Trainer(auto_scale_batch_size="binsearch")
@@ -492,7 +483,6 @@ def train_fn(config, checkpoint_dir=None):
 
 ```python
 import GPUtil
-
 
 def train_fn(config):
     # Before training

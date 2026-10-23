@@ -146,7 +146,7 @@ doc = pymupdf.open("report.pdf")
 for i, page in enumerate(doc):
     results = page.search_for("revenue")
     if results:
-        print(f"Page {i+1}: {len(results)} match(es)")
+        print(f"Page {i + 1}: {len(results)} match(es)")
         print(page.get_text("text"))
 ```
 
@@ -162,4 +162,5 @@ No extra dependencies needed — pymupdf covers split, merge, search, and text e
 - Both helper scripts accept `--help` for full usage
 - marker-pdf downloads ~2.5GB of models to `~/.cache/huggingface/` on first use
 - For Word docs: `pip install python-docx` (better than OCR — parses actual structure)
-- For PowerPoint: see the `powerpoint` skill (uses python-pptx)
+
+- For PowerPoint: see the `pptx-author` skill (optional, python-pptx)

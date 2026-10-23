@@ -158,7 +158,8 @@ boxes -l                                       # List all 70+ designs
 ```bash
 python -m pyfiglet "CLAWKSIS" -f slant | boxes -d stone
 # Or without pyfiglet installed:
-curl -s "https://asciified.thelicato.io/api/v2/ascii?text=CLAWKSIS&font=Slant" | boxes -d stone
+
+curl -s "https://asciified.thelicato.io/api/v2/ascii?text=HERMES&font=Slant" | boxes -d stone
 ```
 
 ## Tool 5: TOIlet (Colored Text Art)
@@ -243,13 +244,15 @@ curl -s 'https://ascii.co.uk/art/cat' -o ~/.clawksis/cache/scratch/ascii_art.htm
 import os, re, html
 with open(os.path.expanduser('~/.clawksis/cache/scratch/ascii_art.html')) as f:
     text = f.read()
-arts = re.findall(r'<pre[^>]*>(.*?)</pre>', text, re.DOTALL)
+
+arts = re.findall(r"<pre[^>]*>(.*?)</pre>", text, re.DOTALL)
 for art in arts:
-    clean = re.sub(r'<[^>]+>', '', art)
+    clean = re.sub(r"<[^>]+>", "", art)
     clean = html.unescape(clean).strip()
     if len(clean) > 30:
         print(clean)
-        print('\n---\n')
+
+        print("\n---\n")
 ```
 
 **Available subjects** (use as URL path):

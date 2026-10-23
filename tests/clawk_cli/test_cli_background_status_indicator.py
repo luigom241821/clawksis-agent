@@ -41,20 +41,10 @@ def test_snapshot_counts_live_background_tasks():
     assert snap["active_background_tasks"] == 2
 
 
-
-
 def test_plain_text_status_omits_indicator_when_idle():
     cli_obj = _make_cli()
     text = cli_obj._build_status_bar_text(width=80)
     assert "▶" not in text
-
-
-
-
-
-
-
-
 
 
 def test_fragments_omit_bg_segment_when_idle():
@@ -85,21 +75,8 @@ class _FakeRunningRegistry:
 
 def _patch_process_registry(monkeypatch, count: int) -> None:
     import tools.process_registry as pr_mod
+
     monkeypatch.setattr(pr_mod, "process_registry", _FakeRunningRegistry(count))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # ── Background/async subagent indicator (⛓ N) ─────────────────────────────
@@ -111,6 +88,7 @@ def _patch_process_registry(monkeypatch, count: int) -> None:
 
 def _patch_async_active(monkeypatch, count: int) -> None:
     import tools.async_delegation as ad_mod
+
     monkeypatch.setattr(ad_mod, "active_count", lambda: count)
 
 
@@ -119,8 +97,6 @@ def test_snapshot_reports_zero_when_no_background_subagents(monkeypatch):
     _patch_async_active(monkeypatch, 0)
     snap = cli_obj._get_status_bar_snapshot()
     assert snap["active_background_subagents"] == 0
-
-
 
 
 def test_snapshot_safe_when_async_active_count_raises(monkeypatch):
@@ -173,4 +149,3 @@ def test_all_three_background_indicators_independent(monkeypatch):
     assert "▶ 1" in rendered
     assert "⚙ 2" in rendered
     assert "⛓ 5" in rendered
-

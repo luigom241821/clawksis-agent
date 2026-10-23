@@ -406,7 +406,7 @@ def offer_interactive(*, cprint, ask=input) -> Optional[bool]:
     if advice is None:
         return None
     cprint("")
-    cprint("☤ " + advice_lines(advice)[0])
+    cprint("∇ " + advice_lines(advice)[0])
     for line in advice_lines(advice)[1:-1]:
         cprint(f"  {line}")
     try:

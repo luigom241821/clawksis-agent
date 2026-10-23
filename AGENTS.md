@@ -17,22 +17,16 @@
 </p>
 
 ---
-
 # Clawksis - Development Guide
 
-
-
-Instructions for AI coding assistants and developers working on the clawksis-agent codebase.
-
-
+For AI coding assistants and developers working on clawksis-agent. This root file is a hub: what
+applies everywhere, then a routing table. Each area's `AGENTS.md` loads automatically when you work
+in that directory; read it before editing there. `python scripts/check` caps this file at 12k chars
+and every root-to-area chain at 30k, so it loads whole on 128k+ models: long form goes in the guide.
 
 **Never give up on the right solution.**
 
-
-
 ## Development Environment
-
-
 
 ```bash
 
@@ -42,111 +36,38 @@ source .venv/bin/activate   # or: source venv/bin/activate
 
 ```
 
-
-
 `scripts/run_tests.sh` probes `.venv` first, then `venv`, then
 
 `$HOME/.clawksis/clawksis-agent/venv` (for worktrees that share a venv with the
 
 main checkout).
 
-
-
 ## Project Structure
 
-
-
-File counts shift constantly — don't treat the tree below as exhaustive.
-
-The canonical source is the filesystem. The notes call out the load-bearing
-
-entry points you'll actually edit.
-
-
+Counts shift constantly; the filesystem is canonical. Load-bearing entry points:
 
 ```
-
 clawksis-agent/
-
-├── run_agent.py          # AIAgent class — core conversation loop (~12k LOC)
-
+├── run_agent.py          # AIAgent facade; the turn loop lives in agent/turn_*.py
 ├── model_tools.py        # Tool orchestration, discover_builtin_tools(), handle_function_call()
-
-├── toolsets.py           # Toolset definitions, _CLAWK_CORE_TOOLS list
-
-├── cli.py                # ClawksisCLI class — interactive CLI orchestrator (~11k LOC)
-
-├── clawk_state.py       # SessionDB — SQLite session store (FTS5 search)
-
+├── toolsets.py           # TOOLSETS dict, _CLAWK_CORE_TOOLS
+├── cli.py                # ClawksisCLI (REPL, slash dispatch) + clawk_cli/cli_*_mixin.py
+├── clawk_state.py       # SessionDB facade; clawk_state_*.py siblings
 ├── clawk_constants.py   # get_clawk_home(), display_clawk_home() — profile-aware paths
-
-├── clawk_logging.py     # setup_logging() — agent.log / errors.log / gateway.log (profile-aware)
-
-├── batch_runner.py       # Parallel batch processing
-
-├── agent/                # Agent internals (provider adapters, memory, caching, compression, etc.)
-
-├── clawk_cli/           # CLI subcommands, setup wizard, plugins loader, skin engine
-
-├── tools/                # Tool implementations — auto-discovered via tools/registry.py
-
-│   └── environments/     # Terminal backends (local, docker, ssh, modal, daytona, singularity)
-
-├── gateway/              # Messaging gateway — run.py + session.py + platforms/
-
-│   ├── platforms/        # Adapter per platform (telegram, discord, slack, whatsapp,
-
-│   │                     #   homeassistant, signal, matrix, mattermost, email, sms,
-
-│   │                     #   dingtalk, wecom, weixin, feishu, qqbot, bluebubbles,
-
-│   │                     #   yuanbao, webhook, api_server, ...). See ADDING_A_PLATFORM.md.
-
-│   └── builtin_hooks/    # Extension point for always-registered gateway hooks (none shipped)
-
-├── plugins/              # Plugin system (see "Plugins" section below)
-
-│   ├── memory/           # Memory-provider plugins (honcho, mem0, supermemory, ...)
-
-│   ├── context_engine/   # Context-engine plugins
-
-│   ├── model-providers/  # Inference backend plugins (openrouter, anthropic, gmi, ...)
-
-│   ├── kanban/           # Multi-agent board dispatcher + worker plugin
-
-│   ├── clawk-achievements/  # Gamified achievement tracking
-
-│   ├── observability/    # Metrics / traces / logs plugin
-
-│   ├── image_gen/        # Image-generation providers
-
-│   └── <others>/         # disk-cleanup, google_meet, platforms, spotify,
-
-│                         #   strike-freedom-cockpit, ...
-
-├── optional-skills/      # Heavier/niche skills shipped but NOT active by default
-
-├── skills/               # Built-in skills bundled with the repo
-
-├── ui-tui/               # Ink (React) terminal UI — `clawk --tui`
-
-│   └── src/              # entry.tsx, app.tsx, gatewayClient.ts + app/components/hooks/lib
-
-├── tui_gateway/          # Python JSON-RPC backend for the TUI
-
-├── acp_adapter/          # ACP server (VS Code / Zed / JetBrains integration)
-
-├── cron/                 # Scheduler — jobs.py, scheduler.py
-
-├── scripts/              # run_tests.sh, release.py, auxiliary scripts
-
-├── website/              # Docusaurus docs site
-
-└── tests/                # Pytest suite (~17k tests across ~900 files as of May 2026)
-
+├── agent/                # turn loop phases, providers, memory, compression, prompt builder
+├── clawk_cli/           # CLI subcommands, setup, config, plugins loader, updater, web_routers/
+├── tools/                # Tool implementations (tools/registry.py) + environments/ backends
+├── gateway/              # run.py facade + run_*.py phases + session*.py + platforms/
+├── plugins/              # memory/, context_engine/, model-providers/, kanban/, image_gen/, ...
+├── skills/               # Built-in skills (by category)   optional-skills/: shipped, not active
+├── ui-tui/, tui_gateway/ # Ink terminal UI + its Python JSON-RPC backend (also serves Desktop)
+├── apps/desktop/         # Electron desktop app (+ apps/shared)   web/: dashboard SPA
+├── cron/                 # jobs.py + scheduler.py (+ scheduler_*.py)
+├── pm/, clawk_platform/ # dependency/environment manager; machine facts + executable lookup
+├── scripts/              # check, run_tests.sh, code_health/, ci/
+├── website/              # Docusaurus docs (developer-guide/ holds the long-form area docs)
+└── tests/                # Pytest suite, mirrors the source tree
 ```
-
-
 
 **User config:** `~/.clawksis/config.yaml` (settings), `~/.clawksis/.env` (API keys only).
 
@@ -156,15 +77,9 @@ clawksis-agent/
 
 Browse with `clawk logs [--follow] [--level ...] [--session ...]`.
 
-
-
 ## TypeScript Style
 
-
-
 Applies to TypeScript across Clawksis: desktop, TUI, website, and future TS packages.
-
-
 
 - Prefer small nanostores over component state when state is shared, reused, or read by distant UI.
 
@@ -202,11 +117,7 @@ Applies to TypeScript across Clawksis: desktop, TUI, website, and future TS pack
 
 - `src/lib` owns shared pure helpers.
 
-
-
 ## File Dependency Chain
-
-
 
 ```
 
@@ -226,23 +137,15 @@ run_agent.py, cli.py, batch_runner.py, environments/
 
 ```
 
-
-
 ---
 
-
-
 ## AIAgent Class (run_agent.py)
-
-
 
 The real `AIAgent.__init__` takes ~60 parameters (credentials, routing, callbacks,
 
 session context, budget, credential pool, etc.). The signature below is the
 
 minimum subset you'll usually touch — read `run_agent.py` for the full list.
-
-
 
 ```python
 class AIAgent:
@@ -280,17 +183,11 @@ class AIAgent:
         """Full interface — returns dict with final_response + messages."""
 ```
 
-
-
 ### Agent Loop
-
-
 
 The core loop is inside `run_conversation()` — entirely synchronous, with
 
 interrupt checks, budget tracking, and a one-turn grace call:
-
-
 
 ```python
 
@@ -318,21 +215,13 @@ while (api_call_count < self.max_iterations and self.iteration_budget.remaining 
 
 ```
 
-
-
 Messages follow OpenAI format: `{"role": "system/user/assistant/tool", ...}`.
 
 Reasoning content is stored in `assistant_msg["reasoning"]`.
 
-
-
 ---
 
-
-
 ## CLI Architecture (cli.py)
-
-
 
 - **Rich** for banner/panels, **prompt_toolkit** for input with autocomplete
 
@@ -346,15 +235,9 @@ Reasoning content is stored in `assistant_msg["reasoning"]`.
 
 - Skill slash commands: `agent/skill_commands.py` scans `~/.clawksis/skills/`, injects as **user message** (not system prompt) to preserve prompt caching
 
-
-
 ### Slash Command Registry (`clawk_cli/commands.py`)
 
-
-
 All slash commands are defined in a central `COMMAND_REGISTRY` list of `CommandDef` objects. Every downstream consumer derives from this registry automatically:
-
-
 
 - **CLI** — `process_command()` resolves aliases via `resolve_command()`, dispatches on canonical name
 
@@ -370,11 +253,7 @@ All slash commands are defined in a central `COMMAND_REGISTRY` list of `CommandD
 
 - **CLI help** — `COMMANDS_BY_CATEGORY` dict feeds `show_help()`
 
-
-
 ### Adding a Slash Command
-
-
 
 1. Add a `CommandDef` entry to `COMMAND_REGISTRY` in `clawk_cli/commands.py`:
 
@@ -409,8 +288,6 @@ if canonical == "mycommand":
 
 4. For persistent settings, use `save_config_value()` in `cli.py`
 
-
-
 **CommandDef fields:**
 
 - `name` — canonical name without slash (e.g. `"background"`)
@@ -429,27 +306,15 @@ if canonical == "mycommand":
 
 - `gateway_config_gate` — config dotpath (e.g. `"display.tool_progress_command"`); when set on a `cli_only` command, the command becomes available in the gateway if the config value is truthy. `GATEWAY_KNOWN_COMMANDS` always includes config-gated commands so the gateway can dispatch them; help/menus only show them when the gate is open.
 
-
-
 **Adding an alias** requires only adding it to the `aliases` tuple on the existing `CommandDef`. No other file changes needed — dispatch, help text, Telegram menu, Slack mapping, and autocomplete all update automatically.
-
-
 
 ---
 
-
-
 ## TUI Architecture (ui-tui + tui_gateway)
-
-
 
 The TUI is a full replacement for the classic (prompt_toolkit) CLI, activated via `clawk --tui` or `CLAWK_TUI=1`.
 
-
-
 ### Process Model
-
-
 
 ```
 
@@ -463,23 +328,13 @@ clawk --tui
 
 ```
 
-
-
 TypeScript owns the screen. Python owns sessions, tools, model calls, and slash command logic.
-
-
 
 ### Transport
 
-
-
 Newline-delimited JSON-RPC over stdio. Requests from Ink, events from Python. See `tui_gateway/server.py` for the full method/event catalog.
 
-
-
 ### Key Surfaces
-
-
 
 | Surface | Ink component | Gateway method |
 
@@ -501,21 +356,13 @@ Newline-delimited JSON-RPC over stdio. Requests from Ink, events from Python. Se
 
 | Theming | `theme.ts` + `branding.tsx` | `gateway.ready` with skin data |
 
-
-
 ### Slash Command Flow
-
-
 
 1. Built-in client commands (`/help`, `/quit`, `/clear`, `/resume`, `/copy`, `/paste`, etc.) handled locally in `app.tsx`
 
 2. Everything else → `slash.exec` (runs in persistent `_SlashWorker` subprocess) → `command.dispatch` fallback
 
-
-
 ### Dev Commands
-
-
 
 ```bash
 
@@ -539,15 +386,9 @@ npm test          # vitest
 
 ```
 
-
-
 ### TUI in the Dashboard (`clawk dashboard` → `/chat`)
 
-
-
 The dashboard embeds the real `clawk --tui` — **not** a rewrite.  See `clawk_cli/pty_bridge.py` + the `@app.websocket("/api/pty")` endpoint in `clawk_cli/web_server.py`.
-
-
 
 - Browser loads `web/src/pages/ChatPage.tsx`, which mounts xterm.js's `Terminal` with the WebGL renderer, `@xterm/addon-fit` for container-driven resize, and `@xterm/addon-unicode11` for modern wide-character widths.
 
@@ -557,27 +398,15 @@ The dashboard embeds the real `clawk --tui` — **not** a rewrite.  See `clawk_c
 
 - Frames: raw PTY bytes each direction; resize via `\x1b[RESIZE:<cols>;<rows>]` intercepted on the server and applied with `TIOCSWINSZ`.
 
-
-
 **Do not re-implement the primary chat experience in React.** The main transcript, composer/input flow (including slash-command behavior), and PTY-backed terminal belong to the embedded `clawk --tui` — anything new you add to Ink shows up in the dashboard automatically. If you find yourself rebuilding the transcript or composer for the dashboard, stop and extend Ink instead.
-
-
 
 **Structured React UI around the TUI is allowed when it is not a second chat surface.** Sidebar widgets, inspectors, summaries, status panels, and similar supporting views (e.g. `ChatSidebar`, `ModelPickerDialog`, `ToolCall`) are fine when they complement the embedded TUI rather than replacing the transcript / composer / terminal. Keep their state independent of the PTY child's session and surface their failures non-destructively so the terminal pane keeps working unimpaired.
 
-
-
 ### Electron Desktop Chat App (`apps/desktop/`)
-
-
 
 A **separate** chat surface from both the classic CLI and the dashboard's embedded TUI. It is an Electron + React + nanostore renderer (`@assistant-ui/react`) that talks to a `tui_gateway` backend over JSON-RPC (`requestGateway(method, params)`). It does NOT embed `clawk --tui` — it has its own composer, transcript, and slash-command pipeline. Route desktop bugs to the `clawk-desktop-app-work` skill, not `clawksis-dashboard-work`.
 
-
-
 **Slash commands in the desktop app are curated client-side, then dispatched to the backend.** The pipeline:
-
-
 
 - **Backend already provides everything.** `tui_gateway/server.py` `commands.catalog` (empty-query list) and `complete.slash` (typed-query completions) both include built-in commands, user `quick_commands`, AND skill-derived commands (`scan_skill_commands()` / `get_skill_commands()`). The desktop app does not need a new RPC to see skills.
 
@@ -591,19 +420,11 @@ A **separate** chat surface from both the classic CLI and the dashboard's embedd
 
 - **Dispatch** lives in `app/session/hooks/use-prompt-actions.ts` (`runSlash`): built-ins that the desktop owns (`/skin`, `/help`, `/new`, …) are handled locally or via `commands.catalog`; everything else goes to `slash.exec`, falling back to `command.dispatch` (which the gateway resolves into skill / alias / exec directives). A skill command resolves to `{type: "skill", message}` and is submitted as a normal prompt.
 
-
-
 **Rule:** the desktop slash palette's curation is about hiding noise (terminal-only / messaging-only built-ins), NOT about hiding user-activated extensions. Skill commands and `quick_commands` are extensions the backend surfaces — they belong in completions. If you tighten `desktop-slash-commands.ts`, keep `isDesktopSlashExtensionCommand` flowing into both the suggestion and catalog-filter paths. Tests: `apps/desktop/src/lib/desktop-slash-commands.test.ts` (run via the repo-root `vitest`, since `apps/desktop` resolves deps from the root workspace install).
-
-
 
 ---
 
-
-
 ## Adding New Tools
-
-
 
 For most custom or local-only tools, do **not** edit Clawksis core. Use the plugin
 
@@ -615,17 +436,11 @@ route instead: create `~/.clawksis/plugins/<name>/plugin.yaml` and
 
 enabled or disabled without touching `tools/` or `toolsets.py`.
 
-
-
 Use the built-in route below only when the user is explicitly contributing a new
 
 core Clawksis tool that should ship in the base system.
 
-
-
 Built-in/core tools require changes in **2 files**:
-
-
 
 **1. Create `tools/your_tool.py`:**
 
@@ -634,16 +449,13 @@ import json, os
 
 from tools.registry import registry
 
-
 def check_requirements() -> bool:
 
     return bool(os.getenv("EXAMPLE_API_KEY"))
 
-
 def example_tool(param: str, task_id: str = None) -> str:
 
     return json.dumps({"success": True, "data": "..."})
-
 
 registry.register(
     name="example_tool",
@@ -657,39 +469,21 @@ registry.register(
 )
 ```
 
-
-
 **2. Add to `toolsets.py`** — either `_CLAWK_CORE_TOOLS` (all platforms) or a new toolset. **This step is required:** auto-discovery imports the tool and registers its schema, but the tool is only *exposed to an agent* if its name appears in a toolset. `_CLAWK_CORE_TOOLS` is not dead code — it's the default bundle every platform's base toolset inherits from.
-
-
 
 Auto-discovery: any `tools/*.py` file with a top-level `registry.register()` call is imported automatically — no manual import list to maintain. Wiring into a toolset is still a deliberate, manual step.
 
-
-
 The registry handles schema collection, dispatch, availability checking, and error wrapping. All handlers MUST return a JSON string.
-
-
 
 **Path references in tool schemas**: If the schema description mentions file paths (e.g. default output directories), use `display_clawk_home()` to make them profile-aware. The schema is generated at import time, which is after `_apply_profile_override()` sets `CLAWK_HOME`.
 
-
-
 **State files**: If a tool stores persistent state (caches, logs, checkpoints), use `get_clawk_home()` for the base directory — never `Path.home() / ".clawk"`. This ensures each profile gets its own state.
-
-
 
 **Agent-level tools** (todo, memory): intercepted by `run_agent.py` before `handle_function_call()`. See `tools/todo_tool.py` for the pattern.
 
-
-
 ---
 
-
-
 ## Dependency Pinning Policy
-
-
 
 All dependencies must have upper bounds to limit supply-chain attack surface.
 
@@ -697,10 +491,7 @@ This policy was established after the litellm compromise (PR #2796, #2810) and
 
 reinforced after the Mini Shai-Hulud worm campaign (May 2026).
 
-
-
 | Source type | Treatment | Example |
-
 |---|---|---|
 
 | PyPI package | `>=floor,<next_major` | `"httpx>=0.28.1,<1"` |
@@ -710,8 +501,6 @@ reinforced after the Mini Shai-Hulud worm campaign (May 2026).
 | GitHub Actions | Commit SHA + comment | `uses: actions/checkout@<sha>  # v4` |
 
 | CI-only pip | `==exact` | `pyyaml==6.0.2` |
-
-
 
 **When adding a new dependency to `pyproject.toml`:**
 
@@ -723,19 +512,11 @@ reinforced after the Mini Shai-Hulud worm campaign (May 2026).
 
 4. Run `uv lock` to regenerate `uv.lock` with hashes.
 
-
-
 Reference: #2810 (bounds pass), #9801 (SHA pinning + audit CI).
-
-
 
 ---
 
-
-
 ## Adding Configuration
-
-
 
 ### config.yaml options:
 
@@ -751,11 +532,7 @@ Reference: #2810 (bounds pass), #9801 (SHA pinning + audit CI).
 
    a version bump.
 
-
-
 ### Top-level `config.yaml` sections (non-exhaustive):
-
-
 
 `model`, `agent`, `terminal`, `compression`, `display`, `stt`, `tts`,
 
@@ -765,8 +542,6 @@ Reference: #2810 (bounds pass), #9801 (SHA pinning + audit CI).
 
 `plugins`, `honcho`.
 
-
-
 `auxiliary` holds per-task overrides for side-LLM work (curator, vision,
 
 embedding, title generation, session_search, etc.) — each task can pin
@@ -775,15 +550,11 @@ its own provider/model/base_url/max_tokens/reasoning_effort. See
 
 `agent/auxiliary_client.py::_resolve_auto` for resolution order.
 
-
-
 `curator` holds the background skill-maintenance config —
 
 `enabled`, `interval_hours`, `min_idle_hours`, `stale_after_days`,
 
 `archive_after_days`, `backup` (nested).
-
-
 
 ### .env variables (SECRETS ONLY — API keys, tokens, passwords):
 
@@ -807,8 +578,6 @@ its own provider/model/base_url/max_tokens/reasoning_effort. See
 
 ```
 
-
-
 Non-secret settings (timeouts, thresholds, feature flags, paths, display
 
 preferences) belong in `config.yaml`, not `.env`. If internal code needs an
@@ -817,11 +586,7 @@ env var mirror for backward compatibility, bridge it from `config.yaml` to
 
 the env var in code (see `gateway_timeout`, `terminal.cwd` → `TERMINAL_CWD`).
 
-
-
 ### Config loaders (three paths — know which one you're in):
-
-
 
 | Loader | Used by | Location |
 
@@ -833,13 +598,9 @@ the env var in code (see `gateway_timeout`, `terminal.cwd` → `TERMINAL_CWD`).
 
 | Direct YAML load | Gateway runtime | `gateway/run.py` + `gateway/config.py` — reads user YAML raw |
 
-
-
 If you add a new key and the CLI sees it but the gateway doesn't (or vice
 
 versa), you're on the wrong loader. Check `DEFAULT_CONFIG` coverage.
-
-
 
 ### Working directory:
 
@@ -855,23 +616,13 @@ versa), you're on the wrong loader. Check `DEFAULT_CONFIG` coverage.
 
   `terminal.cwd` in `config.yaml`.
 
-
-
 ---
-
-
 
 ## Skin/Theme System
 
-
-
 The skin engine (`clawk_cli/skin_engine.py`) provides data-driven CLI visual customization. Skins are **pure data** — no code changes needed to add a new skin.
 
-
-
 ### Architecture
-
-
 
 ```
 
@@ -880,8 +631,6 @@ clawk_cli/skin_engine.py    # SkinConfig dataclass, built-in skins, YAML loader
 ~/.clawksis/skins/*.yaml       # User-installed custom skins (drop-in)
 
 ```
-
-
 
 - `init_skin_from_config()` — called at CLI startup, reads `display.skin` from config
 
@@ -893,11 +642,7 @@ clawk_cli/skin_engine.py    # SkinConfig dataclass, built-in skins, YAML loader
 
 - Missing skin values inherit from the `default` skin automatically
 
-
-
 ### What skins customize
-
-
 
 | Element | Skin Key | Used By |
 
@@ -935,11 +680,7 @@ clawk_cli/skin_engine.py    # SkinConfig dataclass, built-in skins, YAML loader
 
 | Prompt symbol | `branding.prompt_symbol` | `cli.py` |
 
-
-
 ### Built-in skins
-
-
 
 - `default` — Classic Clawksis gold/kawaii (the current look)
 
@@ -949,15 +690,9 @@ clawk_cli/skin_engine.py    # SkinConfig dataclass, built-in skins, YAML loader
 
 - `slate` — Cool blue developer-focused theme
 
-
-
 ### Adding a built-in skin
 
-
-
 Add to `_BUILTIN_SKINS` dict in `clawk_cli/skin_engine.py`:
-
-
 
 ```python
 
@@ -979,23 +714,15 @@ Add to `_BUILTIN_SKINS` dict in `clawk_cli/skin_engine.py`:
 
 ```
 
-
-
 ### User skins (YAML)
 
-
-
 Users create `~/.clawksis/skins/<name>.yaml`:
-
-
 
 ```yaml
 
 name: cyberpunk
 
 description: Neon-soaked terminal theme
-
-
 
 colors:
 
@@ -1005,8 +732,6 @@ colors:
 
   banner_accent: "#FF1493"
 
-
-
 spinner:
 
   thinking_verbs: ["jacking in", "decrypting", "uploading"]
@@ -1015,33 +740,21 @@ spinner:
 
     - ["⟨⚡", "⚡⟩"]
 
-
-
 branding:
 
   agent_name: "Cyber Agent"
 
   response_label: " ⚡ Cyber "
 
-
-
 tool_prefix: "▏"
 
 ```
 
-
-
 Activate with `/skin cyberpunk` or `display.skin: cyberpunk` in config.yaml.
-
-
 
 ---
 
-
-
 ## Plugins
-
-
 
 Clawksis has two plugin surfaces. Both live under `plugins/` in the repo so
 
@@ -1049,19 +762,13 @@ repo-shipped plugins can be discovered alongside user-installed ones in
 
 `~/.clawksis/plugins/` and pip-installed entry points.
 
-
-
 ### General plugins (`clawk_cli/plugins.py` + `plugins/<name>/`)
-
-
 
 `PluginManager` discovers plugins from `~/.clawksis/plugins/`, `./.clawksis/plugins/`,
 
 and pip entry points. Each plugin exposes a `register(ctx)` function that
 
 can:
-
-
 
 - Register Python-callback lifecycle hooks:
 
@@ -1077,8 +784,6 @@ can:
 
   `clawk <pluginname> <subcmd>` works with no change to `main.py`
 
-
-
 Hooks are invoked from `model_tools.py` (pre/post tool) and `run_agent.py`
 
 (lifecycle). **Discovery timing pitfall:** `discover_plugins()` only runs
@@ -1089,19 +794,13 @@ state without importing `model_tools.py` first must call `discover_plugins()`
 
 explicitly (it's idempotent).
 
-
-
 ### Memory-provider plugins (`plugins/memory/<name>/`)
-
-
 
 Separate discovery system for pluggable memory backends. Current built-in
 
 providers include **honcho, mem0, supermemory, byterover, hindsight,
 
 holographic, openviking, retaindb**.
-
-
 
 Each provider implements the `MemoryProvider` ABC (see `agent/memory_provider.py`)
 
@@ -1110,8 +809,6 @@ and is orchestrated by `agent/memory_manager.py`. Lifecycle hooks include
 `sync_turn(turn_messages)`, `prefetch(query)`, `shutdown()`, and optional
 
 `post_setup(clawk_home, config)` for setup-wizard integration.
-
-
 
 **CLI commands via `plugins/memory/<name>/cli.py`:** if a memory plugin
 
@@ -1125,8 +822,6 @@ provider (read from `memory.provider` in config.yaml), so disabled
 
 providers don't clutter `clawk --help`.
 
-
-
 **Rule (Teknium, May 2026):** plugins MUST NOT modify core files
 
 (`run_agent.py`, `cli.py`, `gateway/run.py`, `clawk_cli/main.py`, etc.).
@@ -1138,8 +833,6 @@ generic plugin surface (new hook, new ctx method) — never hardcode
 plugin-specific logic into core. PR #5295 removed 95 lines of hardcoded
 
 honcho argparse from `main.py` for exactly this reason.
-
-
 
 **No new in-tree memory providers (policy, May 2026):** the set of
 
@@ -1161,11 +854,7 @@ provider as its own repo. Existing in-tree providers stay; bug fixes
 
 to them are welcome.
 
-
-
 ### Model-provider plugins (`plugins/model-providers/<name>/`)
-
-
 
 Every inference backend (openrouter, anthropic, gmi, deepseek, nvidia, …)
 
@@ -1179,8 +868,6 @@ discovery system** — scanned on first `get_provider_profile()` or
 
 `list_providers()` call, NOT by the general PluginManager.
 
-
-
 Scan order:
 
 1. Bundled: `<repo>/plugins/model-providers/<name>/`
@@ -1189,15 +876,11 @@ Scan order:
 
 3. Legacy: `<repo>/providers/<name>.py` (back-compat)
 
-
-
 User plugins of the same name override bundled ones — `register_provider()`
 
 is last-writer-wins. This lets third parties swap out any built-in
 
 profile without a repo patch.
-
-
 
 The general PluginManager records `kind: model-provider` manifests but does
 
@@ -1207,15 +890,9 @@ without an explicit `kind:` get auto-coerced via a source-text heuristic
 
 (`register_provider` + `ProviderProfile` in `__init__.py`).
 
-
-
 Full authoring guide: `website/docs/developer-guide/model-provider-plugin.md`.
 
-
-
 ### Dashboard / context-engine / image-gen plugin directories
-
-
 
 `plugins/context_engine/`, `plugins/image_gen/`, etc. follow the same
 
@@ -1233,19 +910,11 @@ plug into `agent/context_engine.py`; image-gen providers into
 
 companion repo, not in this tree.
 
-
-
 ---
-
-
 
 ## Skills
 
-
-
 Two parallel surfaces:
-
-
 
 - **`skills/`** — built-in skills shipped and loadable by default.
 
@@ -1265,17 +934,11 @@ Two parallel surfaces:
 
   `research`, `security`, `web-development`.
 
-
-
 When reviewing skill PRs, check which directory they target — heavy-dep or
 
 niche skills belong in `optional-skills/`.
 
-
-
 ### SKILL.md frontmatter
-
-
 
 Standard fields: `name`, `description`, `version`, `author`, `license`,
 
@@ -1289,25 +952,17 @@ settings the skill needs — stored under `skills.config.<key>`, prompted
 
 during setup, injected at load time).
 
-
-
 Top-level `tags:` and `category:` are also accepted and mirrored from
 
 `metadata.clawk.*` by the loader.
 
-
-
 ### Skill authoring standards (HARDLINE)
-
-
 
 Every new or modernized skill — bundled, optional, or contributed —
 
 must meet these standards before merge. Reviewers reject PRs that
 
 violate them.
-
-
 
 1. **`description` ≤ 60 characters, one sentence, ends with a period.**
 
@@ -1332,8 +987,6 @@ violate them.
 
    assert len(m.group(1)) <= 60, len(m.group(1))
    ```
-
-
 
 2. **Tools referenced in SKILL.md prose must be native Clawksis tools or
 
@@ -1361,8 +1014,6 @@ violate them.
 
    should not be the headline interaction surface in the prose.
 
-
-
 3. **`platforms:` gating audited against actual script imports.**
 
    Skills that use POSIX-only primitives (`fcntl`, `termios`,
@@ -1381,8 +1032,6 @@ violate them.
 
    genuinely platform-bound.
 
-
-
 4. **`author` credits the human contributor first.** For external
 
    contributions, the contributor's real name + GitHub handle goes
@@ -1394,8 +1043,6 @@ violate them.
    used Clawksis to draft the skill), replace it with their actual name
 
    — credit the human, not the tool.
-
-
 
 5. **SKILL.md body uses the modern section order.** `# <Skill> Skill`
 
@@ -1413,8 +1060,6 @@ violate them.
 
    `## Prerequisites`.
 
-
-
 6. **Scripts go in `scripts/`, references in `references/`,
 
    templates in `templates/`.** Don't expect the model to inline-write
@@ -1425,15 +1070,11 @@ violate them.
 
    skill directory.
 
-
-
 7. **Tests live at `tests/skills/test_<skill>_skill.py`** and use only
 
    stdlib + pytest + `unittest.mock`. No live network calls. Run via
 
    `scripts/run_tests.sh tests/skills/test_<skill>_skill.py -q`.
-
-
 
 8. **`.env.example` additions are isolated to a clearly delimited
 
@@ -1443,8 +1084,6 @@ violate them.
 
    skill's own block must be dropped during salvage.
 
-
-
 The full salvage / modernization checklist for external skill PRs
 
 lives in the `clawksis-agent-dev` skill at
@@ -1453,15 +1092,9 @@ lives in the `clawksis-agent-dev` skill at
 
 contributor skill PRs.
 
-
-
 ---
 
-
-
 ## Toolsets
-
-
 
 All toolsets are defined in `toolsets.py` as a single `TOOLSETS` dict.
 
@@ -1470,8 +1103,6 @@ Each platform's adapter picks a base toolset (e.g. Telegram uses
 `"messaging"`); `_CLAWK_CORE_TOOLS` is the default bundle most
 
 platforms inherit from.
-
-
 
 Current toolset keys: `browser`, `clarify`, `code_execution`, `cronjob`,
 
@@ -1483,23 +1114,15 @@ Current toolset keys: `browser`, `clarify`, `code_execution`, `cronjob`,
 
 `spotify`, `terminal`, `todo`, `tts`, `video`, `vision`, `web`, `yuanbao`.
 
-
-
 Enable/disable per platform via `clawk tools` (the curses UI) or the
 
 `tools.<platform>.enabled` / `tools.<platform>.disabled` lists in
 
 `config.yaml`.
 
-
-
 ---
 
-
-
 ## Delegation (`delegate_task`)
-
-
 
 `tools/delegate_tool.py` spawns a subagent with an isolated
 
@@ -1509,11 +1132,7 @@ child's summary before continuing its own loop — if the parent is
 
 interrupted, the child is cancelled.
 
-
-
 Two shapes:
-
-
 
 - **Single:** pass `goal` (+ optional `context`, `toolsets`).
 
@@ -1523,11 +1142,7 @@ Two shapes:
 
   `delegation.max_concurrent_children` (default 3).
 
-
-
 Roles:
-
-
 
 - `role="leaf"` (default) — focused worker. Cannot call `delegate_task`,
 
@@ -1539,8 +1154,6 @@ Roles:
 
   and bounded by `delegation.max_spawn_depth` (default 2).
 
-
-
 Key config knobs (under `delegation:` in `config.yaml`):
 
 `max_concurrent_children`, `max_spawn_depth`, `child_timeout_seconds`,
@@ -1549,31 +1162,21 @@ Key config knobs (under `delegation:` in `config.yaml`):
 
 `max_iterations`.
 
-
-
 Synchronicity rule: delegate_task is **not** durable. For long-running
 
 work that must outlive the current turn, use `cronjob` or
 
 `terminal(background=True, notify_on_complete=True)` instead.
 
-
-
 ---
 
-
-
 ## Curator (skill lifecycle)
-
-
 
 Background skill-maintenance system that tracks usage on agent-created
 
 skills and auto-archives stale ones. Users never lose skills; archives
 
 go to `~/.clawksis/skills/.archive/` and are restorable.
-
-
 
 - **Core:** `agent/curator.py` (review loop, auto-transitions, LLM review
 
@@ -1593,8 +1196,6 @@ go to `~/.clawksis/skills/.archive/` and are restorable.
 
   archived), `pinned`.
 
-
-
 Invariants:
 
 - Curator only touches skills with `created_by: "agent"` provenance —
@@ -1613,27 +1214,17 @@ Invariants:
 
   pinned skills.
 
-
-
 Config section (`curator:` in `config.yaml`):
 
 `enabled`, `interval_hours`, `min_idle_hours`, `stale_after_days`,
 
 `archive_after_days`, `backup.*`.
 
-
-
 Full user-facing docs: `website/docs/user-guide/features/curator.md`.
-
-
 
 ---
 
-
-
 ## Cron (scheduled jobs)
-
-
 
 `cron/jobs.py` (job store) + `cron/scheduler.py` (tick loop). Agents
 
@@ -1642,8 +1233,6 @@ schedule jobs via the `cronjob` tool; users via `clawk cron <verb>`
 (`list`, `add`, `edit`, `pause`, `resume`, `run`, `remove`) or the
 
 `/cron` slash command.
-
-
 
 Supported schedule formats:
 
@@ -1654,8 +1243,6 @@ Supported schedule formats:
 - 5-field cron expression: `"0 9 * * *"`
 
 - ISO timestamp (one-shot): `"2026-06-01T09:00:00Z"`
-
-
 
 Per-job fields include `skills` (load specific skills), `model` /
 
@@ -1668,8 +1255,6 @@ into the entire job), `context_from` (chain job A's last output into
 job B's prompt), `workdir` (run in a specific directory with its
 
 `AGENTS.md`/`CLAUDE.md` loaded), and multi-platform delivery.
-
-
 
 Hardening invariants:
 
@@ -1689,23 +1274,15 @@ Hardening invariants:
 
   intentionally do not run during cron.
 
-
-
 Cron deliveries are **not** mirrored into the target gateway session —
 
 they land in their own cron session with a header/footer frame so the
 
 main conversation's message-role alternation stays intact.
 
-
-
 ---
 
-
-
 ## Kanban (multi-agent work queue)
-
-
 
 Durable SQLite-backed board that lets multiple profiles / workers
 
@@ -1716,8 +1293,6 @@ workers spawned by the dispatcher drive it via a dedicated `kanban_*`
 toolset so their schema footprint is zero when they're not inside a
 
 kanban task.
-
-
 
 - **CLI:** `clawk_cli/kanban.py` wires `clawk kanban` with verbs
 
@@ -1753,8 +1328,6 @@ kanban task.
 
   standalone dispatcher deployment).
 
-
-
 Isolation model:
 
 - **Board** is the hard boundary — workers are spawned with
@@ -1775,23 +1348,13 @@ Isolation model:
 
   loops.
 
-
-
 Full user-facing docs: `website/docs/user-guide/features/kanban.md`.
-
-
 
 ---
 
-
-
 ## Important Policies
 
-
-
 ### Prompt Caching Must Not Break
-
-
 
 Clawksis ensures caching remains valid throughout a conversation. **Do NOT implement changes that would:**
 
@@ -1801,11 +1364,7 @@ Clawksis ensures caching remains valid throughout a conversation. **Do NOT imple
 
 - Reload memories or rebuild system prompts mid-conversation
 
-
-
 Cache-breaking forces dramatically higher costs. The ONLY time we alter context is during context compression.
-
-
 
 Slash commands that mutate system-prompt state (skills, tools, memory, etc.)
 
@@ -1815,11 +1374,7 @@ effect next session), with an opt-in `--now` flag for immediate
 
 invalidation. See `/skills install --now` for the canonical pattern.
 
-
-
 ### Background Process Notifications (Gateway)
-
-
 
 When `terminal(background=true, notify_on_complete=true)` is used, the gateway runs a watcher that
 
@@ -1829,8 +1384,6 @@ messages with `display.background_process_notifications`
 
 in config.yaml (or `CLAWK_BACKGROUND_NOTIFICATIONS` env var):
 
-
-
 - `all` — running-output updates + final message (default)
 
 - `result` — only the final completion message
@@ -1839,21 +1392,13 @@ in config.yaml (or `CLAWK_BACKGROUND_NOTIFICATIONS` env var):
 
 - `off` — no watcher messages at all
 
-
-
 ---
 
-
-
 ## Profiles: Multi-Instance Support
-
-
 
 Clawksis supports **profiles** — multiple fully isolated instances, each with its own
 
 `CLAWK_HOME` directory (config, API keys, memory, sessions, skills, gateway, etc.).
-
-
 
 The core mechanism: `_apply_profile_override()` in `clawk_cli/main.py` sets
 
@@ -1861,11 +1406,7 @@ The core mechanism: `_apply_profile_override()` in `clawk_cli/main.py` sets
 
 automatically scope to the active profile.
 
-
-
 ### Rules for profile-safe code
-
-
 
 1. **Use `get_clawk_home()` for all CLAWK_HOME paths.** Import from `clawk_constants`.
 
@@ -1878,13 +1419,10 @@ automatically scope to the active profile.
 
    config_path = get_clawk_home() / "config.yaml"
 
-
    # BAD — breaks profiles
 
    config_path = Path.home() / ".clawk" / "config.yaml"
    ```
-
-
 
 2. **Use `display_clawk_home()` for user-facing messages.** Import from `clawk_constants`.
 
@@ -1897,21 +1435,16 @@ automatically scope to the active profile.
 
    print(f"Config saved to {display_clawk_home()}/config.yaml")
 
-
    # BAD — shows wrong path for profiles
 
    print("Config saved to ~/.clawksis/config.yaml")
    ```
-
-
 
 3. **Module-level constants are fine** — they cache `get_clawk_home()` at import time,
 
    which is AFTER `_apply_profile_override()` sets the env var. Just use `get_clawk_home()`,
 
    not `Path.home() / ".clawk"`.
-
-
 
 4. **Tests that mock `Path.home()` must also set `CLAWK_HOME`** — since code now uses
 
@@ -1927,8 +1460,6 @@ automatically scope to the active profile.
 
    ```
 
-
-
 5. **Gateway platform adapters should use token locks** — if the adapter connects with
 
    a unique credential (bot token, API key), call `acquire_scoped_lock()` from
@@ -1939,8 +1470,6 @@ automatically scope to the active profile.
 
    See `gateway/platforms/telegram.py` for the canonical pattern.
 
-
-
 6. **Profile operations are HOME-anchored, not CLAWK_HOME-anchored** — `_get_profiles_root()`
 
    returns `Path.home() / ".clawk" / "profiles"`, NOT `get_clawk_home() / "profiles"`.
@@ -1949,11 +1478,7 @@ automatically scope to the active profile.
 
    of which one is active.
 
-
-
 ## Known Pitfalls
-
-
 
 ### DO NOT hardcode `~/.clawksis` paths
 
@@ -1962,8 +1487,6 @@ Use `get_clawk_home()` from `clawk_constants` for code paths. Use `display_clawk
 for user-facing print/log messages. Hardcoding `~/.clawksis` breaks profiles — each profile
 
 has its own `CLAWK_HOME` directory. This was the source of 5 bugs fixed in PR #3575.
-
-
 
 ### DO NOT introduce new `simple_term_menu` usage
 
@@ -1977,25 +1500,17 @@ interactive menus must use `clawk_cli/curses_ui.py` — see
 
 `clawk_cli/tools_config.py` for the canonical pattern.
 
-
-
 ### DO NOT use `\033[K` (ANSI erase-to-EOL) in spinner/display code
 
 Leaks as literal `?[K` text under `prompt_toolkit`'s `patch_stdout`. Use space-padding: `f"\r{line}{' ' * pad}"`.
-
-
 
 ### `_last_resolved_tool_names` is a process-global in `model_tools.py`
 
 `_run_single_child()` in `delegate_tool.py` saves and restores this global around subagent execution. If you add new code that reads this global, be aware it may be temporarily stale during child agent runs.
 
-
-
 ### DO NOT hardcode cross-tool references in schema descriptions
 
 Tool schema descriptions must not mention tools from other toolsets by name (e.g., `browser_navigate` saying "prefer web_search"). Those tools may be unavailable (missing API keys, disabled toolset), causing the model to hallucinate calls to non-existent tools. If a cross-reference is needed, add it dynamically in `get_tool_definitions()` in `model_tools.py` — see the `browser_navigate` / `execute_code` post-processing blocks for the pattern.
-
-
 
 ### The gateway has TWO message guards — both must bypass approval/control commands
 
@@ -2017,8 +1532,6 @@ guards and be dispatched inline, not via `_process_message_background()`
 
 (which races session lifecycle).
 
-
-
 ### Squash merges from stale branches silently revert recent fixes
 
 Before squash-merging a PR, ensure the branch is up to date with `main`
@@ -2033,8 +1546,6 @@ with `git diff HEAD~1..HEAD` after merging — unexpected deletions are a
 
 red flag.
 
-
-
 ### Don't wire in dead code without E2E validation
 
 Unused code that was never shipped was dead for a reason. Before wiring an
@@ -2043,13 +1554,9 @@ unused module into a live code path, E2E test the real resolution chain
 
 with actual imports (not mocks) against a temp `CLAWK_HOME`.
 
-
-
 ### Tests must not write to `~/.clawksis/`
 
 The `_isolate_clawk_home` autouse fixture in `tests/conftest.py` redirects `CLAWK_HOME` to a temp dir. Never hardcode `~/.clawksis/` paths in tests.
-
-
 
 **Profile tests**: When testing profile features, also mock `Path.home()` so that
 
@@ -2072,15 +1579,9 @@ def profile_env(tmp_path, monkeypatch):
     return home
 ```
 
-
-
 ---
 
-
-
 ## Testing
-
-
 
 **ALWAYS use `scripts/run_tests.sh`** — do not call `pytest` directly. The script enforces
 
@@ -2091,8 +1592,6 @@ hermetic environment parity with CI (unset credential vars, TZ=UTC, LANG=C.UTF-8
 on a 16+ core developer machine with API keys set diverges from CI in ways
 
 that have caused multiple "works locally, fails in CI" incidents (and the reverse).
-
-
 
 ```bash
 
@@ -2108,11 +1607,7 @@ scripts/run_tests.sh --no-isolate tests/foo/          # disable subprocess isola
 
 ```
 
-
-
 ### Subprocess-per-test isolation
-
-
 
 Every test runs in a freshly-spawned Python subprocess via the in-tree plugin
 
@@ -2122,11 +1617,7 @@ ContextVars from one test cannot leak into the next — the historic
 
 `_reset_module_state` autouse fixture is gone.
 
-
-
 Implementation notes:
-
-
 
 - The plugin uses `multiprocessing.get_context("spawn")`, which works on
 
@@ -2150,15 +1641,9 @@ Implementation notes:
 
   `CLAWK_ISOLATE_CHILD=1`), so there's no fork-bomb risk.
 
-
-
 ### Why the wrapper (and why the old "just call pytest" doesn't work)
 
-
-
 Five real sources of local-vs-CI drift the script closes:
-
-
 
 | | Without wrapper | With wrapper |
 
@@ -2174,19 +1659,13 @@ Five real sources of local-vs-CI drift the script closes:
 
 | xdist workers | `-n auto` = all cores | `-n auto` (safe — subprocess isolation prevents cross-worker flakes) |
 
-
-
 `tests/conftest.py` also enforces points 1-4 as an autouse fixture so ANY pytest
 
 invocation (including IDE integrations) gets hermetic behavior — but the wrapper
 
 is belt-and-suspenders.
 
-
-
 ### Running without the wrapper (only if you must)
-
-
 
 If you can't use the wrapper (e.g. inside an IDE that shells pytest directly),
 
@@ -2196,8 +1675,6 @@ at minimum activate the venv. The isolation plugin loads automatically from
 
 either way.
 
-
-
 ```bash
 
 source .venv/bin/activate   # or: source venv/bin/activate
@@ -2206,11 +1683,7 @@ python -m pytest tests/ -q
 
 ```
 
-
-
 If you need to bypass isolation for fast feedback while debugging:
-
-
 
 ```bash
 
@@ -2218,15 +1691,9 @@ python -m pytest tests/agent/test_foo.py -q --no-isolate
 
 ```
 
-
-
 Always run the full suite before pushing changes.
 
-
-
 ### Don't write change-detector tests
-
-
 
 A test is a **change-detector** if it fails whenever data that is **expected
 
@@ -2238,11 +1705,7 @@ behavioral coverage; they just guarantee that routine source updates break
 
 CI and cost engineering time to "fix."
 
-
-
 **Do not write:**
-
-
 
 ```python
 # catalog snapshot — breaks every model release
@@ -2251,22 +1714,16 @@ assert "gemini-2.5-pro" in _PROVIDER_MODELS["gemini"]
 
 assert "MiniMax-M2.7" in models
 
-
 # config version literal — breaks every schema bump
 
 assert DEFAULT_CONFIG["_config_version"] == 21
-
 
 # enumeration count — breaks every time a skill/provider is added
 
 assert len(_PROVIDER_MODELS["huggingface"]) == 8
 ```
 
-
-
 **Do write:**
-
-
 
 ```python
 # behavior: does the catalog plumbing work at all?
@@ -2275,24 +1732,19 @@ assert "gemini" in _PROVIDER_MODELS
 
 assert len(_PROVIDER_MODELS["gemini"]) >= 1
 
-
 # behavior: does migration bump the user's version to current latest?
 
 assert raw["_config_version"] == DEFAULT_CONFIG["_config_version"]
 
-
 # invariant: no plan-only model leaks into the legacy list
 
 assert not (set(moonshot_models) & coding_plan_only_models)
-
 
 # invariant: every model in the catalog has a context-length entry
 
 for m in _PROVIDER_MODELS["huggingface"]:
     assert m.lower() in DEFAULT_CONTEXT_LENGTHS_LOWER
 ```
-
-
 
 The rule: if the test reads like a snapshot of current data, delete it. If
 
@@ -2303,8 +1755,6 @@ When a PR adds a new provider/model and you want a test, make the test
 assert the relationship (e.g. "catalog entries all have context lengths"),
 
 not the specific names.
-
-
 
 Reviewers should reject new change-detector tests; authors should convert
 

@@ -1,140 +1,156 @@
 ---
-
 sidebar_position: 5
-
 title: "Scheduled Tasks (Cron)"
-
 description: "Schedule automated tasks with natural language, manage them with one cron tool, and attach one or more skills"
-
 ---
-
-
 
 # Scheduled Tasks (Cron)
 
-
-
-Schedule tasks to run automatically with natural language or cron expressions. Clawksis exposes cron management through a single `cronjob` tool with action-style operations instead of separate schedule/list/remove tools.
-
-
+Schedule tasks to run automatically with natural language or cron expressions. Clawksis exposes cron management through a single `cronjob_manage` tool with action-style operations instead of separate schedule/list/remove tools.
 
 ## What cron can do now
 
-
-
 Cron jobs can:
 
-
-
 - schedule one-shot or recurring tasks
-
 - pause, resume, edit, trigger, and remove jobs
-
 - attach zero, one, or multiple skills to a job
-
 - deliver results back to the origin chat, local files, or configured platform targets
-
 - run in fresh agent sessions with the normal static tool list
-
 - run in **no-agent mode** — a script on a schedule, its stdout delivered verbatim, zero LLM involvement (see the [no-agent mode](#no-agent-mode-script-only-jobs) section below)
+- fire on **external events** — a webhook route with `cron_job` set fires the job the moment something happens (a PR gets feedback, a service posts an alert) instead of waiting for the next scheduled tick. See [Event-Triggered Cron Jobs](../messaging/webhooks.md#event-triggered-cron-jobs).
 
-
-
-All of this is available to Clawksis itself through the `cronjob` tool, so you can create, pause, edit, and remove jobs by asking in plain language — no CLI required.
-
-
+All of this is available to Clawksis itself through the `cronjob_manage` tool, so you can create, pause, edit, and remove jobs by asking in plain language — no CLI required.
 
 :::tip
+**Which model does a cron job run on?** Resolution at fire time is: per-job pin → `cron.model` in `config.yaml` → the main agent model from `clawk model`.
 
-Cron jobs use whatever provider `clawk model` selected. `clawk setup --portal` is the lowest-friction option for unattended runs since OAuth refresh is automatic. See [Nous Portal](/integrations/nous-portal).
+- **Per-job pin** — a job that carries its own model. Set it to a specific model via the dashboard, `clawk cron create/edit --model … --provider …`, or by editing `~/.clawksis/cron/jobs.json`; or **lock in the current main model** with `clawk cron create/edit --pin` (the agent's `cronjob_manage` tool can do this too with `pinned=true`, but only when you ask it to). `--unpin` (`pinned=false`) releases the lock. The agent cannot point a job at a *different* model — inference pins are user-owned.
+- **`cron.model` / `cron.model_provider`** — a cron-fleet default: every unpinned job runs on this model, independent of your chat model. Set it once (`clawk config set cron.model <name>`) and switching your chat model with `clawk model` or `/model` never touches your cron fleet.
+- **Main agent model** — when neither of the above is set, a job runs on whatever `clawk model` / `/model` is set to **at the moment it fires**. Change your main model and every unpinned job follows on its next run.
 
+Whichever provider a job resolves to, its provider-specific request settings (e.g. `request_overrides` such as `extra_body`/`extra_headers` for custom providers) carry into the scheduled run just like an interactive session.
+
+`clawk setup --portal` is the lowest-friction option for unattended runs since OAuth refresh is automatic. See [Nous Portal](../../integrations/nous-portal.md).
 :::
 
-
+:::tip
+**Per-job reasoning effort.** A job can pin its own thinking level, independent of the model pin: one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra`. When set, it overrides both the global `agent.reasoning_effort` and per-model `agent.reasoning_overrides` for that job's runs (`none` disables thinking). Set it via `clawk cron create/edit --reasoning-effort high`; pass an empty string on edit to clear the pin and follow config again. (It is deliberately not exposed on the agent's `cronjob_manage` tool — model configuration stays a user decision.) Levels a model doesn't support are clamped or omitted by the provider at request time — pinning `xhigh` on a model that caps at `high` runs at `high`. The pin has no effect on `no_agent` jobs (there is no LLM call to tune). Use it to run heavy scheduled analyses at `high` while cheap recurring jobs run at `minimal`, without touching your global default.
+:::
 
 :::warning
-
 Cron-run sessions cannot recursively create more cron jobs. Clawksis disables cron management tools inside cron executions to prevent runaway scheduling loops.
-
 :::
 
+## Admission recovery
 
+Agent-backed runs retain their fire identity until output and a durable delivery handoff are recorded.
+The scheduler reconciles unfinished receipts on each tick, including after an owner restart. A known
+terminal result is handed to the delivery queue without running the agent again; duplicate handoffs
+and bookkeeping use the original fire identity. Delivery interrupted after a send claim stays
+unknown and is not retried automatically.
+
+An interrupted execution or a prepared fire that cannot be found stays paused for operator review.
+Recovery never creates another admission for it. Paused jobs are not automatically resumed, even
+when their completed result is recovered. `clawk cron run` exits nonzero for a known synchronous
+execution failure; background dispatch is not a terminal success/failure verdict.
 
 ## Creating scheduled tasks
 
-
-
 ### In chat with `/cron`
 
-
-
 ```bash
-
-/cron add 30m "Remind me to check the build"
-
+/cron add "in 30m" "Remind me to check the build"
 /cron add "every 2h" "Check server status"
-
 /cron add "every 1h" "Summarize new feed items" --skill blogwatcher
-
 /cron add "every 1h" "Use both skills and combine the result" --skill blogwatcher --skill maps
-
 ```
-
-
 
 ### From the standalone CLI
 
-
-
 ```bash
-
 clawk cron create "every 2h" "Check server status"
-
 clawk cron create "every 1h" "Summarize new feed items" --skill blogwatcher
-
 clawk cron create "every 1h" "Use both skills and combine the result" \
-
   --skill blogwatcher \
-
   --skill maps \
-
   --name "Skill combo"
-
 ```
-
-
 
 ### Through natural conversation
 
-
-
 Ask Clawksis normally:
 
-
-
 ```text
-
 Every morning at 9am, check Hacker News for AI news and send me a summary on Telegram.
-
 ```
 
+Clawksis will use the unified `cronjob_manage` tool internally.
 
+## Pre-dispatch configuration validation
 
-Clawksis will use the unified `cronjob` tool internally.
+Before constructing any agent machinery for a scheduled run, the scheduler
+validates that the job's configuration can actually produce a successful run:
 
+- the provider API key resolves (skipped for an unpinned job when a
+  `fallback_providers` chain is configured, since the fallback path may rescue a
+  missing primary key; a pinned job does not use that chain, so it is always
+  checked),
+- attached skills are ready (no missing required environment variables,
+  commands, or credential files),
+- delivery platform targets are known and have gateway credentials configured
+  (`local`/`origin` targets are never checked),
+- every MCP server the job names in its own `enabled_toolsets` resolved to at
+  least one tool for this profile. A server that connected earlier in this
+  gateway and is only reconnecting after a network blip (router reboot, DNS
+  failure) does **not** block: the job runs with the tools that did resolve and
+  the gateway log notes which servers were skipped (once per outage). A server
+  that never connected for this profile (wrong URL or credentials, or a server
+  another profile owns under a multiplexer), or one parked on a permanent error
+  such as revoked credentials, blocks the run.
 
+When validation fails, the job's `last_status` becomes `blocked_config`, ONE
+alert is delivered (it is not repeated every tick), and **no LLM call is
+made** — a misconfigured job never spends tokens. The next healthy run clears
+the blocked state so a future configuration break alerts again.
+
+A missing-credential verdict names the profile and `CLAWK_HOME` the scheduler
+read, e.g. `provider credential missing: No Codex credentials stored … [profile
+'default', CLAWK_HOME /opt/data]`. When an interactive session with "the same"
+credential works, compare that path with the shell's `CLAWK_HOME`: a gateway
+started without the shell's environment (Docker `HOME` vs `CLAWK_HOME`, a
+service unit) or a multiplexed satellite profile reads a different `auth.json`
+and `.env` than the shell does.
+
+To disable the validation and restore the old behavior (the run proceeds and
+fails during execution):
+
+```yaml
+cron:
+  preflight: false
+```
+
+Or: `clawk config set cron.preflight false`
+
+## Moving unpinned jobs to a new global default
+
+An unpinned job follows the main agent model, so `clawk model` moves your cron fleet with it.
+When you want a job to *stay* on a model:
+
+```bash
+clawk cron edit <job_id> --pin                                   # lock the current main model onto one job
+clawk cron edit <job_id> --provider <provider> --model <model>   # pin an explicit model
+clawk cron edit <job_id> --unpin                                 # follow the main model again
+clawk config set cron.model <model>                              # every unpinned job, without touching chat
+```
+
+`clawk cron list` and the `cronjob_manage` tool report `pinned` per job.
 
 ## Skill-backed cron jobs
 
-
-
-A cron job can load one or more skills before it runs the prompt.
-
-
+A cron job can load one or more skills before it runs the prompt. Each skill loads exactly as it does from `/skill-name` in a chat session, including the `[Skill config ...]` block with its resolved `metadata.clawk.config` values from `config.yaml`.
 
 ### Single skill
-
-
 
 ```python
 cronjob(
@@ -146,15 +162,9 @@ cronjob(
 )
 ```
 
-
-
 ### Multiple skills
 
-
-
 Skills are loaded in order. The prompt becomes the task instruction layered on top of those skills.
-
-
 
 ```python
 cronjob(
@@ -166,37 +176,21 @@ cronjob(
 )
 ```
 
-
-
 This is useful when you want a scheduled agent to inherit reusable workflows without stuffing the full skill text into the cron prompt itself.
-
-
 
 ## Running a job inside a project directory
 
-
-
 Cron jobs default to running detached from any repo — no `AGENTS.md`, `CLAUDE.md`, or `.cursorrules` is loaded, and the terminal / file / code-exec tools run from whatever working directory the gateway started in. Pass `--workdir` (CLI) or `workdir=` (tool call) to change that:
 
-
-
 ```bash
-
 # Standalone CLI (schedule and prompt are positional)
-
 clawk cron create "every 1d at 09:00" \
-
   "Audit open PRs, summarize CI health, and post to #eng" \
-
   --workdir /home/me/projects/acme
-
 ```
-
-
 
 ```python
 # From a chat, via the cronjob tool
-
 cronjob(
     action="create",
     schedule="every 1d at 09:00",
@@ -205,36 +199,22 @@ cronjob(
 )
 ```
 
-
-
 When `workdir` is set:
 
-
-
 - `AGENTS.md`, `CLAUDE.md`, and `.cursorrules` from that directory are injected into the system prompt (same discovery order as the interactive CLI)
-
 - `terminal`, `read_file`, `write_file`, `patch`, `search_files`, and `execute_code` all use that directory as their working directory
-
 - The path must be an absolute directory that exists — relative paths and missing directories are rejected at create / update time
-
 - Pass `--workdir ""` (or `workdir=""` via the tool) on edit to clear it and restore the old behaviour
 
-
-
-:::note Serialization
-
-Jobs with a `workdir` run sequentially on the scheduler tick, not in the parallel pool. This is deliberate: the cron worker applies the job workdir through process-global terminal state, so two workdir jobs running at the same time would corrupt each other's cwd. Workdir-less jobs still run in parallel as before.
-
+:::note Isolation
+Each agent run binds its `workdir` to that run's unique task identity. Workdir jobs therefore use the normal parallel pool without mutating process-global terminal state or leaking paths between concurrent runs. Set `cron.max_parallel_jobs` if you want to limit total cron concurrency.
 :::
-
 
 
 ## Running cron jobs in a specific profile
 
 
-
 By default a cron job inherits whichever Clawksis profile owned the gateway / CLI that created it. Pass `--profile <name>` (CLI) or `profile=` (cronjob tool) to re-target the job at a different profile — the scheduler resolves that profile's `CLAWK_HOME`, temporarily switches into it for the duration of the run, loads its `.env` + `config.yaml`, and executes the job there:
-
 
 
 ```bash
@@ -250,7 +230,6 @@ clawk cron create "every 1d at 03:00" \
 ```
 
 
-
 ```python
 # From a chat, via the cronjob tool
 
@@ -263,13 +242,10 @@ cronjob(
 ```
 
 
-
 Use `--profile default` to explicitly pin to the root Clawksis profile. The named profile must already exist; the scheduler refuses to create profiles on the fly. To clear a profile pin during `cron edit`, pass an empty string (`--profile ""` or `profile=""`) — the job reverts to running in whatever profile the scheduler itself is in.
 
 
-
 If the pinned profile is later deleted, the scheduler logs a warning and falls back to running the job in its current profile rather than crashing — so a stale `profile` reference never wedges a job.
-
 
 
 :::note Serialization
@@ -278,465 +254,426 @@ Jobs with a `profile` set also run sequentially, for the same reason as `workdir
 
 :::
 
-
-
 ## Editing jobs
-
-
 
 You do not need to delete and recreate jobs just to change them.
 
-
-
 :::tip Job reference
-
 The `<job_id>` placeholder below (and in [Lifecycle actions](#lifecycle-actions)) also accepts the job's name (case-insensitive) — handy when you remember `morning-digest` but not the hex ID. An exact job ID takes precedence over name matches; if the reference is not an ID and a name matches more than one job, the command refuses and prints the candidate IDs so you can disambiguate.
-
 :::
-
-
 
 ### Chat
 
-
-
 ```bash
-
 /cron edit <job_id> --schedule "every 4h"
-
 /cron edit <job_id> --prompt "Use the revised task"
-
 /cron edit <job_id> --skill blogwatcher --skill maps
-
 /cron edit <job_id> --remove-skill blogwatcher
-
 /cron edit <job_id> --clear-skills
-
 ```
-
-
 
 ### Standalone CLI
 
-
-
 ```bash
-
 clawk cron edit <job_id> --schedule "every 4h"
-
 clawk cron edit <job_id> --prompt "Use the revised task"
-
 clawk cron edit <job_id> --skill blogwatcher --skill maps
-
 clawk cron edit <job_id> --add-skill maps
-
 clawk cron edit <job_id> --remove-skill blogwatcher
-
 clawk cron edit <job_id> --clear-skills
-
 ```
-
-
 
 Notes:
 
-
-
 - repeated `--skill` replaces the job's attached skill list
-
 - `--add-skill` appends to the existing list without replacing it
-
 - `--remove-skill` removes specific attached skills
-
 - `--clear-skills` removes all attached skills
-
-
 
 ## Lifecycle actions
 
-
-
 Cron jobs now have a fuller lifecycle than just create/remove.
-
-
 
 ### Chat
 
-
-
 ```bash
-
 /cron list
-
 /cron pause <job_id>
-
 /cron resume <job_id>
-
 /cron run <job_id>
-
 /cron remove <job_id>
-
 ```
-
-
 
 ### Standalone CLI
 
-
-
 ```bash
-
 clawk cron list
-
 clawk cron pause <job_id_or_name>
-
 clawk cron resume <job_id_or_name>
-
 clawk cron run <job_id_or_name>
-
 clawk cron remove <job_id_or_name>
-
 clawk cron edit <job_id_or_name> [...flags]
-
 clawk cron status
-
 clawk cron tick
-
 ```
-
-
 
 What they do:
 
-
-
 - `pause` — keep the job but stop scheduling it
-
-- `resume` — re-enable the job and compute the next future run
-
+- `resume` — re-enable the job. A recurring job whose slot came due while it was paused keeps that slot due, so the next tick fires one catch-up run (or logs the skip when `cron.catch_up_missed: false`) instead of silently jumping to the next occurrence; otherwise the next future run is computed
 - `run` — trigger the job on the next scheduler tick
-
 - `remove` — delete it entirely
+- `edit` — modify schedule, prompt, delivery, etc.
+- `tick` — run one scheduler pass and exit (for a system crontab or other external
+  scheduler). **The gateway must be running:** agent jobs execute inside the gateway, and a
+  tick never starts one. With no gateway up, agent jobs are skipped with a logged reason
+  (`clawk cron list` shows it) and fire on the next tick after `clawk gateway start`; their
+  schedule is not advanced or penalised. `no_agent` script jobs still run from a bare tick.
 
-- `edit` — modify schedule, prompt, profile, delivery, etc.
+**Name-based lookup.** All four mutating verbs (`pause`, `resume`, `run`, `remove`, `edit`) plus the agent's `cronjob_manage` tool now accept a job **name** (case-insensitive) in place of the hex ID. The agent and CLI both prefer an exact ID match if one exists; ambiguous name matches (multiple jobs sharing the same name) are refused with the full list of candidate IDs so you can pick one explicitly. Names are not unique, so this guard is load-bearing — it prevents silently mutating the wrong job when two share a name.
 
+### Pausing everything: `clawk pause`
 
+`clawk pause [--reason ...]` is the global emergency stop (`clawk resume` lifts it). While it is engaged no scheduled cron fire starts, whichever door it arrives through: the built-in ticker skips its dispatch, the managed-cron (hosted scheduler) fire webhook answers `503` with `Retry-After: 60` so the scheduler redelivers the fire after you resume, and the [misfire catch-up](#misfire-catch-up) sweep stays idle instead of force-firing everything that was held back. Runs already in flight are never killed, and nothing is lost: due work catches up on the first tick or sweep after `clawk resume`. Explicit manual runs (`clawk cron run`, the dashboard's Trigger button) are an operator override and still execute while paused.
 
-**Name-based lookup.** All four mutating verbs (`pause`, `resume`, `run`, `remove`, `edit`) plus the agent's `cronjob` tool now accept a job **name** (case-insensitive) in place of the hex ID. The agent and CLI both prefer an exact ID match if one exists; ambiguous name matches (multiple jobs sharing the same name) are refused with the full list of candidate IDs so you can pick one explicitly. Names are not unique, so this guard is load-bearing — it prevents silently mutating the wrong job when two share a name.
+### Creating a job paused (safe canary)
 
+Create a canary without a create-then-pause scheduling race:
 
+```bash
+clawk cron create "every 1h" "Post the digest" --paused --paused-reason "Awaiting review"
+clawk cron resume <job_id>
+```
+
+`--paused` stores `enabled: false`, `state: paused`, `next_run_at: null`, a pause
+timestamp and an auditable reason in the first locked write, without registering a
+trigger. Omit the reason to store "Created paused; awaiting operator approval."
+Omit `--paused` to retain normal enabled creation. `--paused-reason` requires
+`--paused`; invalid values are rejected before persistence.
+
+The same `paused` boolean and optional `paused_reason` string are accepted by
+`cron.jobs.create_job`, the cron management tool's `create` action, the gateway
+`POST /api/jobs`, and the dashboard `POST /api/cron/jobs`. Resume schedules the next
+future run. Pausing prevents automatic fires, not operator overrides: existing
+explicit **Run now** / force-run behavior remains available and can resume and run
+the job. It is not a security boundary against an operator who can run jobs.
+
+## Agent-managed scheduling (cron jobs that manage cron jobs)
+
+By default, agents launched *by* the scheduler cannot use the `cronjob_manage` tool —
+a scheduled job cannot create, edit, or remove other jobs. Opt in via
+`config.yaml`:
+
+```yaml
+cron:
+  allow_agent_scheduling: true   # default: false
+```
+
+When enabled, a scheduled agent can manage the cron table like any chat
+session: schedule follow-up one-shots from within scheduled work, tune its own
+cadence, or run a "cron librarian" job that reconciles the whole table
+(list, then update/remove/create as needed). Two properties keep this sane:
+
+- **One flat, user-owned table.** Jobs created from a cron run land in the
+  same `jobs.json` as every other job with no special ownership — you can
+  list, edit, or remove them exactly as if you had created them yourself.
+- **No dangling delivery.** A cron run is ephemeral, so `deliver: origin`
+  from inside one is resolved **at create time** to the creating job's own
+  concrete target (`platform:chat_id[:thread_id]`, or `local` if the creating
+  job delivers nowhere). A job created by a scheduled agent can never point
+  its output at a session that no longer exists. Explicit targets
+  (`local`, `all`, `telegram:<chat_id>`) are honored verbatim.
+- **A job may remove itself and still report.** The "watch for X, tell me
+  once, then stop" pattern — a recurring job whose run calls
+  `cronjob(action="remove", job_id=<its own id>)` and then answers — delivers
+  that final response and records the run as `completed`; the job record and
+  its `cron/output/<job_id>/` directory are gone afterwards and the final run
+  is not written there. Deleting the record from *outside* the run (another
+  process, or a replacement job reusing the id) still discards the stale
+  run's output, as before.
+
+Prefer prompts that update existing jobs (list first, then update by ID)
+over ones that create new jobs each run.
 
 ## How it works
 
-
-
 **Cron execution is handled by the gateway daemon.** The gateway ticks the scheduler every 60 seconds, running any due jobs in isolated agent sessions.
 
-
-
 ```bash
-
 clawk gateway install     # Install as a user service
-
 sudo clawk gateway install --system   # Linux: boot-time system service for servers
-
 clawk gateway             # Or run in foreground
 
-
-
 clawk cron list
-
 clawk cron status
-
 ```
 
+`clawk cron status` reports whether the scheduler is alive (gateway process, ticker heartbeat, last successful tick) and the soonest scheduled run across your active jobs, ordered by actual instant even when jobs store different UTC offsets. A `next_run_at` that is already more than 15 minutes in the past is never shown as an upcoming "Next run": `cron status` prints `⚠ Next run <time> is OVERDUE — passed 7h ago but the job has not fired`, `cron list` and the in-chat `/cron list` label the row `Overdue:`, the dashboard and the Desktop cron panel (including a Bot's Routines card) show `Overdue since`, and when the scheduler has stopped ticking `status` (with the gateway down) and the dashboard Cron page also say when it last ticked. That is the signature of a scheduler that stopped ticking — restart the gateway (`clawk gateway restart`) so the next tick picks the overdue job up, or run it right away with `clawk cron run <id>`.
 
+For a named profile served by the default-profile multiplexer, `clawk cron status` names that scheduler host and reports the named profile's own heartbeat health. Missing or stale heartbeats point to `clawk --profile default gateway restart`. `cron list` and `cron create` also warn when that heartbeat is missing or stale; `cron status` additionally checks the last successful tick and reports tick errors.
+
+#### Cron store not writable (full disk, read-only mount, permissions)
+
+When the cron store (`~/.clawksis/cron/`, or the profile's own `cron/` directory) can't be written, for example because the disk is full (`ENOSPC`), the mount is read-only (`EROFS`) or the permissions are wrong (`EACCES`), the scheduler does not run a job whose run it can't record. That prevents double fires after recovery. The ticker keeps running. It stops attempting the doomed writes and re-checks the store about once a minute. The outage shows up in four places:
+
+- `clawk cron status` probes the store itself and leads with `⚠ Cron store is NOT writable — scheduled jobs are being skipped`. Below that it shows the store path, the OS error, the last successful write and how many due runs have not fired. `clawk cron list` prints a one-line banner.
+- `clawk doctor` warns when the store is not writable, or when its filesystem has less than 100 MB free.
+- The gateway posts one notice to the profile's home channels when the store becomes unwritable and one when it has stayed writable for an hour (a store that fails again within that hour posts nothing more, so the last notice always matches its state). Both respect `display.suppress_warning_notifications` and use the profile's `display.language`.
+- Monitoring exports `clawk.cron.store.writable` (0 while any profile's store served by this gateway is unwritable, else 1) and `clawk.cron.store.skipped_runs` (summed over those stores).
+
+To fix it, free disk space on the filesystem holding the store, remount it read-write, or fix the ownership and permissions of the store directory so the gateway user can write it. You don't need to restart anything. On the next tick that can write, each job that stayed due fires **once** under the normal [misfire catch-up](#misfire-catch-up) rules, not once per missed tick. A one-shot that came due during the outage fires once instead of expiring (unless the gateway restarts while the store is unwritable).
 
 ### Gateway scheduler behavior
 
-
-
 On each tick Clawksis:
 
-
-
 1. loads jobs from `~/.clawksis/cron/jobs.json`
-
 2. checks `next_run_at` against the current time
-
 3. starts a fresh `AIAgent` session for each due job
-
 4. optionally injects one or more attached skills into that fresh session
-
 5. runs the prompt to completion
-
 6. delivers the final response
-
 7. updates run metadata and the next scheduled time
-
-
 
 A file lock at `~/.clawksis/cron/.tick.lock` prevents overlapping scheduler ticks from double-running the same job batch.
 
-
-
 ## Delivery options
-
-
 
 When scheduling jobs, you specify where the output goes:
 
-
-
 | Option | Description | Example |
-
 |--------|-------------|---------|
-
 | `"origin"` | Back to where the job was created | Default on messaging platforms |
-
 | `"local"` | Save to local files only (`~/.clawksis/cron/output/`) | Default on CLI |
-
 | `"telegram"` | Telegram home channel | Uses `TELEGRAM_HOME_CHANNEL` |
-
 | `"telegram:123456"` | Specific Telegram chat by ID | Direct delivery |
-
 | `"telegram:-100123:17585"` | Specific Telegram topic | `chat_id:thread_id` format |
-
 | `"discord"` | Discord home channel | Uses `DISCORD_HOME_CHANNEL` |
-
 | `"discord:#engineering"` | Specific Discord channel | By channel name |
-
 | `"slack"` | Slack home channel | |
-
 | `"whatsapp"` | WhatsApp home | |
-
 | `"signal"` | Signal | |
-
 | `"matrix"` | Matrix home room | |
-
 | `"mattermost"` | Mattermost home channel | |
-
 | `"email"` | Email | |
-
 | `"sms"` | SMS via Twilio | |
-
-| `"homeassistant"` | Home Assistant | |
-
+| `"homeassistant"` | Home Assistant (plugin) | Uses `HASS_HOME_CHANNEL`; requires the [`homeassistant` plugin](../messaging/homeassistant.md) |
 | `"dingtalk"` | DingTalk | |
-
 | `"feishu"` | Feishu/Lark | |
-
 | `"wecom"` | WeCom | |
-
 | `"weixin"` | Weixin (WeChat) | |
-
 | `"bluebubbles"` | BlueBubbles (iMessage) | |
-
 | `"qqbot"` | QQ Bot (Tencent QQ) | |
-
+| `"bot-chat"` | This profile's canonical Bot Chat — the bot reads the output and responds | Machine-local |
+| `"bot-chat:research"` | Another local profile's Bot Chat | Validated at create time |
 | `"all"` | Fan out to every connected home channel | Resolved at fire time |
-
 | `"telegram,discord"` | Fan out to a specific set of channels | Comma-separated list |
-
 | `"origin,all"` | Deliver to the origin **plus** every other connected channel | Combine any tokens |
 
+The agent's final response is automatically delivered to the configured `deliver:` target — the agent does not send messages itself, so there is nothing to call in the cron prompt.
 
+Delivered output is secret-redacted on the way out, on every lane: the platform message, the
+session mirror (payload and the job name spliced around it), and a `bot-chat` turn. Credential
+shapes (vendor-prefixed API keys, tokens, `KEY=value` assignments) are masked even when
+`security.redact_secrets: false` — that setting governs your own logs, not what leaves the
+machine — and a redactor failure replaces the payload rather than sending it unscanned.
+Credential-named URL query parameters are not stripped (magic links and pre-signed URLs are
+legitimate cron output), and user-chosen secrets with no recognisable shape are not detected.
+The run document under `cron/output/<job_id>/` keeps the agent's response as written.
 
-The agent's final response is automatically delivered. You do not need to call `send_message` in the cron prompt.
+### Delivery failures are a distinct status
 
+Execution and delivery are tracked separately. When the agent run succeeds but
+the output never reaches the target (platform 5xx, rate limit, stale session,
+adapter returned no positive evidence of a send), the job records
+`last_status: delivery_failed` — never a plain `ok` — with the reason in
+`last_delivery_error`. `clawk cron list` shows it in yellow as
+`delivery_failed: <reason>`, `clawk cron doctor` reports it as a delivery
+issue, and a manual `cronjob run` reports `success: false` with the delivery
+error. A delivery failure does not count toward the job's `failure_streak`
+(the agent did its job); the next fully successful run returns the status to
+`ok`.
 
+### Bot Chat delivery (`bot-chat`)
+
+`bot-chat` delivers the output **into a profile's canonical "Bot Chat" session as a real message**. Unlike every other target — where the recipient is a human reading a channel — the recipient here is the bot itself: it receives the output as an incoming message, acts on anything that needs action, and responds in its chat. Use it when scheduled output should be *processed*, not just posted.
+
+- `bot-chat` (bare) targets the job's own profile.
+- `bot-chat:<profile>` targets another profile **on the same machine**. Names are validated against `clawk profile list` when the job is created; profiles on other gateways or machines can never be targeted, so same-named profiles across machines are unambiguous.
+- Each delivery costs the target bot one full agent turn — mind the schedule frequency.
+- Composes with other targets (`bot-chat,telegram`) but is never included in `all`.
+- If the canonical chat is open in a mailbox-capable Desktop/TUI backend, delivery is **durably queued immediately**, whether the bot is idle or busy. Only that live owner runs the incoming turn; cron does not start a competing CLI writer. A profile that has no Bot Chat yet gets one created on first delivery. If the target profile's gateway is not running, the run is recorded `delivery_failed` with the reason (the output stays in `clawk cron runs`; it is not redelivered automatically) and cron never starts its own Bot Chat turn.
+- **Queued is not completed.** Cron records receipt IDs and `queued`/`claimed` statuses in `last_delivery_queued`, with delivery outcome `queued` (neither delivered nor failed). A successful job shows `delivery_queued`; genuine errors on other targets still take precedence as delivery failures. The bot may complete later. The durable receipt in the target profile's `runtime/bot_live_delivery/<receipt-id>.json` is authoritative for the turn itself. For an agent job the send rides the gateway delivery queue, and once the gateway has handed it to the bot the run settles to `ok` (accepted, not answered) while `last_delivery_queued` keeps the receipt; a refused hand-off settles to `delivery_failed`. Script-only (`no_agent`) Bot Chat deliveries stay `delivery_queued`: cron never rewrites that history when the bot's turn later completes.
+- Rechecking the same execution inspects its existing receipt, even if the owner has disappeared. It never falls back to another writer after acceptance. `failed`, `cancelled`, or `ambiguous` receipts are not automatically replayed; inspect the chat and receipt before intentionally starting new work. Each new cron execution has a distinct delivery ID.
 
 ### Routing intent (`all`)
 
-
-
 `all` lets you ship one cron job to every messaging channel you have configured, without having to enumerate them by name. It is **resolved at fire time**, so a job created before you wired up Telegram will pick up Telegram on the next tick after you set `TELEGRAM_HOME_CHANNEL`.
-
-
 
 Semantics: `all` expands to every platform with a configured home channel. Zero is fine; the job simply produces no delivery targets and is recorded as a delivery failure upstream.
 
-
-
 `all` composes with explicit targets. `origin,all` delivers to the origin chat *plus* every other connected home channel, de-duplicating by `(platform, chat_id, thread_id)`.
-
-
 
 ### Telegram cron topic (`TELEGRAM_CRON_THREAD_ID`)
 
-
-
 When Telegram topic mode is enabled, the root DM is reserved as a system lobby — replies sent there are rebuffed with a lobby reminder and `reply_to_message_id` is dropped, so you cannot reply to a cron message that landed in the main chat.
-
-
 
 Point cron at a dedicated forum topic instead:
 
-
-
 1. In Telegram, open the bot DM and create a topic named e.g. `Cron`. Long-press the topic header → **Copy link**; the trailing integer is the topic's `message_thread_id`.
-
 2. Set `TELEGRAM_CRON_THREAD_ID=<that id>` in your `.env`.
 
-
-
 This applies only to cron deliveries. `TELEGRAM_HOME_CHANNEL_THREAD_ID` (used elsewhere, e.g. restart notifications) is unchanged. Explicit `deliver="telegram:chat_id:thread_id"` targets continue to win over the env var. Replies to cron messages now arrive in the existing topic session, so you can act on them directly.
-
-
 
 ### Response wrapping
 
 
-
 By default, delivered cron output is prefixed with a small ⏰ tag so the recipient knows it came from a scheduled task; the agent's output follows directly:
-
-
 
 ```
 
 ⏰ Morning feeds
 
-
-
 <agent output here>
 
-
-
 Note: The agent cannot see this message, and therefore cannot respond to it.
-
 ```
-
-
 
 To deliver the raw agent output without the wrapper, set `cron.wrap_response` to `false`:
 
-
-
 ```yaml
-
 # ~/.clawksis/config.yaml
-
 cron:
-
   wrap_response: false
-
 ```
-
-
 
 ### Silent suppression
 
 
-
 If the agent's final response starts with `[SILENT]`, delivery is suppressed entirely. The output is still saved locally for audit (in `~/.clawksis/cron/output/`), but no message is sent to the delivery target.
-
-
 
 This is useful for monitoring jobs that should only report when something is wrong:
 
-
-
 ```text
-
 Check if nginx is running. If everything is healthy, respond with only [SILENT].
-
 Otherwise, report the issue.
-
 ```
 
+Failed jobs always deliver regardless of the `[SILENT]` marker — only successful runs can be silenced. For quiet monitoring jobs, prompt the agent to reply with only `[SILENT]` when there is nothing to report.
 
+### Declaring a failed run
 
-Failed jobs always deliver regardless of the `[SILENT]` marker — only successful runs can be silenced.
+Only runtime failures (exceptions, timeouts, an unreachable model) mark a run as failed. When the agent itself
+finishes its turn but the work did not get done — for example a delegated subagent or a script it ran failed —
+it can declare the run failed by putting `[CRON_FAILURE]` alone on the **first line** of its response, followed
+by the explanation:
 
+```text
+[CRON_FAILURE]
+The nightly export subagent exited with "disk full"; no report was produced.
+```
 
+The run is then recorded as failed (`last_status`, failure streak, `clawk cron runs` and `clawk cron incidents`
+all reflect it) and the failure notice is delivered like any other failed run. The full response is still saved
+under `~/.clawksis/cron/output/` for triage. The marker is strict: mentioning or quoting `[CRON_FAILURE]` anywhere
+else in a report leaves the run successful. Script-only (`no_agent`) jobs ignore it — a script signals failure
+with a non-zero exit code.
 
 ## Script timeout
 
 
-
 Pre-run scripts (attached via the `script` parameter) have a default timeout of 120 seconds. If your scripts need longer — for example, to include randomized delays that avoid bot-like timing patterns — you can increase this:
 
-
-
 ```yaml
-
 # ~/.clawksis/config.yaml
-
 cron:
 
   script_timeout_seconds: 300   # 5 minutes
-
 ```
 
+Or set the `CLAWK_CRON_SCRIPT_TIMEOUT` environment variable. The resolution order is: env var → config.yaml → 3600s default.
 
+Cron also bounds post-run session and agent-resource cleanup. This happens after the LLM turn returns, so it is separate from the inactivity timeout. The default is 10 seconds per cleanup operation. If a storage or client finalizer stops returning, the scheduler logs an error, releases the job's in-flight guard, and allows later runs to dispatch instead of skipping that job forever.
 
-Or set the `CLAWK_CRON_SCRIPT_TIMEOUT` environment variable. The resolution order is: env var → config.yaml → 120s default.
+```yaml
+# ~/.clawksis/config.yaml
+cron:
+  cleanup_timeout_seconds: 10
+```
 
+Set `cleanup_timeout_seconds: 0` only to restore the legacy unbounded cleanup behavior.
 
+## Media send timeout
+
+When a cron delivery includes media attachments (a generated PDF, TTS audio, an exported report) sent through a live gateway adapter, each attachment upload is bounded by a timeout — 300 seconds by default. Large files on slow uplinks can need more:
+
+```yaml
+# ~/.clawksis/config.yaml
+cron:
+  media_send_timeout_seconds: 600   # 10 minutes per attachment
+```
+
+Or set the `CLAWK_CRON_MEDIA_SEND_TIMEOUT` environment variable. The resolution order is: env var → config.yaml → 300s default. A timed-out attachment is recorded in the job's run status as a partial delivery failure (the text still delivers).
+
+## Bot Chat delivery completion
+
+A `bot-chat` delivery is admitted to the target profile's running gateway and executed there as a full agent turn. The job's run status records the admission receipt (`delivery_outcome=queued`) until the target's durable receipt settles; a retry of the same run reuses the same receipt and never re-admits. If the target profile's gateway is not running, the run is recorded `delivery_failed` and no local fallback turn is run.
+
+## Standalone send timeout
+
+When the live gateway adapter cannot deliver (or no gateway is running), a target is sent through the platform's standalone sender. That send is bounded by a wall-clock timeout — 60 seconds by default — so a transport that is mid-reconnect cannot pin the job run (and a pending restart drain behind it) indefinitely:
+
+```yaml
+# ~/.clawksis/config.yaml
+cron:
+  standalone_send_timeout_seconds: 120
+```
+
+A timed-out send is recorded in `last_delivery_error` as `standalone send to <target> timed out after Ns`; the message may still land if the adapter had already accepted it.
 
 ## No-agent mode (script-only jobs)
 
-
-
 For recurring jobs that don't need LLM reasoning — classic watchdogs, disk/memory alerts, heartbeats, CI pings — pass `no_agent=True` at creation time. The scheduler runs your script on schedule and delivers its stdout directly, skipping the agent entirely:
 
-
-
 ```bash
-
 clawk cron create "every 5m" \
-
   --no-agent \
-
   --script memory-watchdog.sh \
-
   --deliver telegram \
-
   --name "memory-watchdog"
-
 ```
-
-
 
 Semantics:
 
-
-
 - Script stdout (trimmed) → delivered verbatim as the message.
-
 - **Empty stdout → silent tick**, no delivery. This is the watchdog pattern: "only say something when something is wrong".
-
 - Non-zero exit or timeout → an error alert is delivered, so a broken watchdog can't fail silently.
-
 - `{"wakeAgent": false}` on the last line → silent tick (same gate LLM jobs use).
-
 - No tokens, no model, no provider fallback — the job never touches the inference layer.
 
+`.sh` / `.bash` files run under `bash` from `PATH` when available, otherwise `/bin/bash` (important on Windows Git Bash). Anything else runs under the current Python interpreter (`sys.executable`). `script` is always a **file**, never a command line: `--script "echo hi"` is refused at creation (write the command into `~/.clawksis/scripts/hi.sh` and pass `hi.sh`). Scripts must resolve inside `$CLAWK_HOME/scripts/` — relative names, absolute paths, and `~`-prefixed paths are accepted when the resolved target stays in that directory; paths that escape it are rejected. A Python `script` or `monitor_script` can also pin a user-managed venv (for packages the Clawksis runtime doesn't carry) by passing `--interpreter ~/venvs/.../bin/python` at create/edit time — see [Using your own Python environment](../../guides/cron-script-only.md#using-your-own-python-environment). The Clawksis-managed venv stays Clawksis-owned; nothing is installed or restored automatically. The subprocess environment is sanitized (`_sanitize_subprocess_env`), so provider API credentials and other Clawksis-managed secrets are **not** inherited by cron scripts.
 
+#### Giving a script a credential
 
-`.sh` / `.bash` files run under `/bin/bash`; anything else under the current Python interpreter (`sys.executable`). Scripts must live in `~/.clawksis/scripts/` (same sandboxing rule as the pre-run script gate).
+A script that must authenticate to an external service (an API token, a service-account key) gets it the same way terminal and `execute_code` children do — declare the variable name in the owning profile's `config.yaml` and define the value in that profile's `.env` (or an external [secret source](../secrets/index.md)):
 
+```yaml
+terminal:
+  env_passthrough:
+    - MY_SERVICE_TOKEN
+```
 
+The variable is forwarded into the script's environment with the **owning profile's** value: for a job that belongs to a profile served by a multi-profile gateway or the Desktop/dashboard backend, the value is resolved through that profile's secret scope, never the launch profile's process environment, and that profile's own `.env` credentials never reach another profile's scripts. Clawksis-managed provider credentials (`OPENAI_API_KEY`, gateway tokens, …) cannot be declared — the sanitizer rejects them. On a single-profile install the script inherits what the gateway's `.env` put in the process environment, as before. Log presence (`set`/`MISSING`), never the value: script output is delivered verbatim.
 
 ### The agent sets these up for you
 
-
-
-The `cronjob` tool's schema exposes `no_agent` to Clawksis directly, so you can describe a watchdog in chat and let the agent wire it up:
-
-
+The `cronjob_manage` tool's schema exposes `no_agent` to Clawksis directly, so you can describe a watchdog in chat and let the agent wire it up:
 
 ```text
-
 Ping me on Telegram if RAM is over 85%, every 5 minutes.
-
 ```
 
-
-
 Clawksis will write the check script to `~/.clawksis/scripts/` via `write_file`, then call:
-
-
 
 ```python
 cronjob(
@@ -749,27 +686,16 @@ cronjob(
 )
 ```
 
-
-
 It picks `no_agent=True` automatically when the message content is fully determined by the script (watchdogs, threshold alerts, heartbeats). The same tool also lets the agent pause, resume, edit, and remove jobs — so the whole lifecycle is chat-driven without anyone touching the CLI.
 
-
-
-See the [Script-Only Cron Jobs guide](/guides/cron-script-only) for worked examples.
-
-
+See the [Script-Only Cron Jobs guide](../../guides/cron-script-only.md) for worked examples.
 
 ## Chaining jobs with `context_from`
 
-
-
 Cron jobs run in isolated sessions with no memory of previous runs. But sometimes one job's output is exactly what the next job needs. The `context_from` parameter wires that connection automatically — Job B's prompt gets Job A's most recent output prepended as context at runtime.
-
-
 
 ```python
 # Job 1: Collect raw data
-
 cronjob(
     action="create",
     prompt="Fetch the top 10 AI/ML stories from Hacker News. Save them to ~/.clawksis/data/briefs/raw.md in markdown format with title, URL, and score.",
@@ -777,11 +703,8 @@ cronjob(
     name="AI News Collector",
 )
 
-
 # Job 2: Triage — receives Job 1's output as context
-
 # Get Job 1's ID from: cronjob(action="list")
-
 cronjob(
     action="create",
     prompt="Read ~/.clawksis/data/briefs/raw.md. Score each story 1–10 for engagement potential and novelty. Output the top 5 to ~/.clawksis/data/briefs/ranked.md.",
@@ -790,9 +713,7 @@ cronjob(
     name="AI News Triage",
 )
 
-
 # Job 3: Ship — receives Job 2's output as context
-
 cronjob(
     action="create",
     prompt="Read ~/.clawksis/data/briefs/ranked.md. Write 3 tweet drafts (hook + body + hashtags). Deliver to telegram:7976161601.",
@@ -802,161 +723,185 @@ cronjob(
 )
 ```
 
-
-
 **How it works:**
 
-
-
 - When Job 2 fires, Clawksis reads Job 1's most recent output from `~/.clawksis/cron/output/{job1_id}/*.md`
-
 - That output is prepended to Job 2's prompt automatically
-
 - Job 2 doesn't need to hardcode "read this file" — it receives the content as context
-
 - The chain can be any length: Job 1 → Job 2 → Job 3 → ...
-
-
 
 **What `context_from` accepts:**
 
-
-
 | Format | Example |
-
 |--------|---------|
-
 | Single job ID (string) | `context_from="a1b2c3d4"` |
-
 | Multiple job IDs (list) | `context_from=["job_a", "job_b"]` |
-
-
 
 Outputs are concatenated in the order listed.
 
+**Continuity: carry the previous run's output**
 
+Set `continuity=true` and the job injects its *own* most recent output into each run. Recurring jobs normally start every run with amnesia — a news scout re-reports the same stories, a monitor re-alerts on the same condition. With continuity on, the job wakes up seeing what it reported last time and can dedupe and continue where it left off:
+
+```python
+cronjob(
+    action="create",
+    prompt="Scan HN and arXiv for new agent-tooling papers. Report only items NOT already covered in your previous run's output.",
+    schedule="every 6h",
+    continuity=True,
+    name="Agent Tooling Scout",
+)
+```
+
+The first run has no previous output, so the prompt runs as-is. Silent monitor ticks (`no_change`), empty output, and `wakeAgent=false` audit records are skipped when selecting context, so a quiet period preserves the latest substantive output. Audit files remain on disk. Error documents remain eligible to give the next run recovery context; this is not a success-only history filter. On later runs the previous output is prepended with continuity framing ("avoid repeating what was already reported"). It combines freely with upstream jobs (`context_from=["<other_job_id>"]` plus `continuity=true`), and `continuity=false` on update turns it off while preserving other `context_from` entries. Internally the flag is stored as the reserved `self` entry in `context_from`.
+
+From the CLI: `clawk cron create "every 6h" "Scan for news" --continuity`, and `clawk cron edit <job_id> --continuity` / `--no-continuity` to toggle it on an existing job. The same toggle appears in the dashboard's cron editor and the desktop Bot Mode routine dialog.
 
 **When to use it:**
 
-
-
 - Multi-stage pipelines (collect → filter → format → deliver)
-
 - Dependent tasks where step N's work depends on step N−1's output
-
 - Fan-out/fan-in patterns where one job aggregates results from several others
-
-
+- Recurring scouts/monitors that should dedupe against their own previous report (`continuity=true`)
 
 ## Provider recovery
 
+If the primary API key is rate-limited or the provider returns an error, the cron agent can:
 
+- **Rotate to the next credential** in your [credential pool](../configuration.md#credential-pool-strategies) for the same provider. This applies to every job, pinned or not.
+- **Fall back to an alternate provider** from `fallback_providers` (or the legacy `fallback_model`) in `config.yaml` — **unpinned jobs only**. That covers a failure while resolving credentials before the run starts and a provider error mid-run.
 
-Cron jobs inherit your configured fallback providers and credential pool rotation. If the primary API key is rate-limited or the provider returns an error, the cron agent can:
+A job with its own `provider`, `model` or `base_url` (set with `--provider` / `--model`, `--pin`, the dashboard, or `jobs.json`) never falls back to the global chain. The pin says which route the job runs on, and a fallback entry is a different provider and usually a different model, so when the pinned route fails the run fails and the failure alert says so. This is the same rule [subagent delegation](./delegation.md) applies to a pinned child. To keep fallback for a job, leave it unpinned: it follows `cron.model` / `cron.model_provider` (or the main model) and walks the chain like any other unpinned job.
 
+Before this rule, a pinned job whose provider failed could run on the first working `fallback_providers` entry instead, with a one-line notice in its output. If you relied on that, unpin the job (`clawk cron edit <job_id> --unpin`) and set the model through `cron.model` instead.
 
+A single rate-limited key therefore does not fail a run that has another credential for the same provider, and unpinned jobs still survive a provider outage when a chain is configured.
 
-- **Fall back to an alternate provider** if you have `fallback_providers` (or the legacy `fallback_model`) configured in `config.yaml`
+## Run failures (`last_error`)
 
-- **Rotate to the next credential** in your [credential pool](/user-guide/configuration#credential-pool-strategies) for the same provider
+A failed agent run records a concise `last_error`, visible in job listings and `/cron list`
+with credential patterns and URL credentials redacted (including previously stored errors).
+This is separate from `last_fire_error` (scheduler handoff) and `last_delivery_error` (delivery).
+Those fields can correctly be empty when the agent itself failed.
 
+For a connection failure, inspect the run document under `cron/output/<job_id>/` in the active
+Clawksis home. Its `## Error` section includes the chained traceback, with credential patterns
+and URL credentials redacted. The file uses the existing private output-file permissions;
+traceback locals are not captured. Delivery notices and `last_error` retain the concise error,
+not the full traceback. Review diagnostics before sharing: redaction is not a guarantee that
+arbitrary application data is non-sensitive.
 
+## Missed scheduled fires (`last_fire_error`)
 
-This means cron jobs that run at high frequency or during peak hours are more resilient — a single rate-limited key won't fail the entire run.
+On hosted (managed-cron) deployments, a scheduled fire travels from the platform scheduler through the dashboard to the gateway's internal API server. If that final hand-off fails — the gateway process is down, or its API-server listener never started — the run never begins, so there is no execution record and no `last_status` to inspect. The tell-tale shape: the job works every time you trigger it manually, but never auto-fires.
 
+These misses are stamped on the job record as `last_fire_error` (timestamp + reason) and surfaced by:
 
+- `cronjob_manage` tool → `action: "list"` — the `last_fire_error` field
+- `clawk cron list`: a red missed-fire warning under the job
+- `clawk cron doctor`: a per-job missed-fire finding that makes the command exit `1`
+- The dashboard job view
+
+The stamp always reflects **current** auto-fire health: it is overwritten by newer misses and cleared automatically by the next successful run. If you see it, the job and its schedule are fine — the gateway side of the fire path needs attention (most commonly, restart the gateway through its supervisor so it loads the full profile environment: `clawk gateway restart`).
+
+### Local missed-run policy
+
+If the gateway was down (or restarting) when a recurring job's scheduled time
+passed, the job **catches up once** when the scheduler is back: a slot missed
+inside a restart gap fires exactly one time, a slot that already ran before the
+restart is never run again, and a long outage collapses into a single run rather
+than one run per missed slot. Paused jobs never catch up. Each catch-up shows in
+`clawk cron list` as `⚠ late` / `⚠ catch-up after missed fire`.
+
+To avoid that catch-up load after a planned gateway stop, set:
+
+```yaml
+cron:
+  catch_up_missed: false   # default: true
+```
+
+Or run `clawk config set cron.catch_up_missed false`. With this opt-out, a recurring
+job later than its existing grace window (half its period, clamped to 120 seconds–2
+hours) is re-anchored to its next future occurrence without firing now. The skip is
+logged. Jobs inside grace and explicit manual triggers still run normally; if the
+next occurrence cannot be computed, the existing run-once fallback is preserved.
+This does not change one-shot expiry, resume behavior, or the hosted-provider sweep
+below. There is no per-job override.
+
+### Misfire catch-up
+
+When an external scheduler provider is active (managed cron on hosted deployments), the gateway also runs a catch-up sweep: a job whose scheduled time passed with no fire delivered — and whose grace window has elapsed — is claimed and run locally, so an outage in the fire hand-off costs minutes instead of the whole day. The sweep is de-duplicated against late scheduler retries by the same store claim used for normal fires.
+
+```yaml
+cron:
+  misfire_grace_minutes: 10   # wait this long for the scheduler's own retries
+                              # before catching up locally; 0 disables catch-up
+```
+
+Local (built-in ticker) deployments don't need this — the ticker already picks up past-due jobs on its next tick.
 
 ## Schedule formats
 
 
-
 The agent's final response is automatically delivered — you do **not** need to include `send_message` in the cron prompt for that same destination. If a cron run calls `send_message` to the exact target the scheduler will already deliver to, Clawksis skips that duplicate send and tells the model to put the user-facing content in the final response instead. Use `send_message` only for additional or different targets.
-
-
 
 ### Relative delays (one-shot)
 
-
-
 ```text
-
-30m     → Run once in 30 minutes
-
-2h      → Run once in 2 hours
-
-1d      → Run once in 1 day
-
+in 30m  → Run once in 30 minutes
+in 2h   → Run once in 2 hours
+in 1d   → Run once in 1 day
 ```
-
-
 
 ### Intervals (recurring)
 
-
-
 ```text
-
+30m          → Every 30 minutes (bare durations are recurring)
 every 30m    → Every 30 minutes
-
 every 2h     → Every 2 hours
-
 every 1d     → Every day
-
+every hour   → Every hour (bare unit = 1)
 ```
 
+### Natural day/time schedules (recurring)
 
+```text
+every monday 9am         → Weekly, Mondays at 9:00 AM
+every day at 9am         → Daily at 9:00 AM
+weekdays at 9am          → Weekdays at 9:00 AM
+weekends at 10am         → Saturdays and Sundays at 10:00 AM
+daily at 7am             → Daily at 7:00 AM
+monday, wednesday at 9am → Mondays and Wednesdays at 9:00 AM
+```
+
+Times accept `9am`, `9:30pm`, `14:00`, bare 24-hour hours (`at 7`), `noon`, and `midnight`. These forms compile to cron expressions internally (they require the `croniter` package, installed by default).
 
 ### Cron expressions
 
-
-
 ```text
-
 0 9 * * *       → Daily at 9:00 AM
-
 0 9 * * 1-5     → Weekdays at 9:00 AM
-
+0 9 * * MON-FRI → Weekdays at 9:00 AM (named weekdays/months accepted)
 0 */6 * * *     → Every 6 hours
-
 30 8 1 * *      → First of every month at 8:30 AM
-
 0 0 * * 0       → Every Sunday at midnight
-
 ```
-
-
 
 ### ISO timestamps
 
-
-
 ```text
-
 2026-03-15T09:00:00    → One-time at March 15, 2026 9:00 AM
-
 ```
-
-
 
 ## Repeat behavior
 
-
-
 | Schedule type | Default repeat | Behavior |
-
 |--------------|----------------|----------|
-
-| One-shot (`30m`, timestamp) | 1 | Runs once |
-
+| One-shot (`in 30m`, timestamp) | 1 | Runs once |
 | Interval (`every 2h`) | forever | Runs until removed |
-
 | Cron expression | forever | Runs until removed |
 
-
-
 You can override it:
-
-
 
 ```python
 cronjob(
@@ -967,346 +912,207 @@ cronjob(
 )
 ```
 
-
-
 ## Managing jobs programmatically
-
-
 
 The agent-facing API is one tool:
 
-
-
 ```python
-
 cronjob(action="create", ...)
-
 cronjob(action="list")
-
 cronjob(action="update", job_id="...")
-
 cronjob(action="pause", job_id="...")
-
 cronjob(action="resume", job_id="...")
-
 cronjob(action="run", job_id="...")
-
 cronjob(action="remove", job_id="...")
-
 ```
-
-
 
 For `update`, pass `skills=[]` to remove all attached skills.
 
+### Manual runs are asynchronous
 
+`cronjob(action="run")` fires the job immediately **in the background** (like
+`delegate_task`): the tool call returns at once with a handle, and the job's
+outcome — success/failure, delivery target, next scheduled run, and an output
+excerpt — re-enters the conversation as a new message when the run finishes.
+The agent (and you) can keep working in the meantime, and a job that is
+already mid-run is refused with "already running" instead of double-firing.
+
+You can also pass `prompt` with `action="run"` to inject transient per-run
+context:
+
+```python
+cronjob(action="run", job_id="...", prompt="CONTEXT: focus on the EU region today")
+```
+
+The context is appended to the job's stored prompt under a `## Run Context`
+header for that single fire only — it is never persisted to the job
+definition, and it passes the same prompt-injection scan as stored prompts.
+
+Runtimes that can't receive detached results (one-shot `clawk -z`, `clawk
+cron run` from the CLI, cron child sessions, Kanban workers) fall back to
+synchronous execution automatically.
 
 ## Toolsets available to cron jobs
 
-
-
 Cron runs each job in a fresh agent session with no chat platform attached. By default the cron agent gets **the toolset you configured for the `cron` platform in `clawk tools`** — not the CLI default, not everything under the sun.
 
-
-
 ```bash
-
 clawk tools
-
 # → pick the "cron" platform in the curses UI
-
 # → toggle toolsets on/off just like you would for Telegram/Discord/etc.
-
 ```
-
-
 
 Tighter per-job control is available via the `enabled_toolsets` field on `cronjob.create` (or on an existing job via `cronjob.update`):
 
-
-
 ```text
-
 cronjob(action="create", name="weekly-news-summary",
-
         schedule="every sunday 9am",
-
         enabled_toolsets=["web", "file"],      # just web + file, no terminal/browser/etc.
-
         prompt="Summarize this week's AI news: ...")
-
 ```
 
+When `enabled_toolsets` is set on a job it wins; otherwise the `clawk tools` cron-platform config wins; otherwise Clawksis falls back to the built-in defaults. If the cron-platform toolset config cannot be read at all (for example a malformed `platform_toolsets` block in `config.yaml`), the run fails with a recorded error instead of quietly running with every tool — check `clawk cron list` / `clawk cron doctor`. This matters for cost control: carrying `browser`, `delegation` into every tiny "fetch news" job bloats the tool-schema prompt on every LLM call.
 
-
-When `enabled_toolsets` is set on a job it wins; otherwise the `clawk tools` cron-platform config wins; otherwise Clawksis falls back to the built-in defaults. This matters for cost control: carrying `moa`, `browser`, `delegation` into every tiny "fetch news" job bloats the tool-schema prompt on every LLM call.
-
-
+If the job drives a site you're logged into, the login has to be in place before the run — a scheduled tick has nobody to answer a prompt. [Scheduled and unattended runs](./browser.md#scheduled-and-unattended-runs) covers that setup.
 
 ### Skipping the agent entirely: `wakeAgent`
 
-
-
 If your cron job attaches a pre-check script (via `script=`), the script can decide at runtime whether Clawksis should even invoke the agent. Emit a final stdout line of the form:
 
-
-
 ```text
-
 {"wakeAgent": false}
-
 ```
-
-
 
 …and cron skips the agent run entirely for this tick. Useful for frequent polls (every 1–5 min) that only need to wake the LLM when state actually changed — otherwise you pay for zero-content agent turns over and over.
 
-
-
 ```python
 # pre-check script
-
 import json, sys
-
 latest = fetch_latest_issue_count()
-
 prev = read_state("issue_count")
-
 if latest == prev:
     print(json.dumps({"wakeAgent": False}))  # skip this tick
-
     sys.exit(0)
-
 write_state("issue_count", latest)
-
 print(json.dumps({"wakeAgent": True, "context": {"new_issues": latest - prev}}))
 ```
 
-
-
 When `wakeAgent` is omitted, the default is `true` (wake the agent as usual).
-
-
 
 #### Recipes: cheap pre-run gates
 
-
-
 The `wakeAgent` gate gives you a $0 way to decide whether a scheduled job should spend any LLM tokens at all. Three patterns cover most use cases.
-
-
 
 **File-change gate** — only run when a watched file has new content since the last successful tick. The scheduler records each job's `last_run_at`; compare it against the file's mtime.
 
-
-
 ```bash
-
-#!/bin/bash
-
+#!/usr/bin/env bash
 # ~/.clawksis/scripts/feed-changed.sh
-
 FEED="$HOME/data/feed.json"
 
 STATE="$HOME/.clawksis/scripts/.feed-changed.last"
-
 test -f "$FEED" || { echo '{"wakeAgent": false}'; exit 0; }
-
 mtime=$(stat -c %Y "$FEED")
-
 last=$(cat "$STATE" 2>/dev/null || echo 0)
-
 if [ "$mtime" -le "$last" ]; then
-
   echo '{"wakeAgent": false}'
-
 else
-
   echo "$mtime" > "$STATE"
-
   echo '{"wakeAgent": true}'
-
 fi
-
 ```
-
-
 
 ```text
-
 cronjob(action="create", name="process-feed",
-
         schedule="every 30m",
-
         script="feed-changed.sh",
-
         prompt="A new ~/data/feed.json has landed. Summarize what changed.")
-
 ```
-
-
 
 **External-flag gate** — only run when some other process has signalled readiness (e.g. a deploy hook drops a file, a CI job sets a value in your state store).
 
-
-
 ```bash
-
-#!/bin/bash
-
+#!/usr/bin/env bash
 # ~/.clawksis/scripts/flag-ready.sh
-
-if test -f /tmp/new-data-ready; then
-
-  rm -f /tmp/new-data-ready
-
+if test -f ~/.clawksis/cache/scratch/new-data-ready; then
+  rm -f ~/.clawksis/cache/scratch/new-data-ready
   echo '{"wakeAgent": true}'
-
 else
-
   echo '{"wakeAgent": false}'
-
 fi
-
 ```
-
-
 
 ```text
-
 cronjob(action="create", name="nightly-analysis",
-
         schedule="0 9 * * *",
-
         script="flag-ready.sh",
-
         prompt="Run the nightly analysis over today's batch.")
-
 ```
-
-
 
 **SQL-count gate** — only run when there are new rows to process in your own database. The script can also pass the count through to the agent via `context`, so the agent knows how much it's looking at without re-querying.
 
-
-
 ```python
 #!/usr/bin/env python
-
 # ~/.clawksis/scripts/new-rows.py
-
 import json, sqlite3
-
 conn = sqlite3.connect("/home/me/data/app.db")
-
 n = conn.execute(
     "SELECT COUNT(*) FROM messages WHERE ts > strftime('%s','now','-2 hours')"
 ).fetchone()[0]
-
 if n < 1:
     print(json.dumps({"wakeAgent": False}))
-
 else:
     print(json.dumps({"wakeAgent": True, "context": {"new_rows": n}}))
 ```
 
-
-
 ```text
-
 cronjob(action="create", name="summarize-new-msgs",
-
         schedule="every 2h",
-
         script="new-rows.py",
-
         prompt="Summarize the new messages from the last 2 hours.")
-
 ```
-
-
 
 The same pattern works for any data source you can query from a script — Postgres, an HTTP API, your own state store — without baking a SQL evaluator into the cron subsystem.
 
-
-
 :::tip
-
 Clawksis's own `~/.clawksis/state.db` is an internal schema that changes between releases. Don't query it from a pre-run gate — point at your own database or feed instead.
-
 :::
-
-
 
 Credit: this recipe set was prompted by @iankar8's exploration in [#2654](https://github.com/samuelgradientai-sys/clawksis-agent/pull/2654), which proposed adding sql/file/command triggers as a parallel mechanism. The `script` + `wakeAgent` gate already covers all three cases at $0, so the work landed as documentation instead.
 
-
-
 ### Chaining jobs: `context_from`
-
-
 
 A cron job can consume the most recent successful output of one or more other jobs by listing their names (or IDs) in `context_from`:
 
-
-
 ```text
-
 cronjob(action="create", name="daily-digest",
-
         schedule="every day 7am",
-
         context_from=["ai-news-fetch", "github-prs-fetch"],
-
         prompt="Write the daily digest using the outputs above.")
-
 ```
-
-
 
 The referenced jobs' most recent completed outputs are injected above the prompt as context for this run. Each upstream entry must be a valid job ID or name (see `cronjob action="list"`). Note: chaining reads the *most recent completed* output — it does not wait for upstream jobs that are running in the same tick.
 
-
-
 ## Job storage
-
-
 
 Jobs are stored in `~/.clawksis/cron/jobs.json`. Output from job runs is saved to `~/.clawksis/cron/output/{job_id}/{timestamp}.md`.
 
-
-
 Jobs may store `model` and `provider` as `null`. When those fields are omitted, Clawksis resolves them at execution time from the global configuration. They only appear in the job record when a per-job override is set.
 
-
+A per-job `base_url` override needs an explicit `provider`. For a provider with a stored key (a named custom provider or a built-in one), the override must have the same origin as that provider's configured endpoint: the same scheme, host and port. Another scheme, port or subdomain is refused, so the stored key is only ever sent where you configured it. A bare `provider: custom` takes any `base_url` that no stored key goes with. When a stored key matches the URL's hostname (for example `DEEPSEEK_API_KEY` for `api.deepseek.com`), the same rule applies: the `base_url` must have the origin of an endpoint you configured or of a built-in provider.
 
 The storage uses atomic file writes so interrupted writes do not leave a partially written job file behind.
 
-
-
 ## Self-contained prompts still matter
 
-
-
 :::warning Important
-
 Cron jobs run in a completely fresh agent session. The prompt must contain everything the agent needs that is not already provided by attached skills.
-
 :::
-
-
 
 **BAD:** `"Check on that server issue"`
 
-
-
 **GOOD:** `"SSH into server 192.168.1.100 as user 'deploy', check if nginx is running with 'systemctl status nginx', and verify https://example.com returns HTTP 200."`
-
-
 
 ## Security
 
-
-
 Scheduled task prompts are scanned for prompt-injection and credential-exfiltration patterns at creation and update time. Prompts containing invisible Unicode tricks, SSH backdoor attempts, or obvious secret-exfiltration payloads are blocked.
-

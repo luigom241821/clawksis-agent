@@ -6,6 +6,10 @@ description: "Frequently asked questions and solutions to common issues with Cla
 
 # FAQ & Troubleshooting
 
+Python dependency commands on this page use a
+[PM-prepared source checkout](./package-management.md#developer-workflow).
+After a dependency change, reactivate the checkout and restart Clawksis.
+
 Quick answers and fixes for the most common questions and issues.
 
 ---
@@ -17,7 +21,7 @@ Quick answers and fixes for the most common questions and issues.
 Clawksis works with any OpenAI-compatible API. Supported providers include:
 
 - **[OpenRouter](https://openrouter.ai/)** — access hundreds of models through one API key (recommended for flexibility)
-- **[Nous Portal](/integrations/nous-portal)** — Nous Research's subscription gateway — 300+ models plus web/image/TTS/browser through one OAuth login (recommended for newcomers)
+- **[Nous Portal](../integrations/nous-portal.md)** — Nous Research's subscription gateway — 300+ models plus web/image/TTS/browser through one OAuth login (recommended for newcomers)
 - **OpenAI** — GPT-5.4, GPT-5-codex, GPT-4.1, GPT-4o, etc.
 - **Anthropic** — Claude models (direct API, OAuth via `clawk auth add anthropic`, OpenRouter, or any compatible proxy)
 - **Google** — Gemini models (direct API via `gemini` provider, the `google-gemini-cli` OAuth provider, OpenRouter, or compatible proxy)
@@ -28,21 +32,8 @@ Clawksis works with any OpenAI-compatible API. Supported providers include:
 
 Set your provider with `clawk model` or by editing `~/.clawksis/.env`. See the [Environment Variables](./environment-variables.md) reference for all provider keys.
 
-### Does it work on Windows?
-
-**Yes, natively.** Clawksis supports native Windows via the PowerShell installer — no WSL required. Run in PowerShell:
-
-```powershell
-iex (irm https://clawksis-agent.nousresearch.com/install.ps1)
-```
-
-The installer provisions a PortableGit that backs the terminal tool's shell. See the [Windows (Native) Guide](../user-guide/windows-native.md) for details.
-
-WSL2 remains a fully supported alternative. To run Clawksis inside WSL2, install [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) and use the standard install command:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
-```
+### Does it work on Windows/Android/my platform??
+See **[Platform Support](../getting-started/platform-support.md)** for the full platform availability matrix.
 
 ### I run Clawksis in WSL2. What's the best way to control my normal Windows Chrome?
 
@@ -171,20 +162,19 @@ ls ~/.local/bin/clawk
 The installer adds `~/.local/bin` to your PATH. If you use a non-standard shell config, add `export PATH="$HOME/.local/bin:$PATH"` manually.
 :::
 
-#### Python version too old
+#### Unsupported Python version
 
-**Cause:** Clawksis requires Python 3.11 or newer.
+Current first-party installations require **Python 3.14**, not an arbitrary
+newer version. The `>=3.11,<3.15` range in `pyproject.toml` allows older
+installations to run the updater before switching to 3.14; it does not mean
+the current runtime supports 3.11–3.13. The installer and packaged
+distributions provide their pinned interpreter.
 
-**Solution:**
-```bash
-python3 --version   # Check current version
-
-# Install a newer Python
-sudo apt install python3.12   # Ubuntu/Debian
-brew install python@3.12      # macOS
-```
-
-The installer handles this automatically — if you see this error during manual installation, upgrade Python first.
+For a manual source environment, use the
+[development setup](../developer-guide/contributing.md#development-setup).
+Do not replace the interpreter inside an installed app or container.
+For a managed-install error, run `clawk doctor` and use that installation's
+[update method](../getting-started/updating.md).
 
 #### Terminal commands say `node: command not found` (or `nvm`, `pyenv`, `asdf`, …)
 
@@ -205,6 +195,8 @@ terminal:
 ```
 
 Missing files are skipped silently. Sourcing happens in bash, so files that rely on zsh-only syntax may error — if that's a concern, source just the PATH-setting portion (e.g. nvm's `nvm.sh` directly) rather than the whole rc file.
+
+Independently of the init files, every terminal command's `PATH` is completed with the standard system directories (`/usr/local/bin`, `/opt/homebrew/bin`, …), the Clawksis-managed runtime dirs, and `~/.local/bin` when it exists (the `pip --user` / `pipx` / `uv tool` install target) — appended after your own entries, so precedence is unchanged. This covers backends started with a thin non-interactive PATH (systemd, GUI launchers, the Desktop SSH remote backend) without any configuration.
 
 To disable the auto-source behaviour (strict login-shell semantics only):
 
@@ -239,6 +231,43 @@ curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent
 ---
 
 ### Provider & Model Issues
+
+#### The agent says "Clawksis policy" or "Clawksis guardrails" refused my request
+
+A model cannot reliably identify why it refused a request. If the refusal appears only in the assistant's prose, its claim that a hidden Clawksis runtime policy caused it may be a hallucinated explanation or a restriction applied by the selected model or provider.
+
+Clawksis enforcement is explicit: a blocked tool action returns a tool error naming the denied command or path, and an approval-required action shows an approval prompt. Clawksis does not silently turn those execution controls into a general content-refusal layer. Provider-level controls can still apply when configured, such as Amazon Bedrock Guardrails.
+
+To isolate the source:
+
+1. Run `/status` to confirm the active model and provider.
+2. Check whether the refusal includes an actual Clawksis tool error or approval prompt. If it is prose only, do not treat the model's attribution as runtime evidence.
+3. Retry in a fresh session with another configured model or provider. A refusal that changes with the model is model/provider behavior, not a Clawksis execution control.
+4. If an explicit tool error appears, use its exact text when reporting the problem.
+
+See [Security](../user-guide/security.md) for Clawksis' documented execution controls and [Providers](../integrations/providers.md) for provider configuration.
+
+#### "…refused this request because of a policy on your account"
+
+**Meaning:** the provider rejected the request for an account-level reason that retrying cannot change — an aggregator's data/privacy settings excluded every endpoint for the model, or the model's upstream provider has blocked the account (for example `this user has been blocked for a previous policy violation`, which OpenRouter can relay inside an otherwise successful HTTP 200 stream). Clawksis sends the request once, does not retry it or rotate credentials, and moves to your fallback chain if one is configured.
+
+**Solution:** check the account's status and data/privacy settings with the provider named in the reply, or switch to another model or provider with `/model`. `clawk fallback add` routes future blocks to a backup automatically.
+
+#### "Could not open a stream to `<host>` after N attempts (request X KB)"
+
+**Meaning:** every connect attempt to that endpoint failed before a single stream event arrived, so nothing was billed; the normal retry/fallback chain still runs afterwards. The line names the host actually contacted, how many attempts were made, and the serialized request size — the three things that separate an outage from a request-size limit.
+
+**Solution:** if the request is large (hundreds of KB — long coding sessions reach this once the context grows) and short new chats work, the endpoint or a proxy in front of it is likely rejecting bodies that size: raise its body limit, or run `/compress` to shrink the context. If the request is small, the endpoint is unreachable — check the `base_url`, then retry with `/retry`. `logs/agent.log` records the exception chain for each attempt.
+
+#### Messaging replies: "interrupted mid-request" vs "not running or is unreachable" vs "could not reach"
+
+Chat surfaces (Telegram, Discord, Slack, …) never show the raw transport exception; the gateway maps it to one of three short replies, and the difference tells you where to look:
+
+| Reply | What happened | What to do |
+|---|---|---|
+| "The connection to the AI model service was **interrupted mid-request** — usually transient." | An established connection was cut (`Connection reset by peer`, EOF, `RemoteProtocolError`). The endpoint answered the connect, so it is running. | `/retry`. If it recurs on large requests, see the "stream" entry above. |
+| "The AI model service isn't reachable right now — the configured model endpoint is **not running or is unreachable**." | Nothing accepted the connection (`Connection refused`, no route to host, DNS failure). | Start the model server / check `base_url`, then `/retry`; `clawk doctor` on the host. |
+| "Clawksis **could not reach** the AI model service (no further detail from the SDK)." | The SDK reported a generic `APIConnectionError` and kept no cause; neither of the above is certain. | `/retry`; `clawk doctor` if it persists. The raw exception is in `clawk logs`. |
 
 #### `/model` only shows one provider / can't switch providers
 
@@ -296,7 +325,7 @@ Make sure the key matches the provider. An OpenAI key won't work with OpenRouter
 clawk model
 
 # Set a valid model
-clawk config set CLAWK_MODEL anthropic/claude-opus-4.7
+clawk config set model.default anthropic/claude-opus-4.7
 
 # Or specify per-session
 clawk chat --model openrouter/meta-llama/llama-3.1-70b-instruct
@@ -331,6 +360,10 @@ If this happens on the first long conversation, Clawksis may have the wrong cont
 
 Look at the CLI startup line — it shows the detected context length (e.g., `📊 Context limit: 128000 tokens`). You can also check with `/usage` during a session.
 
+**Local servers (llama.cpp, Ollama) that go silent instead of erroring:** when a provider rejects a request as too large, Clawksis compacts the conversation and rebuilds the request. Clawksis re-measures the *complete* rebuilt request (system prompt + tool schemas + messages) before retrying, and runs further bounded compaction passes if it is still over the threshold. If the request still cannot fit, the turn ends with `Context length exceeded: compression could not reduce the rebuilt request below the safe threshold` rather than sending an oversized request that llama.cpp would silently truncate (`stop processing: n_tokens = 65535, truncated = 1` in the server log). If you hit that message, the fix is almost always the configured `context_length` above: make it match the server's actual `-c` / `--ctx-size`.
+
+**"The model server rejected this request as too large, but this conversation is only about N tokens…":** a local server (localhost, LAN, Tailscale) said "context exceeded" without quoting any measurement, while Clawksis's own estimate of the request is far below the window it knows for the model — so it does **not** compress or blame the conversation, and the turn stays retryable. On single-slot local servers (LM Studio, Ollama) this is almost always another request holding the server's context at that moment — typically a background memory review from an earlier session (`thread=bg-review` in `logs/agent.log`). Wait a moment and `/retry`. If it recurs with no other Clawksis process running, the server is loading the model with a smaller window than Clawksis assumes: raise the server's context setting or lower `model.context_length` to match it. Hosted providers never get this message: they have no shared slot to wait out, so the same rejection there means the route's real window is smaller than Clawksis assumes, and Clawksis compresses and retries instead.
+
 To fix context detection, set it explicitly:
 
 ```yaml
@@ -340,16 +373,18 @@ model:
   context_length: 131072  # your model's actual context window
 ```
 
-Or for custom endpoints, add it per-model:
+Or for custom endpoints, add it per-model on the provider entry:
 
 ```yaml
-custom_providers:
-  - name: "My Server"
-    base_url: "http://localhost:11434/v1"
+providers:
+  my-server:
+    api: "http://localhost:11434/v1"
     models:
       qwen3.5:27b:
         context_length: 64000
 ```
+
+(Older configs use the legacy `custom_providers:` list — still supported and auto-migrated to `providers:`.)
 
 See [Context Length Detection](../integrations/providers.md#context-length-detection) for how auto-detection works and all override options.
 
@@ -445,7 +480,7 @@ Configure in `~/.clawksis/config.yaml` under your gateway's settings. See the [M
 **Solution:**
 ```bash
 # Install core messaging gateway dependencies
-pip install "clawksis-agent[messaging]"  # Telegram, Discord, Slack, and shared gateway deps
+cd ~/.clawksis/clawksis-agent && python -c "import pm; pm.sync_venv(['messaging'], explicit=True)"  # Telegram, Discord, Slack, and shared gateway deps
 
 # Check for port conflicts
 lsof -i :8080
@@ -527,12 +562,18 @@ You can verify the plist has the correct PATH:
 
 **Solution:**
 ```bash
+# See exactly what the fixed prompt costs — breakdown by block
+# (system prompt, skills index, memory, tool schemas). Runs offline.
+clawk prompt-size
+
 # Compress the conversation to reduce tokens
 /compress
 
 # Check session token usage
 /usage
 ```
+
+If the baseline looks high before you've typed anything, that's the fixed prompt budget — the system prompt plus tool schemas sent on every call. Run [`clawk prompt-size`](./cli-commands.md#clawk-prompt-size) to measure it, then trim: disable toolsets you don't use (`clawk tools`) and uninstall or disable skills you don't need (`clawk skills`).
 
 :::tip
 Use `/compress` regularly during long sessions. It summarizes the conversation history and reduces token usage significantly while preserving context.
@@ -565,14 +606,14 @@ clawk chat --continue
 **Solution:**
 ```bash
 # Ensure MCP dependencies are installed (already included in standard install)
-cd ~/.clawksis/clawksis-agent && uv pip install -e ".[mcp]"
+cd ~/.clawksis/clawksis-agent && python -c "import pm; pm.sync_venv(['mcp'], explicit=True)"
 
 # For npm-based servers, ensure Node.js is available
 node --version
 npx --version
 
 # Test the server manually
-npx -y @modelcontextprotocol/server-filesystem /tmp
+npx -y @modelcontextprotocol/server-filesystem /path/to/allowed/dir
 ```
 
 Verify your `~/.clawksis/config.yaml` MCP configuration:
@@ -603,9 +644,9 @@ clawk chat
 ```
 
 See also:
-- [MCP (Model Context Protocol)](/user-guide/features/mcp)
-- [Use MCP with Clawksis](/guides/use-mcp-with-clawk)
-- [MCP Config Reference](/reference/mcp-config-reference)
+- [MCP (Model Context Protocol)](../user-guide/features/mcp.md)
+- [Use MCP with Clawksis](../guides/use-mcp-with-clawk.md)
+- [MCP Config Reference](./mcp-config-reference.md)
 
 #### MCP timeout errors
 
@@ -619,6 +660,16 @@ See also:
 :::warning
 If an MCP server crashes mid-request, Clawksis will report a timeout. Check the server's own logs (not just Clawksis logs) to diagnose the root cause.
 :::
+
+---
+
+### Skills Issues
+
+#### The Skills Hub page won't load in the desktop app (403 / blocked)
+
+**Cause:** The docs site (`clawksis-agent.nousresearch.com`) is served through Vercel, whose WAF denies some residential IP ranges it considers flagged. If your network is on such a range, every request to the domain returns a 403 block page.
+
+**Solution:** The Skills Hub picker probes the primary domain and automatically falls back to the equivalent GitHub Pages deployment (`nousresearch.github.io/clawksis-agent`), which serves the same catalog. If the page still fails on both origins, check whether a proxy, DNS filter, or firewall is blocking both hosts — and report the affected range to the maintainers so it can be reviewed on the deployment side.
 
 ---
 
@@ -636,6 +687,8 @@ No. Each messaging platform (Telegram, Discord, etc.) requires exclusive access 
 
 No. Each profile has its own memory store, session database, and skills directory. They are completely isolated. If you want to start a new profile with existing memories and sessions, use `clawk profile create newname --clone-all` to copy everything from the current profile, or add `--clone-from <profile>` to copy from a specific source profile.
 
+This isolation is also the reason to never run two agents against the *same* profile or Clawksis home: both write memory automatically and each loads the other's writes at session start, so their stored state degrades with every session. One agent per profile; for genuinely shared memory across agents, use an [external memory provider](../user-guide/features/memory-providers.md).
+
 ### What happens when I run `clawk update`?
 
 `clawk update` pulls the latest code and reinstalls dependencies **once** (not per-profile). It then syncs updated skills to all profiles automatically. You only need to run `clawk update` once — it covers every profile on the machine.
@@ -643,7 +696,7 @@ No. Each profile has its own memory store, session database, and skills director
 
 ### How many profiles can I run?
 
-There is no hard limit. Each profile is just a directory under `~/.clawksis/profiles/`. The practical limit depends on your disk space and how many concurrent gateways your system can handle (each gateway is a lightweight Python process). Running dozens of profiles is fine; each idle profile uses no resources.
+There is no hard limit. Each profile is a directory under `~/.clawksis/profiles/` that carries at least one identity file (`config.yaml`, `.env`, `SOUL.md`, `profile.yaml`, `auth.json` or `state.db`); a bare directory without one (a leftover from a log rotation or cron tick) is not a profile — it is not listed or served, `-p <name>` reports it as missing, and `clawk profile create <name>` refuses to overwrite it until you move or remove it. The practical limit depends on your disk space and how many concurrent gateways your system can handle (each gateway is a lightweight Python process). Running dozens of profiles is fine; each idle profile uses no resources.
 
 ---
 
@@ -766,7 +819,9 @@ Skills with very long descriptions are truncated to 40 characters in the Telegra
    ```bash
    clawk backup
    ```
-   This creates a zip of your entire `~/.clawksis/` directory — config, API keys, memories, skills, sessions, and profiles — saved to your home directory as `~/clawk-backup-<timestamp>.zip`.
+   This saves a zip archive at `~/clawk-backup-<timestamp>.zip`.
+   The full backup covers configuration, credentials, memories, skills, sessions,
+   and profiles under the Clawksis data root. It is not an application or runtime image.
 
 3. Copy the zip to the new machine and import it:
    ```bash
@@ -793,15 +848,31 @@ clawk profile import ./work-backup.tar.gz work
 
 The imported profile will have all config, memories, sessions, and skills from the export. You may need to update paths or re-authenticate with providers if the new machine has a different setup.
 
-### `clawk backup` vs `clawk profile export`
+### `clawk backup` vs `clawk profile export` {#clawk-backup-vs-clawk-profile-export}
 
 | Feature | `clawk backup` | `clawk profile export` |
 | :--- | :--- | :--- |
 | **Use Case** | **Full machine migration** | **Porting/sharing a specific profile** |
-| **Scope** | Global (entire `~/.clawksis` directory) | Local (single profile directory) |
+| **Scope** | Clawksis data root, with the exclusions listed below | Single profile directory |
 | **Includes** | All profiles, global config, API keys, sessions | Single profile: SOUL.md, memories, sessions, skills |
 | **Credentials** | **Included** (`.env` and `auth.json`) | **Excluded** (stripped for safe sharing) |
 | **Format** | `.zip` | `.tar.gz` |
+
+The full backup excludes:
+
+- The source checkout, dependency environments, and downloaded tools, models, and runtimes.
+- Build caches, checkpoints, previous backups, and quick snapshots.
+- Browser profiles, including copies of real-browser credentials.
+- Bytecode, SQLite sidecars, `gateway.pid`, `cron.pid`, and `.backup.lock`.
+
+`clawk backup --quick` saves selected state files instead of a full archive.
+It is not a replacement for the full backup before a machine migration.
+
+Full backups report files that fail to copy. An archive can therefore exist
+with missing data. Review the skipped-file report before you remove the source installation.
+Restored package declarations let PM download dependencies again. Bytecode and
+SQLite sidecars regenerate locally. The exclusions do not remove `.env` or
+`auth.json` from the full backup.
 
 **Manual fallback (rsync):** If you prefer to copy files directly, exclude the code repo:
 ```bash

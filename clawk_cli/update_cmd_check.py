@@ -206,9 +206,9 @@ def report_shallow_verdict(git_cmd: list[str], root: Path, compare_branch: str) 
         return
     if counted is not None:
         commits_word = "commit" if counted == 1 else "commits"
-        print(f"⚕ Update available: {counted} {commits_word} behind {compare_branch}.")
+        print(f"∇ Update available: {counted} {commits_word} behind {compare_branch}.")
     else:
-        print(f"⚕ Update available (behind {compare_branch}).")
+        print(f"∇ Update available (behind {compare_branch}).")
     print(f"  Run '{recommended_update_command()}' to install.")
 
 
@@ -219,7 +219,7 @@ def report_rev_list_verdict(git_cmd: list[str], root: Path, compare_branch: str)
         print("✓ Already up to date.")
         return
     commits_word = "commit" if behind == 1 else "commits"
-    print(f"⚕ Update available: {behind} {commits_word} behind {compare_branch}.")
+    print(f"∇ Update available: {behind} {commits_word} behind {compare_branch}.")
     from clawk_cli.config import recommended_update_command
 
     print(f"  Run '{recommended_update_command()}' to install.")
