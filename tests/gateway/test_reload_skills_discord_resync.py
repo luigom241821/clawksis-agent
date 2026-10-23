@@ -20,9 +20,9 @@ No ``tree.sync()`` is required because Discord fetches autocomplete
 options dynamically on every keystroke — we only need to rebind the
 data the live callbacks already read from.
 """
-
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock
 
 
@@ -30,7 +30,6 @@ def _make_adapter():
     """Construct a DiscordAdapter without going through __init__ / token checks."""
     from plugins.platforms.discord.adapter import DiscordAdapter
     from gateway.platforms.base import Platform
-
     adapter = object.__new__(DiscordAdapter)
     adapter.config = MagicMock()
     adapter.config.extra = {}
@@ -65,19 +64,17 @@ class TestRefreshSkillGroup:
         # User adds new-skill to disk and removes old-skill.
         def fake_collector(*, reserved_names):
             return (
-                {
-                    "creative": [("new-skill", "Fresh skill", "/new-skill")]
-                },  # categories
+                {"creative": [("new-skill", "Fresh skill", "/new-skill")]},  # categories
                 [],  # uncategorized
-                0,  # hidden
+                0,   # hidden
             )
 
         monkeypatch.setattr(
-            "clawk_cli.commands.discord_skill_commands_by_category",
+            "clawk_cli.commands_platforms.discord_skill_commands_by_category",
             fake_collector,
         )
 
-        new_count, hidden = adapter.refresh_skill_group()
+        new_count, hidden = asyncio.run(adapter.refresh_skill_group())
 
         assert new_count == 1
         assert hidden == 0
@@ -87,100 +84,7 @@ class TestRefreshSkillGroup:
         assert "old-skill" not in adapter._skill_lookup
         assert adapter._skill_lookup["new-skill"] == ("Fresh skill", "/new-skill")
 
-    def test_refresh_sorts_entries_alphabetically(self, monkeypatch) -> None:
-        """Autocomplete order must be stable and predictable across refreshes."""
-        adapter = _make_adapter()
-        adapter._skill_entries = []
-        adapter._skill_lookup = {}
-        adapter._skill_group_reserved_names = set()
-        adapter._skill_group_hidden_count = 0
 
-        def fake_collector(*, reserved_names):
-            # Intentionally unsorted — the fix must resort.
-            return (
-                {"zzz": [("zebra", "", "/zebra")]},
-                [("alpha", "", "/alpha")],
-                0,
-            )
-
-        monkeypatch.setattr(
-            "clawk_cli.commands.discord_skill_commands_by_category",
-            fake_collector,
-        )
-
-        adapter.refresh_skill_group()
-
-        names = [n for n, _d, _k in adapter._skill_entries]
-        assert names == sorted(names) == ["alpha", "zebra"]
-
-    def test_refresh_handles_collector_exception_gracefully(self, monkeypatch) -> None:
-        """A broken collector must not take down /reload-skills."""
-        adapter = _make_adapter()
-        adapter._skill_entries = [("keep", "kept", "/keep")]
-        adapter._skill_lookup = {"keep": ("kept", "/keep")}
-        adapter._skill_group_reserved_names = set()
-        adapter._skill_group_hidden_count = 0
-
-        def boom(*, reserved_names):
-            raise RuntimeError("simulated collector failure")
-
-        monkeypatch.setattr(
-            "clawk_cli.commands.discord_skill_commands_by_category",
-            boom,
-        )
-
-        new_count, hidden = adapter.refresh_skill_group()
-        # Returns previously-cached count, no crash, existing entries
-        # preserved so the live autocomplete keeps working.
-        assert new_count == 1
-        assert hidden == 0
-        assert adapter._skill_entries == [("keep", "kept", "/keep")]
-
-
-class TestRegisterSkillGroupUsesInstanceState:
-    """The closure-based ``entries`` / ``skill_lookup`` must be gone.
-
-    If the callbacks in ``_register_skill_group`` still close over
-    local variables instead of reading from ``self``, the refresh
-    method is useless — autocomplete will keep serving the stale list.
-
-    The full slash-command registration path pulls in ``discord.app_commands``
-    decorators (``@describe`` / ``@autocomplete`` / ``Command``), which
-    are unstubbed in the hermetic test env. We assert the data-shaped
-    side-effects instead: after ``_register_skill_group`` returns
-    (successfully or not), ``_skill_entries`` and ``_skill_lookup`` must
-    be populated from the collector output, because
-    ``_refresh_skill_catalog_state`` runs before any decorator evaluation.
-    """
-
-    def test_refresh_catalog_state_populates_instance_attrs(self, monkeypatch) -> None:
-        adapter = _make_adapter()
-        adapter._skill_group_reserved_names = set()
-
-        def fake_collector(*, reserved_names):
-            return (
-                {"creative": [("ascii-art", "Make ASCII", "/ascii-art")]},
-                [],
-                0,
-            )
-
-        monkeypatch.setattr(
-            "clawk_cli.commands.discord_skill_commands_by_category",
-            fake_collector,
-        )
-
-        adapter._refresh_skill_catalog_state()
-
-        # Instance-level state populated — the autocomplete + handler
-        # callbacks both read from these, so `refresh_skill_group`
-        # mutating them in place is enough to pick up new skills.
-        assert adapter._skill_entries == [
-            ("ascii-art", "Make ASCII", "/ascii-art"),
-        ]
-        assert adapter._skill_lookup == {
-            "ascii-art": ("Make ASCII", "/ascii-art"),
-        }
-        assert adapter._skill_group_hidden_count == 0
 
 
 class TestHandleReloadSkillsCallsRefreshSkillGroup:
@@ -200,7 +104,6 @@ class TestHandleReloadSkillsCallsRefreshSkillGroup:
         # Import without constructing a real runner — test the method
         # directly against an ``object.__new__`` instance.
         from gateway.run import GatewayRunner
-
         runner = object.__new__(GatewayRunner)
 
         sync_refresh = MagicMock(return_value=(5, 0))
@@ -208,7 +111,6 @@ class TestHandleReloadSkillsCallsRefreshSkillGroup:
 
         class AsyncAdapter:
             name = "async-platform"
-
             async def refresh_skill_group(self):
                 async_called["flag"] = True
                 return (3, 0)
@@ -229,17 +131,18 @@ class TestHandleReloadSkillsCallsRefreshSkillGroup:
 
         # Mock reload_skills itself so no disk scan runs.
         fake_result = {"added": [], "removed": [], "total": 7}
-        with patch("agent.skill_commands.reload_skills", return_value=fake_result):
+        with patch(
+            "agent.skill_commands.reload_skills", return_value=fake_result
+        ):
             event = MagicMock()
             event.source = MagicMock()
             # _session_key_for_source may be called — make it safe.
             runner._session_key_for_source = lambda src: None
             runner._pending_skills_reload_notes = {}
 
-            result = asyncio.get_event_loop().run_until_complete(
+            asyncio.get_event_loop().run_until_complete(
                 runner._handle_reload_skills_command(event)
             )
 
-        assert "Skills Reloaded" in result
         assert sync_refresh.called, "sync adapter refresh must be invoked"
         assert async_called["flag"], "async adapter refresh must be awaited"

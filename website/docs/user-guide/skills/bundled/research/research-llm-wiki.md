@@ -21,7 +21,7 @@ Karpathy's LLM Wiki: build/query interlinked markdown KB.
 | License | MIT |
 | Platforms | linux, macos, windows |
 | Tags | `wiki`, `knowledge-base`, `research`, `notes`, `markdown`, `rag-alternative` |
-| Related skills | [`obsidian`](/docs/user-guide/skills/bundled/note-taking/note-taking-obsidian), [`arxiv`](/docs/user-guide/skills/bundled/research/research-arxiv) |
+| Related skills | [`obsidian`](../../bundled/note-taking/note-taking-obsidian.md), [`arxiv`](../../bundled/research/research-arxiv.md) |
 
 ## Reference: full SKILL.md
 
@@ -343,7 +343,6 @@ When the user asks to lint, health-check, or audit the wiki:
 # Use execute_code for this — programmatic scan across all wiki pages
 import os, re
 from collections import defaultdict
-
 wiki = "<WIKI_PATH>"
 # Scan all .md files in entities/, concepts/, comparisons/, queries/
 # Extract all [[wikilinks]] — build inbound link map
@@ -476,7 +475,7 @@ Wants=network-online.target
 
 [Service]
 ExecStart=/path/to/ob sync --continuous
-WorkingDirectory=/home/user/wiki
+WorkingDirectory=%h/wiki
 Restart=on-failure
 RestartSec=10
 

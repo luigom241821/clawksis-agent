@@ -1,82 +1,131 @@
-/**
- * backend-probes.ts
- *
- * Cheap "does this candidate backend actually work" checks used by
- * resolveClawksisBackend (main.ts). The resolver walks a ladder of
- * candidates -- bootstrap marker, `clawk` on PATH, system Python with
- * clawk_cli installed -- and historically returned the first candidate
- * whose binary existed on disk. That assumption breaks when a user has
- * a pre-installed Python 3.11-3.13 (so findSystemPython() returns a
- * path) but no clawk_cli in its site-packages: the resolver hands back
- * a backend the spawn step can't actually run, and the user gets a
- * dead-on-arrival "ModuleNotFoundError: No module named 'clawk_cli'"
- * instead of the first-launch installer.
- *
- * These probes give the resolver a way to verify a candidate before
- * trusting it. Failure (non-zero exit, exception, timeout) means "skip
- * this rung, try the next one"; success means "spawn this for real."
- * Falling off the bottom of the ladder lands on the bootstrap-needed
- * sentinel, which is exactly what we want when nothing pre-existing
- * actually works.
- *
- * Both probes are deliberately fast and forgiving:
- *   - 5s timeout (a hung interpreter beats forever, but we still give
- *     slow disks / cold caches room to breathe)
- *   - stdio ignored (we only care about exit code; stdout/stderr are
- *     not surfaced to the user, just to recentClawksisLog for forensics
- *     via the caller's catch block if it chooses)
- *   - any throw -> false (never propagate -- resolver wants a boolean)
- *
- * Kept in a standalone ts module so it can be unit-tested with
- * `node --test` without dragging in the electron runtime (same pattern
- * as bootstrap-platform.ts and hardening.ts).
- */
+/** Bounded backend probes. A file on disk is not proof of a usable runtime. */
 
-import { execFileSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 
-const PROBE_TIMEOUT_MS = 5000
+import { buildDesktopBackendEnv } from './backend-env'
+import { windowsShellCommand } from './windows-child-options'
+
+/** Default probe budget. 5s false-negativeed healthy Windows cold starts (#61764). */
+const DEFAULT_PROBE_TIMEOUT_MS = 15_000
 
 /**
- * Return the Python snippet used to verify Clawksis can import far enough to
- * launch the CLI. Kept exported for tests so dependency regressions are
- * caught without needing a real broken venv fixture.
- *
- * @returns {string}
+ * Resolve the backend probe timeout (ms).
+ * Honours CLAWK_PROBE_TIMEOUT_MS when it parses as a positive integer.
  */
-function clawkRuntimeImportProbe() {
-  return 'import yaml; import dotenv; import clawk_cli.config'
+function resolveProbeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.CLAWK_PROBE_TIMEOUT_MS
+
+  if (raw == null || raw === '') {
+    return DEFAULT_PROBE_TIMEOUT_MS
+  }
+
+  const n = Number.parseInt(String(raw), 10)
+
+  if (!Number.isFinite(n) || n <= 0) {
+    return DEFAULT_PROBE_TIMEOUT_MS
+  }
+
+  // Clamp absurd values (ms) so a typo can't hang startup forever.
+  return Math.min(n, 120_000)
+}
+
+const PROBE_TIMEOUT_MS = resolveProbeTimeoutMs()
+
+function isTimeoutError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') {
+    return false
+  }
+
+  const e = err as { code?: string; killed?: boolean; signal?: string }
+
+  if (e.killed === true) {
+    return true
+  }
+
+  if (e.code === 'ETIMEDOUT') {
+    return true
+  }
+
+  // Node marks timed-out execFileSync with SIGTERM on some platforms.
+  if (e.signal === 'SIGTERM') {
+    return true
+  }
+
+  return false
 }
 
 /**
- * Return true iff the Clawksis runtime import probe exits 0.
- *
- * Used to gate the "fallback to system Python with clawk_cli installed"
- * rung of resolveClawksisBackend. Without this, a system Python 3.11-3.13
- * registered in PEP 514 makes findSystemPython() succeed regardless of
- * whether clawk_cli has actually been pip-installed into its
- * site-packages -- and the resolver returns a backend that immediately
- * dies on spawn.
- *
- * The probe intentionally imports clawk_cli.config, not just the top-level
- * package: a broken/empty Windows launcher venv can still see the source tree
- * through PYTHONPATH but lack PyYAML, then die on the first real CLI import.
- *
- * @param {string} pythonPath - Absolute path to a python.exe / python.
- * @param {object} [opts.env] - Additional environment for the probe.
- * @returns {boolean}
+ * Run without blocking the event loop; on timeout only, retry once before failing.
+ * Non-timeout failures (ENOENT, non-zero exit) fail immediately.
  */
-function canImportClawksisCli(pythonPath: string, opts: { env?: Record<string, string> } = {}) {
+async function execProbe(
+  command: string,
+  args: string[],
+  options: {
+    cwd?: string
+    env?: NodeJS.ProcessEnv
+    stdio: 'ignore'
+    timeout: number
+    shell?: boolean
+    windowsHide?: boolean
+  }
+): Promise<void> {
+  const run = () =>
+    new Promise<void>((resolve, reject) => {
+      const child = spawn(command, args, options)
+      child.once('error', reject)
+      child.once('close', (code, signal) => {
+        // A timed-out probe may handle SIGTERM and exit zero; it is still a timeout.
+        if (code === 0 && !child.killed) {
+          resolve()
+        } else {
+          reject(
+            Object.assign(new Error(`Runtime probe failed: ${command} (${signal || code})`), {
+              code,
+              signal,
+              killed: child.killed
+            })
+          )
+        }
+      })
+    })
+
+  try {
+    await run()
+  } catch (err) {
+    if (!isTimeoutError(err)) {
+      throw err
+    }
+
+    // One cold-cache / AV miss should not force clawk-setup --update (#61764).
+    await run()
+  }
+}
+
+/** Probe the checkout at cwd with the same dependency activation as launch. */
+async function canImportClawksisCli(
+  pythonPath: string,
+  opts: { env?: NodeJS.ProcessEnv; cwd?: string } = {}
+): Promise<boolean> {
   if (!pythonPath) {
     return false
   }
 
   try {
-    execFileSync(pythonPath, ['-c', clawkRuntimeImportProbe()], {
-      env: { ...process.env, ...(opts.env || {}) },
-      stdio: 'ignore',
-      timeout: PROBE_TIMEOUT_MS,
-      windowsHide: true
-    })
+    const env: NodeJS.ProcessEnv = { ...process.env, ...opts.env }
+
+    // Bootstrap selects the committed generation before any dependency import.
+    await execProbe(
+      pythonPath,
+      ['-c', 'import clawk_bootstrap; import clawk_yaml; import dotenv; import clawk_cli.config'],
+      {
+        cwd: opts.cwd,
+        env: { ...env, ...buildDesktopBackendEnv({ currentEnv: env }) },
+        stdio: 'ignore',
+        timeout: PROBE_TIMEOUT_MS,
+        windowsHide: true
+      }
+    )
 
     return true
   } catch {
@@ -99,18 +148,28 @@ function canImportClawksisCli(pythonPath: string, opts: { env?: Record<string, s
  * @param {string} clawkCommand - Resolved absolute path to a clawk
  *   executable (or an interpreter+script wrapper).
  * @param {boolean} [opts.shell] - Whether to run through a shell. For
- *   .cmd/.bat shims on Windows execFileSync needs shell:true to find
+ *   .cmd/.bat shims on Windows spawn needs shell:true to find
  *   the cmd interpreter; mirrors the same flag isCommandScript() drives
  *   in resolveClawksisBackend.
  * @returns {boolean}
  */
-function verifyClawksisCli(clawkCommand: string, opts?: { shell?: boolean }) {
+/**
+ * An explicit desktop backend command is a deployment contract, not a PATH
+ * discovery candidate. In particular, the Nix desktop wrapper points this at
+ * its immutable, matching Clawksis package; it must never fall through to the
+ * mutable install-script bootstrap path if a best-effort probe is slow.
+ */
+function shouldTrustClawksisOverride(clawkOverride?: string) {
+  return typeof clawkOverride === 'string' && clawkOverride.trim().length > 0
+}
+
+async function verifyClawksisCli(clawkCommand: string, opts?: { shell?: boolean }) {
   if (!clawkCommand) {
     return false
   }
 
   try {
-    execFileSync(clawkCommand, ['--version'], {
+    await execProbe(windowsShellCommand(clawkCommand, Boolean(opts?.shell)), ['--version'], {
       stdio: 'ignore',
       timeout: PROBE_TIMEOUT_MS,
       shell: Boolean(opts?.shell),
@@ -123,4 +182,13 @@ function verifyClawksisCli(clawkCommand: string, opts?: { shell?: boolean }) {
   }
 }
 
-export { canImportClawksisCli, clawkRuntimeImportProbe, PROBE_TIMEOUT_MS, verifyClawksisCli }
+export {
+  canImportClawksisCli,
+  DEFAULT_PROBE_TIMEOUT_MS,
+  execProbe,
+  isTimeoutError,
+  PROBE_TIMEOUT_MS,
+  resolveProbeTimeoutMs,
+  shouldTrustClawksisOverride,
+  verifyClawksisCli
+}

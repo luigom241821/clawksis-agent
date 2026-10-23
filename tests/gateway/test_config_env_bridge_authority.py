@@ -22,7 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _run_gateway_import(
-    clawk_home: Path, initial_env: dict[str, str]
+    clawk_home: Path, initial_env: dict[str, str], routed_home: Path | None = None
 ) -> dict[str, str]:
     """Import gateway.run in a clean subprocess and return the post-import env.
 
@@ -35,6 +35,9 @@ def _run_gateway_import(
         f"""
         import os, sys
         sys.path.insert(0, {str(PROJECT_ROOT)!r})
+        if {str(routed_home or "")!r}:
+            from clawk_constants import set_clawk_home_override
+            set_clawk_home_override({str(routed_home or "")!r})
 
         try:
             from gateway import run  # noqa: F401  — module import triggers bridge
@@ -46,10 +49,13 @@ def _run_gateway_import(
             "CLAWK_MAX_ITERATIONS",
             "CLAWK_AGENT_TIMEOUT",
             "CLAWK_AGENT_TIMEOUT_WARNING",
+            "CLAWK_TURN_LEASE_TIMEOUT",
+            "CLAWK_SESSION_STALL_TIMEOUT",
             "CLAWK_GATEWAY_BUSY_INPUT_MODE",
             "CLAWK_GATEWAY_BUSY_TEXT_MODE",
             "CLAWK_GATEWAY_PLATFORM_CONNECT_TIMEOUT",
             "CLAWK_TIMEZONE",
+            "TERMINAL_CWD",
         ):
             v = os.environ.get(k)
             if v is not None:
@@ -58,8 +64,23 @@ def _run_gateway_import(
     )
     env = dict(initial_env)
     env["CLAWK_HOME"] = str(clawk_home)
-    # Keep PATH / PYTHONPATH so venv imports resolve.
-    for k in ("PATH", "PYTHONPATH", "VIRTUAL_ENV", "HOME"):
+    # Keep interpreter paths plus the Windows bootstrap variables required by
+    # stdlib platform detection and native dependency loading.  The child is
+    # otherwise intentionally clean so stale Clawksis settings cannot leak in.
+    for k in (
+        "PATH",
+        "PYTHONPATH",
+        "VIRTUAL_ENV",
+        "HOME",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "LOCALAPPDATA",
+        "APPDATA",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+    ):
         if k in os.environ and k not in env:
             env[k] = os.environ[k]
 
@@ -69,6 +90,7 @@ def _run_gateway_import(
         capture_output=True,
         text=True,
         timeout=60,
+        check=False,
     )
     if result.returncode != 0:
         pytest.fail(
@@ -83,15 +105,9 @@ def _run_gateway_import(
     return out
 
 
-def _write_config(
-    home: Path,
-    agent_cfg: dict | None = None,
-    display_cfg: dict | None = None,
-    timezone: str | None = None,
-    gateway_cfg: dict | None = None,
-) -> None:
-    import yaml
-
+def _write_config(home: Path, agent_cfg: dict | None = None, display_cfg: dict | None = None,
+                  timezone: str | None = None, gateway_cfg: dict | None = None) -> None:
+    import clawk_yaml as yaml
     cfg: dict = {}
     if agent_cfg:
         cfg["agent"] = agent_cfg
@@ -101,12 +117,12 @@ def _write_config(
         cfg["gateway"] = gateway_cfg
     if timezone:
         cfg["timezone"] = timezone
-    (home / "config.yaml").write_text(yaml.safe_dump(cfg))
+    (home / "config.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
 
 
 def _write_env(home: Path, entries: dict[str, str]) -> None:
     lines = [f"{k}={v}\n" for k, v in entries.items()]
-    (home / ".env").write_text("".join(lines))
+    (home / ".env").write_text("".join(lines), encoding="utf-8")
 
 
 @pytest.fixture
@@ -116,86 +132,76 @@ def clawk_home(tmp_path: Path) -> Path:
     return home
 
 
-def test_config_max_turns_wins_over_stale_env(clawk_home: Path) -> None:
-    """Regression: config.yaml:agent.max_turns=500 must beat .env=60."""
-    _write_config(clawk_home, agent_cfg={"max_turns": 500})
-    _write_env(clawk_home, {"CLAWK_MAX_ITERATIONS": "60"})
-
-    env = _run_gateway_import(clawk_home, initial_env={})
-
-    assert env.get("CLAWK_MAX_ITERATIONS") == "500", (
-        f"expected config.yaml max_turns=500 to win; got {env.get('CLAWK_MAX_ITERATIONS')!r}. "
-        "Stale .env value is shadowing config — the bridge lost its override."
-    )
-
-
 def test_config_gateway_timeout_wins_over_stale_env(clawk_home: Path) -> None:
     """Every agent.* bridge key must be config-authoritative, not .env-authoritative."""
-    _write_config(
-        clawk_home,
-        agent_cfg={
-            "gateway_timeout": 1800,
-            "gateway_timeout_warning": 900,
-        },
-    )
-    _write_env(
-        clawk_home,
-        {
-            "CLAWK_AGENT_TIMEOUT": "60",
-            "CLAWK_AGENT_TIMEOUT_WARNING": "30",
-        },
-    )
+    _write_config(clawk_home, agent_cfg={
+        "gateway_timeout": 1800,
+        "gateway_timeout_warning": 900,
+        "session_stall_timeout": 300,
+    })
+    _write_env(clawk_home, {
+        "CLAWK_AGENT_TIMEOUT": "60",
+        "CLAWK_AGENT_TIMEOUT_WARNING": "30",
+        "CLAWK_SESSION_STALL_TIMEOUT": "15",
+    })
 
     env = _run_gateway_import(clawk_home, initial_env={})
 
     assert env.get("CLAWK_AGENT_TIMEOUT") == "1800"
     assert env.get("CLAWK_AGENT_TIMEOUT_WARNING") == "900"
+    assert env.get("CLAWK_SESSION_STALL_TIMEOUT") == "300"
 
 
-def test_config_display_busy_input_mode_wins_over_stale_env(clawk_home: Path) -> None:
-    _write_config(clawk_home, display_cfg={"busy_input_mode": "interrupt"})
-    _write_env(clawk_home, {"CLAWK_GATEWAY_BUSY_INPUT_MODE": "queue"})
-
-    env = _run_gateway_import(clawk_home, initial_env={})
-
-    assert env.get("CLAWK_GATEWAY_BUSY_INPUT_MODE") == "interrupt"
-
-
-def test_config_display_busy_text_mode_wins_over_stale_env(clawk_home: Path) -> None:
-    _write_config(clawk_home, display_cfg={"busy_text_mode": "queue"})
-    _write_env(clawk_home, {"CLAWK_GATEWAY_BUSY_TEXT_MODE": "interrupt"})
-
-    env = _run_gateway_import(clawk_home, initial_env={})
-
-    assert env.get("CLAWK_GATEWAY_BUSY_TEXT_MODE") == "queue"
-
-
-def test_config_timezone_wins_over_stale_env(clawk_home: Path) -> None:
-    _write_config(clawk_home, timezone="America/Los_Angeles")
-    _write_env(clawk_home, {"CLAWK_TIMEZONE": "UTC"})
+def test_config_turn_lease_timeout_wins_over_stale_env(clawk_home: Path) -> None:
+    """The user-facing lease wait budget belongs to config.yaml."""
+    _write_config(
+        clawk_home,
+        agent_cfg={"gateway_turn_lease_timeout": 600},
+    )
+    _write_env(
+        clawk_home,
+        {"CLAWK_TURN_LEASE_TIMEOUT": "60"},
+    )
 
     env = _run_gateway_import(clawk_home, initial_env={})
 
-    assert env.get("CLAWK_TIMEZONE") == "America/Los_Angeles"
+    assert env.get("CLAWK_TURN_LEASE_TIMEOUT") == "600"
 
 
-def test_env_value_survives_when_config_omits_key(clawk_home: Path) -> None:
-    """If config.yaml doesn't set max_turns, .env value must still pass through.
-
-    The bridge only overwrites when the config key is present — an absent
-    config key should NOT clobber the .env value.
-    """
-    _write_config(clawk_home, agent_cfg={})  # no max_turns
-    _write_env(clawk_home, {"CLAWK_MAX_ITERATIONS": "123"})
-
-    env = _run_gateway_import(clawk_home, initial_env={})
-
-    assert env.get("CLAWK_MAX_ITERATIONS") == "123"
-
-
-def test_config_platform_connect_timeout_supplies_env_when_unset(
+def test_default_turn_lease_timeout_overrides_stale_env_when_key_is_omitted(
     clawk_home: Path,
 ) -> None:
+    """The internal env mirror must never become a second config source."""
+    _write_env(
+        clawk_home,
+        {"CLAWK_TURN_LEASE_TIMEOUT": "60"},
+    )
+
+    env = _run_gateway_import(clawk_home, initial_env={})
+
+    from clawk_cli.config import DEFAULT_CONFIG
+
+    assert float(env.get("CLAWK_TURN_LEASE_TIMEOUT")) == float(
+        DEFAULT_CONFIG["agent"]["gateway_turn_lease_timeout"]
+    )
+
+
+def test_default_turn_lease_timeout_matches_the_runtime_fallback() -> None:
+    """The advertised config default must match the fail-closed runtime fallback.
+
+    Invariant, not a snapshot: whatever the default becomes, config and the
+    lease registry's DEFAULT_LEASE_WAIT must move together.
+    """
+    from gateway.turn_lease import DEFAULT_LEASE_WAIT
+    from clawk_cli.config import DEFAULT_CONFIG
+
+    assert (
+        float(DEFAULT_CONFIG["agent"]["gateway_turn_lease_timeout"])
+        == DEFAULT_LEASE_WAIT
+    )
+
+
+def test_config_platform_connect_timeout_supplies_env_when_unset(clawk_home: Path) -> None:
     """config.yaml:gateway.platform_connect_timeout supplies the env var when
     it isn't already set (#19776 — config surface for the Discord connect
     timeout, replacing the undocumented env-var-only workaround)."""
@@ -219,3 +225,22 @@ def test_env_platform_connect_timeout_wins_over_config(clawk_home: Path) -> None
     )
 
     assert env.get("CLAWK_GATEWAY_PLATFORM_CONNECT_TIMEOUT") == "120"
+
+
+def test_first_import_under_a_routed_override_bridges_the_process_home(tmp_path: Path) -> None:
+    """A multiplexed backend first imports gateway.run lazily inside a routed profile's session;
+    the import-time bridge must still write the LAUNCH home's config into the process env."""
+    from utils import atomic_yaml_write
+
+    homes = {}
+    for name, turns in (("launch", 111), ("routed", 222)):
+        home = tmp_path / name
+        (home / "work").mkdir(parents=True)
+        cfg = {"agent": {"max_turns": turns}, "terminal": {"cwd": str(home / "work")}}
+        atomic_yaml_write(home / "config.yaml", cfg)
+        homes[name] = home
+
+    env = _run_gateway_import(homes["launch"], {}, routed_home=homes["routed"])
+
+    assert env.get("CLAWK_MAX_ITERATIONS") == "111"
+    assert env.get("TERMINAL_CWD") == str(homes["launch"] / "work")

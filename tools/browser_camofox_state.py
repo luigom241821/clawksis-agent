@@ -1,71 +1,27 @@
 """Clawksis-managed Camofox state helpers.
 
-
-
-Provides profile-scoped identity and state directory paths for Camofox
-
-persistent browser profiles.  When managed persistence is enabled, Clawksis
-
-sends a deterministic userId derived from the active profile so that
-
-Camofox can map it to the same persistent browser profile directory
-
-across restarts.
-
+With managed persistence enabled, Clawksis sends a deterministic userId derived from the
+active profile so Camofox maps it to the same persistent browser profile across restarts.
 """
 
 from __future__ import annotations
 
-
 import uuid
-
 from pathlib import Path
-
 from typing import Dict, Optional
-
 
 from clawk_constants import get_clawk_home
 
 
-CAMOFOX_STATE_DIR_NAME = "browser_auth"
-
-CAMOFOX_STATE_SUBDIR = "camofox"
-
-
 def get_camofox_state_dir() -> Path:
     """Return the profile-scoped root directory for Camofox persistence."""
-
-    return get_clawk_home() / CAMOFOX_STATE_DIR_NAME / CAMOFOX_STATE_SUBDIR
-
-
-def get_camofox_identity(task_id: Optional[str] = None) -> Dict[str, str]:
-    """Return the stable Clawksis-managed Camofox identity for this profile.
+    return get_clawk_home() / "browser_auth" / "camofox"
 
 
-
-    The user identity is profile-scoped (same Clawksis profile = same userId).
-
-    The session key is scoped to the logical browser task so newly created
-
-    tabs within the same profile reuse the same identity contract.
-
-    """
-
+def get_camofox_identity(task_id: Optional[str] = None) -> dict[str, str]:
+    """Stable Clawksis-managed Camofox identity: userId is profile-scoped, session key is
+    scoped to the logical browser task so new tabs in the same profile reuse it."""
     scope_root = str(get_camofox_state_dir())
-
-    logical_scope = task_id or "default"
-
-    user_digest = uuid.uuid5(
-        uuid.NAMESPACE_URL,
-        f"camofox-user:{scope_root}",
-    ).hex[:10]
-
-    session_digest = uuid.uuid5(
-        uuid.NAMESPACE_URL,
-        f"camofox-session:{scope_root}:{logical_scope}",
-    ).hex[:16]
-
-    return {
-        "user_id": f"clawk_{user_digest}",
-        "session_key": f"task_{session_digest}",
-    }
+    user_digest = uuid.uuid5(uuid.NAMESPACE_URL, f"camofox-user:{scope_root}").hex[:10]
+    session_digest = uuid.uuid5(uuid.NAMESPACE_URL, f"camofox-session:{scope_root}:{task_id or 'default'}").hex[:16]
+    return {"user_id": f"clawk_{user_digest}", "session_key": f"task_{session_digest}"}

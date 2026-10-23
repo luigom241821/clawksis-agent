@@ -2,12 +2,15 @@
   "upstream": "NousResearch/hermes-agent",
   "baseline_commit": "1eeb7da2e6e5463018cb4be9aff1ec97bb09488a",
   "baseline_note": "upstream main del 2026-06-04, punto de corte del fork (entre v2026.5.29.2 y v2026.6.5)",
-  "last_synced_commit": "3ef6bbd201263d354fd83ec55b3c306ded2eb72a",
-  "last_synced_tag": "v2026.7.20",
-  "last_synced_date": "2026-07-20T11:35:21-07:00",
+  "last_synced_commit": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
+  "last_synced_tag": "v0.22.5",
+  "last_synced_date": "2026-10-22T19:24:27-07:00",
   "skip_paths": [
-    "*nous*"
+    "*nous*",
+    ".github/*",
+    "website/i18n/*",
+    "README.zh-CN.md"
   ],
-  "merge_base_commit": "f3fe99863d134bd05316882dee0d469439110ca6",
-  "merge_base_note": "base del ciclo de merges divergentes hacia v2026.7.20 (borrar al terminar pending/)"
+  "merge_base_commit": "3ef6bbd201263d354fd83ec55b3c306ded2eb72a",
+  "merge_base_note": "base del ciclo de merges divergentes v2026.7.20 -> v0.22.5 (borrar al terminar pending/)"
 }

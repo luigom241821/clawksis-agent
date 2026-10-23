@@ -6,7 +6,7 @@ a present-but-null value sails through as None and crashes any chained
 method call.
 """
 
-from agent.anthropic_adapter import _convert_user_message
+from agent.anthropic_message_convert import _convert_user_message
 from agent.moa_loop import _slot_label
 
 
@@ -19,10 +19,12 @@ class TestAnthropicNullTextBlock:
         assert result["role"] == "user"
 
     def test_mixed_null_and_real_text_blocks(self):
-        result = _convert_user_message([
-            {"type": "text", "text": None},
-            {"type": "text", "text": "hello"},
-        ])
+        result = _convert_user_message(
+            [
+                {"type": "text", "text": None},
+                {"type": "text", "text": "hello"},
+            ]
+        )
         assert result["role"] == "user"
 
 

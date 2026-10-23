@@ -13,7 +13,6 @@ Adapted from ShinMegamiBoson/OpenPlanter (MIT). Differences:
   - Configurable column names via flags
   - Optional --seed for reproducibility
 """
-
 from __future__ import annotations
 
 import argparse
@@ -168,18 +167,20 @@ def analyze(
         null_std = statistics.pstdev(permuted_means) or 1.0
         effect_size = (null_mean - observed) / null_std
 
-        results.append({
-            "donor": donor,
-            "recipient": recip,
-            "n_donations": len(records),
-            "n_award_dates": len(award_dates),
-            "observed_mean_days": round(observed, 2),
-            "null_mean_days": round(null_mean, 2),
-            "p_value": round(p_value, 4),
-            "effect_size_sd": round(effect_size, 2),
-            "significant": p_value < p_threshold,
-            "total_donation_amount": round(sum(a for (_, a) in records), 2),
-        })
+        results.append(
+            {
+                "donor": donor,
+                "recipient": recip,
+                "n_donations": len(records),
+                "n_award_dates": len(award_dates),
+                "observed_mean_days": round(observed, 2),
+                "null_mean_days": round(null_mean, 2),
+                "p_value": round(p_value, 4),
+                "effect_size_sd": round(effect_size, 2),
+                "significant": p_value < p_threshold,
+                "total_donation_amount": round(sum(a for (_, a) in records), 2),
+            }
+        )
 
     results.sort(key=lambda r: r["p_value"])
 
@@ -197,14 +198,12 @@ def analyze(
         "results": results,
     }
 
-    Path(out_path).write_text(json.dumps(payload, indent=2))
+    Path(out_path).write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--donations", required=True)
     p.add_argument("--donation-date-col", required=True)
     p.add_argument("--donation-amount-col", required=True)

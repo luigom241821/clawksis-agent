@@ -15,9 +15,9 @@ IRC is plain text: there is no voice, image, file, thread, reaction, typing, or 
 
 ## Configure Clawksis
 
-You can configure IRC two ways — environment variables (for a quick env-only setup) or the `gateway` block in `~/.clawksis/gateway-config.yaml`.
+You can configure IRC two ways — environment variables (for a quick env-only setup) or the `gateway` block in `~/.clawksis/config.yaml`.
 
-### Option A — gateway-config.yaml
+### Option A — config.yaml
 
 ```yaml
 gateway:

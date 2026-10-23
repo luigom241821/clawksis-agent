@@ -1,0 +1,17 @@
+name: clawk-kame-provider
+repo: https://github.com/Kame696/kame-api-rotation-for-clawk
+sha: cab5372d18d233da905c9f84a343359d2bc26564
+subdir: clawk-kame-provider
+description: "Companion to clawk-kame-api-rotation (install both). A model-provider plugin that re-registers Clawksis' bundled API-key profiles unchanged except for create_client and create_messages_client, which return the rotation plugin's key-rotating client; otherwise None and Clawksis builds its own. Same endpoints as Clawksis, no third-party service, no core override."
+maintainer: Kame696
+tier: community
+category: models
+requires_clawk: ">=0.21.4"
+version: "1.8.2.2"
+docs_url: https://github.com/Kame696/kame-api-rotation-for-clawk/tree/v1.8.2.2/clawk-kame-provider#readme
+readme: true
+capabilities:
+  provides_tools: []
+  provides_hooks: []
+  provides_middleware: []
+  requires_env: []

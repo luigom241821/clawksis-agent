@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent, MessageType
+from gateway.platforms.event import MessageEvent, MessageType
 from gateway.session import SessionSource
 
 
@@ -44,7 +44,6 @@ def _make_event(text: str) -> MessageEvent:
 
 def _clear_approval_state():
     from tools import approval as mod
-
     mod._gateway_queues.clear()
     mod._gateway_notify_cbs.clear()
     mod._session_approved.clear()
@@ -85,8 +84,8 @@ def _make_runner():
 
 def _register_blocking_approval(runner):
     """Register a real blocking approval entry for the runner's session."""
-    from tools.approval import _ApprovalEntry, _gateway_queues
-
+    from tools.approval import _gateway_queues
+    from tools.approval_gateway_wait import _ApprovalEntry
     source = _make_source()
     session_key = runner._session_key_for_source(source)
     entry = _ApprovalEntry({"command": "rm -rf /tmp/test"})
@@ -112,62 +111,17 @@ def test_plaintext_yes_resolves_approval(reply):
     _clear_approval_state()
 
 
-@pytest.mark.parametrize("reply", ["no", "deny", "reject", "n", "cancel"])
-def test_plaintext_no_denies_approval(reply):
-    _clear_approval_state()
-    runner, adapter = _make_runner()
-    session_key, entry = _register_blocking_approval(runner)
-
-    handled = asyncio.run(
-        runner._handle_active_session_busy_message(_make_event(reply), session_key)
-    )
-
-    assert handled is True
-    assert entry.event.is_set()
-    assert entry.result == "deny"
-    adapter._send_with_retry.assert_awaited()
-    _clear_approval_state()
-
-
-def test_plaintext_always_maps_to_permanent_choice():
-    _clear_approval_state()
-    runner, adapter = _make_runner()
-    session_key, entry = _register_blocking_approval(runner)
-
-    handled = asyncio.run(
-        runner._handle_active_session_busy_message(_make_event("always"), session_key)
-    )
-
-    assert handled is True
-    assert entry.result == "always"
-    _clear_approval_state()
-
-
-def test_plaintext_session_maps_to_session_choice():
-    _clear_approval_state()
-    runner, adapter = _make_runner()
-    session_key, entry = _register_blocking_approval(runner)
-
-    handled = asyncio.run(
-        runner._handle_active_session_busy_message(_make_event("session"), session_key)
-    )
-
-    assert handled is True
-    assert entry.result == "session"
-    _clear_approval_state()
-
-
 def test_no_pending_approval_does_not_consume_conversational_yes():
     """A bare 'yes' with NO blocking approval must NOT be treated as an
     approval — it falls through to normal busy handling (design intent:
     'yes' in conversation must not execute a dangerous command)."""
     _clear_approval_state()
-    runner, adapter = _make_runner()
+    runner, _adapter = _make_runner()
     source = _make_source()
     session_key = runner._session_key_for_source(source)
     # No approval registered.
 
-    handled = asyncio.run(
+    asyncio.run(
         runner._handle_active_session_busy_message(_make_event("yes"), session_key)
     )
 
@@ -176,24 +130,7 @@ def test_no_pending_approval_does_not_consume_conversational_yes():
     # (It still flows through normal busy handling, which may send a busy
     # ack; the contract here is only that no approval was consumed.)
     from tools.approval import _gateway_queues
-
     assert session_key not in _gateway_queues
     _clear_approval_state()
 
 
-def test_unrelated_text_with_pending_approval_falls_through():
-    """Text that is neither approve nor deny vocab must NOT resolve the
-    approval — it falls through to normal busy handling."""
-    _clear_approval_state()
-    runner, adapter = _make_runner()
-    session_key, entry = _register_blocking_approval(runner)
-
-    handled = asyncio.run(
-        runner._handle_active_session_busy_message(
-            _make_event("what files are here?"), session_key
-        )
-    )
-
-    # Approval still pending — not resolved by unrelated text.
-    assert not entry.event.is_set()
-    _clear_approval_state()

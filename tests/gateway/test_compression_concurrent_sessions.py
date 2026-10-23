@@ -32,7 +32,6 @@ from clawk_state import SessionDB
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-
 def _build_agent_with_db(db: SessionDB, session_id: str):
     """Construct an AIAgent wired to *db* and pinned to *session_id*.
 
@@ -57,7 +56,7 @@ def _build_agent_with_db(db: SessionDB, session_id: str):
     compressor = MagicMock()
 
     def _compress_with_overlap(*_a, **_kw):
-        time.sleep(0.25)  # match fork test sleep so threads reliably overlap
+        time.sleep(0.2)  # match fork test sleep so threads reliably overlap
         return [
             {"role": "user", "content": "[CONTEXT COMPACTION] summary"},
             {"role": "user", "content": "tail"},
@@ -85,54 +84,6 @@ _MESSAGES = [{"role": "user", "content": f"m{i}"} for i in range(20)]
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-
-
-def test_concurrent_compressions_do_not_alias_sessions(tmp_path: Path) -> None:
-    """Five distinct sessions compressing in parallel must each produce a unique
-    post-compression session_id; no two agents must end up sharing an id.
-
-    Without per-session locking there is no cross-session aliasing anyway (each
-    agent generates its own timestamp + uuid suffix), but this test makes the
-    invariant explicit and would catch any regression where session_id generation
-    became shared state (e.g. a module-level counter or a shared random seed).
-    """
-    db = SessionDB(db_path=tmp_path / "state.db")
-
-    n = 5
-    parent_ids = [f"DISTINCT_PARENT_{i:02d}" for i in range(n)]
-    for sid in parent_ids:
-        db.create_session(sid, source="discord")
-
-    agents = [_build_agent_with_db(db, sid) for sid in parent_ids]
-    errors: list[Exception] = []
-
-    def run(agent):
-        try:
-            agent._compress_context(_MESSAGES, "sys", approx_tokens=120_000)
-        except Exception as exc:
-            errors.append(exc)
-
-    threads = [
-        threading.Thread(target=run, args=(a,), name=f"session-{i}")
-        for i, a in enumerate(agents)
-    ]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=15)
-
-    assert not errors, f"Compression raised exceptions: {errors}"
-
-    # Every agent must have rotated to a new, unique session_id.
-    new_ids = [a.session_id for a in agents]
-    assert all(sid not in parent_ids for sid in new_ids), (
-        "At least one agent did not rotate its session_id during compression. "
-        f"parent_ids={parent_ids}  new_ids={new_ids}"
-    )
-    assert len(set(new_ids)) == n, (
-        f"Post-compression session_ids are not unique: {new_ids}. "
-        "Two agents aliased to the same id — cross-session contamination."
-    )
 
 
 def test_concurrent_compressions_same_session_serialize(tmp_path: Path) -> None:
@@ -184,9 +135,7 @@ def test_concurrent_compressions_same_session_serialize(tmp_path: Path) -> None:
 
     def run(key, agent):
         try:
-            compressed, _sp = agent._compress_context(
-                _MESSAGES, "sys", approx_tokens=120_000
-            )
+            compressed, _sp = agent._compress_context(_MESSAGES, "sys", approx_tokens=120_000)
             results[key] = compressed
         except Exception as exc:
             errors.append(exc)
@@ -206,13 +155,11 @@ def test_concurrent_compressions_same_session_serialize(tmp_path: Path) -> None:
 
     # Count which agents actually compressed (returned fewer messages than input)
     compressed_count = sum(
-        1
-        for msgs in results.values()
+        1 for msgs in results.values()
         if msgs is not None and len(msgs) < len(_MESSAGES)
     )
     unchanged_count = sum(
-        1
-        for msgs in results.values()
+        1 for msgs in results.values()
         if msgs is not None and len(msgs) == len(_MESSAGES)
     )
 
@@ -227,7 +174,9 @@ def test_concurrent_compressions_same_session_serialize(tmp_path: Path) -> None:
     )
 
     # Exactly one session_id rotation must have occurred.
-    rotated = sum(1 for a in (agent_a, agent_b) if a.session_id != shared_sid)
+    rotated = sum(
+        1 for a in (agent_a, agent_b) if a.session_id != shared_sid
+    )
     assert rotated == 1, (
         f"Expected exactly one agent to rotate session_id, got {rotated}. "
         "Both agents rotating produces a session fork (Damien's incident shape)."

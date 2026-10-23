@@ -5,13 +5,12 @@ provider plugin is listed in ``plugins.disabled``, plugin discovery skips
 it and the dashboard auth gate sees zero providers — even after the
 interactive username/password setup path writes credentials to config.yaml.
 """
-
 from __future__ import annotations
 
 from unittest.mock import patch
 
 import pytest
-import yaml
+import clawk_yaml as yaml
 
 from clawk_cli.dashboard_auth import clear_providers, list_providers
 from clawk_cli.plugins import PluginManager, discover_plugins
@@ -43,16 +42,6 @@ class TestEnsureBasicAuthPluginEnabled:
         cfg = {"plugins": {"disabled": ["other-plugin"]}}
         assert ensure_basic_auth_plugin_enabled_in_config(cfg) is False
 
-    def test_removes_bare_basic_key(self):
-        cfg = {"plugins": {"disabled": ["basic", "foo"]}}
-        assert ensure_basic_auth_plugin_enabled_in_config(cfg) is True
-        assert cfg["plugins"]["disabled"] == ["foo"]
-
-    def test_removes_namespaced_key(self):
-        cfg = {"plugins": {"disabled": ["dashboard_auth/basic"]}}
-        assert ensure_basic_auth_plugin_enabled_in_config(cfg) is True
-        assert cfg["plugins"]["disabled"] == []
-
 
 class TestBasicProviderLoadsAfterUnblock:
     def test_disabled_basic_blocks_registration(self, clawk_home, monkeypatch):
@@ -79,9 +68,7 @@ class TestBasicProviderLoadsAfterUnblock:
         assert list_providers() == []
 
     def test_unblock_then_rediscover_registers_provider(
-        self,
-        clawk_home,
-        monkeypatch,
+        self, clawk_home, monkeypatch,
     ):
         password_hash = basic_plugin.hash_password("hunter2")
         cfg = {

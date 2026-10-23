@@ -3,7 +3,6 @@
 
 Anonymous: 120 req/hour. Token (SENATE_LDA_TOKEN): 1200 req/hour.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -14,7 +13,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _http import get_json  # noqa: E402
+from _http import get_json
 
 ENDPOINT = "https://lda.senate.gov/api/v1/filings/"
 COLUMNS = [
@@ -57,10 +56,8 @@ def fetch(
     page = 0
     while page < max_pages:
         try:
-            payload = get_json(
-                url, params=params if page == 0 else None, headers=headers
-            )
-        except Exception as e:  # noqa: BLE001
+            payload = get_json(url, params=params if page == 0 else None, headers=headers)
+        except Exception as e:
             print(f"Senate LDA error on page {page + 1}: {e}", file=sys.stderr)
             break
         if not isinstance(payload, dict):
@@ -77,12 +74,7 @@ def fetch(
                 for lob in la.get("lobbyists") or []:
                     lob_obj = lob.get("lobbyist") or {}
                     name = " ".join(
-                        x
-                        for x in (
-                            lob_obj.get("first_name", ""),
-                            lob_obj.get("last_name", ""),
-                        )
-                        if x
+                        x for x in (lob_obj.get("first_name", ""), lob_obj.get("last_name", "")) if x
                     )
                     if name:
                         lobbyists.append(name)
@@ -93,24 +85,25 @@ def fetch(
                     nm = ge.get("name") or ""
                     if nm:
                         entities.append(nm)
-            rows.append({
-                "filing_uuid": r.get("filing_uuid", "") or "",
-                "filing_type": r.get("filing_type", "") or "",
-                "filing_year": str(r.get("filing_year", "") or year),
-                "filing_period": r.get("filing_period", "") or "",
-                "registrant_name": registrant_obj.get("name", "") or "",
-                "registrant_id": str(registrant_obj.get("id", "") or ""),
-                "client_name": client_obj.get("name", "") or "",
-                "client_id": str(client_obj.get("id", "") or ""),
-                "client_general_description": client_obj.get("general_description", "")
-                or "",
-                "income": str(r.get("income", "") or ""),
-                "expenses": str(r.get("expenses", "") or ""),
-                "lobbyists": "; ".join(sorted(set(lobbyists))),
-                "issues": "; ".join(issues),
-                "government_entities": "; ".join(sorted(set(entities))),
-                "filing_date": (r.get("dt_posted") or "")[:10],
-            })
+            rows.append(
+                {
+                    "filing_uuid": r.get("filing_uuid", "") or "",
+                    "filing_type": r.get("filing_type", "") or "",
+                    "filing_year": str(r.get("filing_year", "") or year),
+                    "filing_period": r.get("filing_period", "") or "",
+                    "registrant_name": registrant_obj.get("name", "") or "",
+                    "registrant_id": str(registrant_obj.get("id", "") or ""),
+                    "client_name": client_obj.get("name", "") or "",
+                    "client_id": str(client_obj.get("id", "") or ""),
+                    "client_general_description": client_obj.get("general_description", "") or "",
+                    "income": str(r.get("income", "") or ""),
+                    "expenses": str(r.get("expenses", "") or ""),
+                    "lobbyists": "; ".join(sorted(set(lobbyists))),
+                    "issues": "; ".join(issues),
+                    "government_entities": "; ".join(sorted(set(entities))),
+                    "filing_date": (r.get("dt_posted") or "")[:10],
+                }
+            )
         next_url = payload.get("next")
         if not next_url:
             break

@@ -8,7 +8,6 @@ Two free APIs:
 Both are anonymous-access. Useful for resolving who-is-this-entity questions
 and surfacing cross-references that other sources can join against.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -19,7 +18,7 @@ import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _http import get_json  # noqa: E402
+from _http import get_json
 
 WP_OPENSEARCH = "https://en.wikipedia.org/w/api.php"
 WP_SUMMARY = "https://en.wikipedia.org/api/rest_v1/page/summary/"
@@ -57,11 +56,13 @@ def _wp_search(query: str, limit: int) -> list[dict]:
     titles, descs, urls = data[1], data[2], data[3]
     out = []
     for i, title in enumerate(titles):
-        out.append({
-            "title": title,
-            "description": descs[i] if i < len(descs) else "",
-            "url": urls[i] if i < len(urls) else "",
-        })
+        out.append(
+            {
+                "title": title,
+                "description": descs[i] if i < len(descs) else "",
+                "url": urls[i] if i < len(urls) else "",
+            }
+        )
     return out
 
 
@@ -70,7 +71,7 @@ def _wp_summary(title: str) -> dict:
     url = f"{WP_SUMMARY}{urllib.parse.quote(title.replace(' ', '_'))}"
     try:
         return get_json(url)  # type: ignore[return-value]
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"Wikipedia summary lookup for {title!r} failed: {e}", file=sys.stderr)
         return {}
 
@@ -85,8 +86,8 @@ def _wd_lookup_by_qid(qid: str) -> dict:
     # typed literals, so the slot mapping is local-only.
     interesting = {
         "P31": "instance_of",
-        "P17": "country",  # for orgs / places
-        "P27": "country",  # for individuals (country of citizenship)
+        "P17": "country",          # for orgs / places
+        "P27": "country",          # for individuals (country of citizenship)
         "P106": "occupation",
         "P108": "employer",
         "P569": "date_of_birth",
@@ -101,7 +102,7 @@ def _wd_lookup_by_qid(qid: str) -> dict:
     url = f"{WD_ACTION}?{urllib.parse.urlencode(params)}"
     try:
         data = get_json(url)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"Wikidata wbgetentities for {qid} failed: {e}", file=sys.stderr)
         return {}
     if not isinstance(data, dict):
@@ -149,7 +150,7 @@ def _wd_lookup_by_qid(qid: str) -> dict:
         url = f"{WD_ACTION}?{urllib.parse.urlencode(params)}"
         try:
             data = get_json(url)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"Wikidata label batch failed: {e}", file=sys.stderr)
             continue
         if not isinstance(data, dict):
@@ -187,7 +188,7 @@ def _wd_qid_for_title(title: str) -> str:
     url = f"{WP_OPENSEARCH}?{urllib.parse.urlencode(params)}"
     try:
         data = get_json(url)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return ""
     if not isinstance(data, dict):
         return ""
@@ -211,26 +212,24 @@ def fetch(query: str, limit: int, no_wikidata: bool, out_path: str) -> int:
         facts: dict = {}
         if qid:
             facts = _wd_lookup_by_qid(qid)
-        rows.append({
-            "source": "wikipedia+wikidata" if qid else "wikipedia",
-            "label": title,
-            "description": (
-                summary.get("description") or hit.get("description") or ""
-            ).strip(),
-            "qid": qid,
-            "wikipedia_title": title,
-            "wikipedia_url": hit.get("url", ""),
-            "wikidata_url": f"https://www.wikidata.org/wiki/{qid}" if qid else "",
-            "instance_of": "; ".join(facts.get("instance_of", [])),
-            "country": "; ".join(facts.get("country", [])),
-            "occupation": "; ".join(facts.get("occupation", [])),
-            "employer": "; ".join(facts.get("employer", [])),
-            "date_of_birth": "; ".join(facts.get("date_of_birth", []))[:10]
-            if facts.get("date_of_birth")
-            else "",
-            "place_of_birth": "; ".join(facts.get("place_of_birth", [])),
-            "summary": (summary.get("extract") or "").replace("\n", " ")[:1000],
-        })
+        rows.append(
+            {
+                "source": "wikipedia+wikidata" if qid else "wikipedia",
+                "label": title,
+                "description": (summary.get("description") or hit.get("description") or "").strip(),
+                "qid": qid,
+                "wikipedia_title": title,
+                "wikipedia_url": hit.get("url", ""),
+                "wikidata_url": f"https://www.wikidata.org/wiki/{qid}" if qid else "",
+                "instance_of": "; ".join(facts.get("instance_of", [])),
+                "country": "; ".join(facts.get("country", [])),
+                "occupation": "; ".join(facts.get("occupation", [])),
+                "employer": "; ".join(facts.get("employer", [])),
+                "date_of_birth": "; ".join(facts.get("date_of_birth", []))[:10] if facts.get("date_of_birth") else "",
+                "place_of_birth": "; ".join(facts.get("place_of_birth", [])),
+                "summary": (summary.get("extract") or "").replace("\n", " ")[:1000],
+            }
+        )
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
@@ -248,12 +247,8 @@ def fetch(query: str, limit: int, no_wikidata: bool, out_path: str) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    p.add_argument(
-        "--query", required=True, help="Entity name (person, company, place, concept)"
-    )
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--query", required=True, help="Entity name (person, company, place, concept)")
     p.add_argument("--limit", type=int, default=5)
     p.add_argument(
         "--no-wikidata",

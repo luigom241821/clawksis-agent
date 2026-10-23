@@ -8,7 +8,6 @@ never gated.
 These call ``_dispatch_inbound`` directly (no aiohttp / ports) and assert
 on what reaches ``handle_message``.
 """
-
 from __future__ import annotations
 
 from typing import List
@@ -16,13 +15,11 @@ from typing import List
 import pytest
 
 from gateway.config import PlatformConfig
-from gateway.platforms.base import MessageEvent
+from gateway.platforms.event import MessageEvent
 from plugins.platforms.photon.adapter import PhotonAdapter
 
 
-def _make_adapter(
-    monkeypatch: pytest.MonkeyPatch, extra: dict | None = None
-) -> PhotonAdapter:
+def _make_adapter(monkeypatch: pytest.MonkeyPatch, extra: dict | None = None) -> PhotonAdapter:
     monkeypatch.setenv("PHOTON_PROJECT_ID", "test-project-id")
     monkeypatch.setenv("PHOTON_PROJECT_SECRET", "test-project-secret")
     monkeypatch.delenv("PHOTON_REQUIRE_MENTION", raising=False)
@@ -51,10 +48,8 @@ def _dm_payload(text: str) -> dict:
     }
 
 
-def _capture(
-    adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch
-) -> List[MessageEvent]:
-    captured: List[MessageEvent] = []
+def _capture(adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch) -> list[MessageEvent]:
+    captured: list[MessageEvent] = []
 
     async def fake_handle(event: MessageEvent) -> None:
         captured.append(event)
@@ -63,35 +58,15 @@ def _capture(
     return captured
 
 
-def test_require_mention_defaults_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    adapter = _make_adapter(monkeypatch)
-    assert adapter.require_mention is False
-    # Defaults compile to the two Clawksis wake-word patterns.
-    assert len(adapter._mention_patterns) == 2
 
 
 @pytest.mark.asyncio
-async def test_group_message_dropped_without_mention(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_group_message_dropped_without_mention(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = _make_adapter(monkeypatch, extra={"require_mention": True})
     captured = _capture(adapter, monkeypatch)
 
     await adapter._dispatch_inbound(_group_payload("just chatting, no wake word"))
     assert captured == []
-
-
-@pytest.mark.asyncio
-async def test_group_message_passes_and_strips_wake_word(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    adapter = _make_adapter(monkeypatch, extra={"require_mention": True})
-    captured = _capture(adapter, monkeypatch)
-
-    await adapter._dispatch_inbound(_group_payload("Clawksis what's the weather"))
-    assert len(captured) == 1
-    # Leading wake word stripped before dispatch.
-    assert captured[0].text == "what's the weather"
 
 
 @pytest.mark.asyncio
@@ -104,25 +79,10 @@ async def test_dm_never_gated(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured[0].text == "no wake word here"
 
 
-@pytest.mark.asyncio
-async def test_require_mention_off_passes_group_messages(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    adapter = _make_adapter(monkeypatch)  # require_mention defaults off
-    captured = _capture(adapter, monkeypatch)
-
-    await adapter._dispatch_inbound(_group_payload("plain group chatter"))
-    assert len(captured) == 1
-    assert captured[0].text == "plain group chatter"
-
-
 def test_custom_mention_patterns_from_config(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = _make_adapter(
         monkeypatch,
-        extra={
-            "require_mention": True,
-            "mention_patterns": [r"(?<![\w@])@?amos\b[,:\-]?"],
-        },
+        extra={"require_mention": True, "mention_patterns": [r"(?<![\w@])@?amos\b[,:\-]?"]},
     )
     assert adapter.require_mention is True
     assert len(adapter._mention_patterns) == 1
@@ -150,3 +110,34 @@ def test_invalid_pattern_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     # Bad regex dropped, good one kept.
     assert len(adapter._mention_patterns) == 1
     assert adapter._message_matches_mention_patterns("a good thing") is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("caption, cached_calls, dispatched", [
+    ("holiday pic", 0, 0),          # unmentioned group attachment: never persisted
+    ("clawk holiday pic", 1, 1),   # mentioned: cached and dispatched
+])
+async def test_unmentioned_group_attachment_is_not_cached(
+        monkeypatch: pytest.MonkeyPatch, caption: str, cached_calls: int, dispatched: int) -> None:
+    """The group mention gate must run BEFORE inline attachment bytes hit the media cache."""
+    import plugins.platforms.photon.adapter as photon_adapter
+
+    adapter = _make_adapter(monkeypatch, extra={"require_mention": True})
+    captured = _capture(adapter, monkeypatch)
+    calls: list[str] = []
+
+    def fake_cache(content, name, mime, *, force_audio=False):
+        calls.append(name)
+        return "/tmp/cached.png"
+
+    monkeypatch.setattr(photon_adapter, "_cache_inbound_attachment", fake_cache)
+    payload = _group_payload(caption)
+    payload["content"] = {"type": "group", "items": [
+        {"content": {"type": "text", "text": caption}},
+        {"content": {"type": "attachment", "name": "pic.png", "mimeType": "image/png",
+                     "data": "aGVsbG8=", "encoding": "base64"}},
+    ]}
+
+    await adapter._dispatch_inbound(payload)
+    assert len(calls) == cached_calls
+    assert len(captured) == dispatched

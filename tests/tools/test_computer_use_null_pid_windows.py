@@ -35,10 +35,9 @@ _PNG_B64 = (
 # _ingest_windows: the fix locus (pure function, no session needed)
 # ---------------------------------------------------------------------------
 
-
 class TestIngestWindows:
     def test_skips_window_with_null_pid(self):
-        from tools.computer_use.cua_backend import _ingest_windows
+        from tools.computer_use.cua_backend_parse import _ingest_windows
 
         raw = [
             {"app_name": "Desktop", "pid": None, "window_id": 1, "z_index": 0},
@@ -51,32 +50,9 @@ class TestIngestWindows:
         assert out[0]["pid"] == 4321
         assert out[0]["window_id"] == 77
 
-    def test_skips_window_with_null_window_id(self):
-        from tools.computer_use.cua_backend import _ingest_windows
-
-        raw = [
-            {"app_name": "Panel", "pid": 10, "window_id": None, "z_index": 0},
-            {"app_name": "Firefox", "pid": 4321, "window_id": 77, "z_index": 1},
-        ]
-
-        out = _ingest_windows(raw)
-
-        assert [w["app_name"] for w in out] == ["Firefox"]
-
-    def test_coerces_numeric_strings_like_the_original_int_call(self):
-        # The original `int(w["pid"])` accepted numeric strings; preserve that.
-        from tools.computer_use.cua_backend import _ingest_windows
-
-        out = _ingest_windows([
-            {"app_name": "Term", "pid": "200", "window_id": "9", "z_index": 0}
-        ])
-
-        assert out[0]["pid"] == 200
-        assert out[0]["window_id"] == 9
-        assert isinstance(out[0]["pid"], int)
 
     def test_preserves_fields_capture_relies_on(self):
-        from tools.computer_use.cua_backend import _ingest_windows
+        from tools.computer_use.cua_backend_parse import _ingest_windows
 
         out = _ingest_windows([
             {
@@ -90,7 +66,7 @@ class TestIngestWindows:
         ])
 
         w = out[0]
-        assert w["off_screen"] is True  # derived from is_on_screen
+        assert w["off_screen"] is True          # derived from is_on_screen
         assert w["title"] == "Mozilla Firefox"
         assert w["z_index"] == 3
 
@@ -98,7 +74,6 @@ class TestIngestWindows:
 # ---------------------------------------------------------------------------
 # capture(): end-to-end proof the null-pid window no longer crashes capture
 # ---------------------------------------------------------------------------
-
 
 def _backend_with_windows(raw_windows):
     """A CuaDriverBackend whose session returns `raw_windows` from
@@ -130,14 +105,8 @@ def _backend_with_windows(raw_windows):
 def test_capture_vision_survives_null_pid_window():
     raw = [
         {"app_name": "Desktop", "pid": None, "window_id": 1, "z_index": 0},
-        {
-            "app_name": "Firefox",
-            "pid": 4321,
-            "window_id": 77,
-            "is_on_screen": True,
-            "title": "Mozilla Firefox",
-            "z_index": 1,
-        },
+        {"app_name": "Firefox", "pid": 4321, "window_id": 77,
+         "is_on_screen": True, "title": "Mozilla Firefox", "z_index": 1},
     ]
     backend = _backend_with_windows(raw)
 

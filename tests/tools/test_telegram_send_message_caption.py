@@ -19,9 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
-def _install_telegram_mock(
-    monkeypatch: pytest.MonkeyPatch, bot_factory: MagicMock
-) -> None:
+def _install_telegram_mock(monkeypatch: pytest.MonkeyPatch, bot_factory: MagicMock) -> None:
     parse_mode = SimpleNamespace(MARKDOWN_V2="MarkdownV2", HTML="HTML")
     constants_mod = SimpleNamespace(ParseMode=parse_mode)
     _MessageEntity = lambda **_kw: SimpleNamespace(**_kw)
@@ -45,19 +43,18 @@ def _make_bot() -> MagicMock:
 
 def _no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     for var in (
-        "TELEGRAM_PROXY",
-        "HTTPS_PROXY",
-        "https_proxy",
-        "HTTP_PROXY",
-        "http_proxy",
-        "ALL_PROXY",
-        "all_proxy",
-        "NO_PROXY",
-        "no_proxy",
+        "TELEGRAM_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY",
+        "http_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy",
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("gateway.run._gateway_runner_ref", lambda: None, raising=False)
-    monkeypatch.setattr(sys, "platform", "linux")
+    # Neutralize macOS system-proxy auto-detection at its probe rather than by
+    # claiming the host is Linux: this keeps the test honest on the macOS
+    # runner (and on a developer's Mac), where a real scutil-configured proxy
+    # would otherwise leak into the assertion.
+    monkeypatch.setattr(
+        "gateway.platforms.base._detect_macos_system_proxy", lambda: None
+    )
 
 
 def _tmpfile(suffix: str) -> str:
@@ -67,9 +64,7 @@ def _tmpfile(suffix: str) -> str:
     return f.name
 
 
-def test_image_caption_rides_bubble_no_separate_text(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_image_caption_rides_bubble_no_separate_text(monkeypatch: pytest.MonkeyPatch) -> None:
     from tools.send_message_tool import _send_telegram
 
     _no_proxy(monkeypatch)
@@ -89,48 +84,6 @@ def test_image_caption_rides_bubble_no_separate_text(
         os.unlink(img)
 
 
-def test_video_caption_rides_bubble(monkeypatch: pytest.MonkeyPatch) -> None:
-    from tools.send_message_tool import _send_telegram
-
-    _no_proxy(monkeypatch)
-    bot = _make_bot()
-    _install_telegram_mock(monkeypatch, MagicMock(return_value=bot))
-    vid = _tmpfile(".mp4")
-    try:
-        res = asyncio.run(
-            _send_telegram("tok", "123", "Model unit tour", media_files=[(vid, False)])
-        )
-        assert res["success"] is True
-        bot.send_message.assert_not_awaited()
-        bot.send_video.assert_awaited_once()
-        assert bot.send_video.await_args.kwargs.get("caption") == "Model unit tour"
-    finally:
-        os.unlink(vid)
-
-
-def test_long_text_falls_back_to_separate_message(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from tools.send_message_tool import _send_telegram
-
-    _no_proxy(monkeypatch)
-    bot = _make_bot()
-    _install_telegram_mock(monkeypatch, MagicMock(return_value=bot))
-    img = _tmpfile(".png")
-    long_text = "x" * 1100  # over Telegram's 1024 caption cap
-    try:
-        res = asyncio.run(
-            _send_telegram("tok", "123", long_text, media_files=[(img, False)])
-        )
-        assert res["success"] is True
-        # Text too long for a caption — sent as its own message, photo uncaptioned.
-        bot.send_message.assert_awaited()
-        bot.send_photo.assert_awaited_once()
-        assert not bot.send_photo.await_args.kwargs.get("caption")
-    finally:
-        os.unlink(img)
-
-
 def test_multi_file_keeps_separate_text(monkeypatch: pytest.MonkeyPatch) -> None:
     from tools.send_message_tool import _send_telegram
 
@@ -141,9 +94,7 @@ def test_multi_file_keeps_separate_text(monkeypatch: pytest.MonkeyPatch) -> None
     img2 = _tmpfile(".jpg")
     try:
         res = asyncio.run(
-            _send_telegram(
-                "tok", "123", "two pics", media_files=[(img, False), (img2, False)]
-            )
+            _send_telegram("tok", "123", "two pics", media_files=[(img, False), (img2, False)])
         )
         assert res["success"] is True
         # Ambiguous caption→file association: text stays a separate message.

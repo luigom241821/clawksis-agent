@@ -10,7 +10,6 @@ remote debugging on a DEDICATED profile so Clawksis's browser tools can attach a
 
 Stdlib only; cross-platform (macOS / Linux / Windows). Nothing here touches a password or PII.
 """
-
 from __future__ import annotations
 
 import json
@@ -29,14 +28,8 @@ DEFAULT_PORT = 9222
 # Chromium-family binaries we know how to drive, in preference order. Names first (works on any OS
 # where one is on PATH), then per-OS absolute-path fallbacks below.
 _PATH_NAMES = (
-    "google-chrome",
-    "google-chrome-stable",
-    "chromium",
-    "chromium-browser",
-    "brave-browser",
-    "microsoft-edge",
-    "microsoft-edge-stable",
-    "chrome",
+    "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+    "brave-browser", "microsoft-edge", "microsoft-edge-stable", "chrome",
 )
 
 
@@ -105,9 +98,7 @@ def find_browser(override: str | None = None) -> str | None:
     return None
 
 
-def launch_command(
-    browser: str, port: int = DEFAULT_PORT, profile: Path | None = None
-) -> list[str]:
+def launch_command(browser: str, port: int = DEFAULT_PORT, profile: Path | None = None) -> list[str]:
     """The exact argv used to start the debug browser (also handy for `--print`)."""
     profile = profile or default_profile()
     return [
@@ -121,13 +112,12 @@ def launch_command(
 
 def _http_get(url: str, timeout: float) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "unbroker-cdp/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (localhost only)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read()
 
 
-def endpoint_status(
-    port: int = DEFAULT_PORT, host: str = "127.0.0.1", timeout: float = 1.0
-) -> dict | None:
+def endpoint_status(port: int = DEFAULT_PORT, host: str = "127.0.0.1",
+                    timeout: float = 1.0) -> dict | None:
     """Return the CDP `/json/version` dict if a debuggable browser is live at host:port, else None.
 
     (Chrome restricts this endpoint to localhost/IP Host headers, so we always hit 127.0.0.1.)
@@ -161,8 +151,7 @@ def launch(browser: str, port: int = DEFAULT_PORT, profile: Path | None = None) 
     }
     if sys.platform == "win32":
         kwargs["creationflags"] = (
-            subprocess.DETACHED_PROCESS
-            | subprocess.CREATE_NEW_PROCESS_GROUP  # windows-footgun: ok
+            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP  # windows-footgun: ok
         )
     else:
         kwargs["start_new_session"] = True

@@ -5,11 +5,10 @@ end-to-end evolution with whatever model the user already has paid access to.
 
 Run with:
     uv --project darwinian_evolver run python parrot_openrouter.py \
-        --num_iterations 3 --output_dir /tmp/parrot_out
+        --num_iterations 3 --output_dir ~/.clawksis/cache/scratch/parrot_out
 
 Reads `OPENROUTER_API_KEY` from the environment.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -120,9 +119,7 @@ template in the LAST triple-backtick block of your response.
             return []
 
 
-class ParrotEvaluator(
-    Evaluator[ParrotOrganism, EvaluationResult, ParrotEvaluationFailureCase]
-):
+class ParrotEvaluator(Evaluator[ParrotOrganism, EvaluationResult, ParrotEvaluationFailureCase]):
     TRAINABLE_PHRASES = [
         "Hello world.",
         "bla",
@@ -142,19 +139,13 @@ class ParrotEvaluator(
         for i, p in enumerate(self.TRAINABLE_PHRASES):
             r = organism.run(p)
             if r != p:
-                train_fails.append(
-                    ParrotEvaluationFailureCase(
-                        phrase=p, response=r, data_point_id=f"trainable_{i}"
-                    )
-                )
+                train_fails.append(ParrotEvaluationFailureCase(
+                    phrase=p, response=r, data_point_id=f"trainable_{i}"))
         for i, p in enumerate(self.HOLDOUT_PHRASES):
             r = organism.run(p)
             if r != p:
-                hold_fails.append(
-                    ParrotEvaluationFailureCase(
-                        phrase=p, response=r, data_point_id=f"holdout_{i}"
-                    )
-                )
+                hold_fails.append(ParrotEvaluationFailureCase(
+                    phrase=p, response=r, data_point_id=f"holdout_{i}"))
         n_total = len(self.TRAINABLE_PHRASES) + len(self.HOLDOUT_PHRASES)
         n_ok = n_total - len(train_fails) - len(hold_fails)
         return EvaluationResult(
@@ -203,7 +194,6 @@ def main() -> int:
     )
 
     import json
-
     log_path = out / "results.jsonl"
     snap_dir = out / "snapshots"
     snap_dir.mkdir(exist_ok=True)
@@ -211,22 +201,15 @@ def main() -> int:
     for snap in loop.run(num_iterations=args.num_iterations):
         (snap_dir / f"iteration_{snap.iteration}.pkl").write_bytes(snap.snapshot)
         _, best_eval = snap.best_organism_result
-        print(
-            f"iter={snap.iteration} pop={snap.population_size} "
-            f"best_score={best_eval.score:.3f}"
-        )
+        print(f"iter={snap.iteration} pop={snap.population_size} "
+              f"best_score={best_eval.score:.3f}")
         with log_path.open("a") as f:
-            f.write(
-                json.dumps({
-                    "iteration": snap.iteration,
-                    "best_score": best_eval.score,
-                    "pop_size": snap.population_size,
-                    "score_percentiles": {
-                        str(k): v for k, v in snap.score_percentiles.items()
-                    },
-                })
-                + "\n"
-            )
+            f.write(json.dumps({
+                "iteration": snap.iteration,
+                "best_score": best_eval.score,
+                "pop_size": snap.population_size,
+                "score_percentiles": {str(k): v for k, v in snap.score_percentiles.items()},
+            }) + "\n")
     print(f"\nDone. Results in: {out}")
     return 0
 

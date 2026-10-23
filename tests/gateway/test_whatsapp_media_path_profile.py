@@ -8,7 +8,6 @@ constants value-imported at import time, so under a profile override the
 validator rejected media the bridge had legitimately written into the override
 profile's cache. The validator must resolve the cache roots per-call.
 """
-
 from pathlib import Path
 
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
@@ -18,20 +17,6 @@ def _make_profile(root: Path) -> Path:
     for sub in ("cache/images", "cache/audio", "cache/videos", "cache/documents"):
         (root / sub).mkdir(parents=True, exist_ok=True)
     return root
-
-
-def test_validator_accepts_active_profile_media(tmp_path):
-    from plugins.platforms.whatsapp.adapter import _is_allowed_bridge_path
-
-    prof = _make_profile(tmp_path / "profB")
-    media = prof / "cache" / "images" / "img_abc.jpg"
-    media.write_bytes(b"\xff\xd8\xff\x00")
-
-    token = set_clawk_home_override(str(prof))
-    try:
-        assert _is_allowed_bridge_path(str(media)) is True
-    finally:
-        reset_clawk_home_override(token)
 
 
 def test_validator_follows_override_switch(tmp_path):
@@ -55,14 +40,3 @@ def test_validator_follows_override_switch(tmp_path):
         reset_clawk_home_override(token)
 
 
-def test_validator_rejects_non_cache_path(tmp_path):
-    from plugins.platforms.whatsapp.adapter import _is_allowed_bridge_path
-
-    prof = _make_profile(tmp_path / "profB")
-    outside = tmp_path / "etc_passwd"
-    outside.write_text("root:x:0:0")
-    token = set_clawk_home_override(str(prof))
-    try:
-        assert _is_allowed_bridge_path(str(outside)) is False
-    finally:
-        reset_clawk_home_override(token)

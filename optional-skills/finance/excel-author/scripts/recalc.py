@@ -53,15 +53,12 @@ def recalc(xlsx_path: str, timeout: int = 60) -> dict:
                     "--outdir",
                     td,
                 ],
-                check=True,
+                stdin=subprocess.DEVNULL, check=True,
                 capture_output=True,
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            return {
-                "status": "error",
-                "error": f"libreoffice timed out after {timeout}s",
-            }
+            return {"status": "error", "error": f"libreoffice timed out after {timeout}s"}
         except subprocess.CalledProcessError as e:
             return {
                 "status": "error",
@@ -70,10 +67,7 @@ def recalc(xlsx_path: str, timeout: int = 60) -> dict:
 
         produced = Path(td) / src.name
         if not produced.exists():
-            return {
-                "status": "error",
-                "error": "libreoffice did not produce output file",
-            }
+            return {"status": "error", "error": "libreoffice did not produce output file"}
 
         shutil.copy(produced, src)
 

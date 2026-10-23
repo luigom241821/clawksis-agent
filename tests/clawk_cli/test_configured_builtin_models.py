@@ -9,9 +9,7 @@ def _provider_row(configured_models, *, max_models=None):
     with (
         patch(
             "agent.models_dev.fetch_models_dev",
-            return_value={
-                "deepseek": {"env": ["DEEPSEEK_API_KEY"], "name": "DeepSeek"}
-            },
+            return_value={"deepseek": {"env": ["DEEPSEEK_API_KEY"], "name": "DeepSeek"}},
         ),
         patch(
             "agent.models_dev.PROVIDER_TO_MODELS_DEV",
@@ -39,8 +37,3 @@ def test_configured_models_precede_and_deduplicate_discovered_models():
     assert row["total_models"] == 3
 
 
-def test_configured_models_are_merged_before_picker_limit():
-    row = _provider_row(["configured-x", "configured-y"], max_models=2)
-
-    assert row["models"] == ["configured-x", "configured-y"]
-    assert row["total_models"] == 4

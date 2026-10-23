@@ -1,242 +1,102 @@
 """Guards for CLI startup performance regression.
 
-
-
 ``clawk_cli.main`` skips eager plugin discovery at argparse-setup time
-
 when the invocation is clearly targeting a known built-in subcommand.
-
-This saves 500-650ms on ``clawk --help``, ``clawk version``,
-
+This saves 500-650ms on ``clawk --help``, ``clawk --version``,
 ``clawk logs``, etc., by not importing ``google.cloud.pubsub_v1``,
-
 ``aiohttp``, ``grpc``, and friends.
 
-
-
-Two invariants:
-
-
-
-1. ``_BUILTIN_SUBCOMMANDS`` must contain every subcommand that is actually
-
-   registered by ``main()``.  If an entry is missing, plugin discovery
-
-   runs unnecessarily for that command (correctness-safe, just slow).
-
-   If an entry is PRESENT but the subcommand doesn't exist, a plugin
-
-   could shadow the name — also bad.
-
-
-
-2. ``_plugin_cli_discovery_needed()`` returns the right answer for the
-
-   flag/positional parsing cases it's meant to handle.
-
+Invariants: ``_plugin_cli_discovery_needed()`` classifies flag/positional argv
+correctly, and deferred platforms register their CLI command before argparse
+builds the plugin subparsers (issue #54678).
 """
 
 from __future__ import annotations
 
-
-import io
-
-import re
-
 import sys
-
-from contextlib import redirect_stdout
-
 from unittest.mock import patch
 
-
-import pytest
-
-
 from clawk_cli.main import (
-    _BUILTIN_SUBCOMMANDS,
-    _first_positional_argv,
-    _plugin_cli_discovery_needed,
+    _resolve_deferred_platform_cli_command,
 )
 
 
-# ── helper: grab the live set of top-level subcommands from argparse ───────
-
-
-def _live_subcommand_names() -> set[str]:
-    """Run ``clawk --help`` in-process and parse the subcommand block.
+# ── _resolve_deferred_platform_cli_command (issue #54678) ──────────────────
 
 
 
-    We patch ``_plugin_cli_discovery_needed`` to always return False so
 
-    plugin-registered commands aren't included — we're validating the
+def test_deferred_platform_loader_registers_cli_command_before_parser_table():
+    """Fake deferred loader must resolve through real registry + register CLI
+    before argparse builds plugin command subparsers (issue #54678 review).
 
-    built-in-only set.
+    Existing unit tests mock ``platform_registry.get`` and only assert the
+    helper calls it. This regression exercises the full chain clawk-sweeper
+    asked for:
 
+    1. a deferred platform loader is pending on a real ``PlatformRegistry``
+    2. that loader materializes a ``register_cli_command`` side effect on the
+       plugin manager (no Photon SDK import)
+    3. ``_resolve_deferred_platform_cli_command`` runs the pending loader
+    4. the registered command is present on the manager *and* visible as an
+       argparse subparser/choice after the same construction path ``main()``
+       uses for plugin CLI commands
     """
+    import argparse
 
-    from clawk_cli import main as _main
+    from gateway.platform_registry import PlatformRegistry
+    from clawk_cli.plugins import PluginContext, PluginManager, PluginManifest
 
-    argv_backup = sys.argv[:]
+    mgr = PluginManager()
+    manifest = PluginManifest(name="fake-photon-platform")
+    command_name = "fakephoton"
 
-    sys.argv = ["clawk", "--help"]
+    def _fake_loader():
+        # Mirrors what a real platform adapter does on import: register its
+        # top-level clawk <name> CLI command via PluginContext.
+        ctx = PluginContext(manifest, mgr)
+        ctx.register_cli_command(
+            name=command_name,
+            help="Fake deferred platform CLI (test-only)",
+            setup_fn=lambda p: None,
+            description="Hermetic stand-in for deferred platform CLI registration",
+        )
 
-    buf = io.StringIO()
+    registry = PlatformRegistry()
+    registry.register_deferred(command_name, _fake_loader)
 
-    try:
-        with patch.object(_main, "_plugin_cli_discovery_needed", return_value=False):
-            with redirect_stdout(buf):
-                with pytest.raises(SystemExit):
-                    _main.main()
+    # Precondition: deferred is known, but CLI command is not yet registered.
+    assert registry.is_registered(command_name)
+    assert command_name not in mgr._cli_commands
+    assert command_name in registry._deferred
 
-    finally:
-        sys.argv = argv_backup
+    fake_module = type(sys)("gateway.platform_registry")
+    fake_module.platform_registry = registry
+    with patch.dict(sys.modules, {"gateway.platform_registry": fake_module}):
+        _resolve_deferred_platform_cli_command(command_name)
 
-    text = buf.getvalue()
+    # Loader resolution must promote deferred -> concrete and fire CLI register.
+    assert command_name not in registry._deferred
+    assert command_name in mgr._cli_commands
+    cmd_info = mgr._cli_commands[command_name]
+    assert cmd_info["name"] == command_name
+    assert cmd_info["plugin"] == "fake-photon-platform"
 
-    # argparse prints "{chat,model,...}" somewhere in the help output
+    # Same parser-table assembly main() uses after reading _cli_commands.
+    parser = argparse.ArgumentParser(prog="clawk")
+    subparsers = parser.add_subparsers(dest="command")
+    for info in mgr._cli_commands.values():
+        plugin_parser = subparsers.add_parser(
+            info["name"],
+            help=info["help"],
+            description=info.get("description", ""),
+        )
+        info["setup_fn"](plugin_parser)
+        if info.get("handler_fn") is not None:
+            plugin_parser.set_defaults(func=info["handler_fn"])
 
-    m = re.search(r"\{([a-zA-Z0-9_,\-]+)\}", text)
-
-    assert m, f"Could not find subcommand group in --help output:\n{text[:500]}"
-
-    return set(m.group(1).split(","))
-
-
-# ── _first_positional_argv ─────────────────────────────────────────────────
-
-
-@pytest.mark.parametrize(
-    "argv,expected",
-    [
-        (["clawk"], None),
-        (["clawk", "--help"], None),
-        (["clawk", "-h"], None),
-        (["clawk", "--version"], None),
-        (["clawk", "-w"], None),
-        # -p / --profile is stripped from sys.argv by
-        # _apply_profile_override() at import time, so it never reaches
-        # _first_positional_argv. We test with just -w / --tui here.
-        (["clawk", "-w", "--tui"], None),
-        (["clawk", "version"], "version"),
-        (["clawk", "--tui", "chat"], "chat"),
-        (["clawk", "-w", "logs"], "logs"),
-        (["clawk", "chat", "hello world"], "chat"),
-        (["clawk", "gateway", "run"], "gateway"),
-        # Top-level value-taking flags: the value should be skipped.
-        (["clawk", "-m", "gpt5", "chat"], "chat"),
-        (["clawk", "--model", "gpt5", "chat", "hi"], "chat"),
-        (["clawk", "-m", "gpt5", "--provider", "openai", "chat"], "chat"),
-        (["clawk", "-z", "hello world"], None),
-        (["clawk", "-z", "hello", "chat"], "chat"),
-        (["clawk", "--model=gpt5", "chat"], "chat"),  # inline form
-        (["clawk", "--", "chat"], "chat"),  # -- terminator
-        (["clawk", "-w", "--"], None),
-        # Unknown positional after skipped flags → plugin-cmd candidate.
-        (["clawk", "some-plugin-cmd"], "some-plugin-cmd"),
-        (["clawk", "-m", "gpt5", "some-plugin-cmd"], "some-plugin-cmd"),
-    ],
-)
-def test_first_positional_argv(argv, expected):
-
-    with patch.object(sys, "argv", argv):
-        assert _first_positional_argv() == expected
-
-
-# ── _plugin_cli_discovery_needed ───────────────────────────────────────────
-
-
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["clawk"],  # bare → chat
-        ["clawk", "--help"],  # top-level help
-        ["clawk", "-h"],
-        ["clawk", "version"],  # known built-in
-        ["clawk", "logs"],
-        ["clawk", "gateway", "run"],
-        ["clawk", "--tui"],
-        ["clawk", "-w", "--tui"],
-        ["clawk", "chat", "hi"],
-        ["clawk", "help"],  # accepted built-in-ish
-        ["clawk", "-m", "gpt5", "chat"],  # flag-value-skipping
-    ],
-)
-def test_discovery_skipped_for_builtins(argv):
-
-    with patch.object(sys, "argv", argv):
-        assert _plugin_cli_discovery_needed() is False
-
-
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["clawk", "meet", "join"],  # potential google_meet plugin
-        ["clawk", "honcho", "status"],  # potential memory plugin
-        ["clawk", "unknown-subcmd"],
-    ],
-)
-def test_discovery_runs_for_unknown_positional(argv):
-
-    with patch.object(sys, "argv", argv):
-        assert _plugin_cli_discovery_needed() is True
-
-
-# ── _BUILTIN_SUBCOMMANDS ↔ argparse registration parity ────────────────────
-
-
-def test_builtin_set_covers_every_registered_subcommand():
-    """Every subcommand registered in main() must appear in the set.
-
-
-
-    Missing entries cause a slow-path regression (correctness stays
-
-    fine — discovery just runs unnecessarily).
-
-    """
-
-    live = _live_subcommand_names()
-
-    # "help" is synthetic — an argparse-implicit convenience we include
-
-    # in the set so ``clawk help <cmd>`` skips discovery; it won't show
-
-    # up as a subparser in the --help output.
-
-    declared = _BUILTIN_SUBCOMMANDS - {"help"}
-
-    missing_from_declaration = live - declared
-
-    assert not missing_from_declaration, (
-        f"_BUILTIN_SUBCOMMANDS is missing these live subcommands: "
-        f"{sorted(missing_from_declaration)}. Add them to "
-        f"clawk_cli/main.py::_BUILTIN_SUBCOMMANDS so plugin discovery "
-        f"can be skipped when the user targets them."
-    )
-
-
-def test_builtin_set_has_no_phantom_entries():
-    """No entry in the set should refer to a subcommand that no longer exists.
-
-
-
-    A phantom entry means plugin discovery gets incorrectly skipped for
-
-    a name that — if a plugin actually registered it — would fail to
-
-    parse. Keeps the set honest.
-
-    """
-
-    live = _live_subcommand_names()
-
-    allowed_synthetic = {"help"}
-
-    phantom = _BUILTIN_SUBCOMMANDS - live - allowed_synthetic
-
-    assert not phantom, (
-        f"_BUILTIN_SUBCOMMANDS has entries that are not registered as "
-        f"top-level subparsers: {sorted(phantom)}"
-    )
+    # argparse surface: choices + parse success.
+    choices = getattr(subparsers, "choices", None) or {}
+    assert command_name in choices
+    parsed = parser.parse_args([command_name])
+    assert parsed.command == command_name

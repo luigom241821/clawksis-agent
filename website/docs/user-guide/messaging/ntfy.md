@@ -80,12 +80,12 @@ Once `NTFY_HOME_CHANNEL` is set, cron jobs can deliver to ntfy:
 cronjob(
     action="create",
     schedule="every 1h",
-    deliver="ntfy",  # uses NTFY_HOME_CHANNEL
-    prompt="Check for alerts and summarise.",
+    deliver="ntfy",          # uses NTFY_HOME_CHANNEL
+    prompt="Check for alerts and summarise."
 )
 ```
 
-Or target a specific topic explicitly via the cron job's `deliver:` field, or from a shell script with the [`clawk send` CLI](/guides/pipe-script-output):
+Or target a specific topic explicitly via the cron job's `deliver:` field, or from a shell script with the [`clawk send` CLI](../../guides/pipe-script-output.md):
 
 ```bash
 clawk send ntfy:alerts-channel "Done!"

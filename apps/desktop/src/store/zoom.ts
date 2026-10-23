@@ -17,6 +17,17 @@ export function setZoomPercent(percent: number): void {
 }
 
 if (typeof window !== 'undefined' && window.clawkDesktop?.zoom) {
-  void window.clawkDesktop.zoom.get().then(({ percent }) => $zoomPercent.set(percent))
-  window.clawkDesktop.zoom.onChanged(({ percent }) => $zoomPercent.set(percent))
+  const zoom = window.clawkDesktop.zoom
+  let receivedZoomChange = false
+
+  zoom.onChanged(({ percent }) => {
+    receivedZoomChange = true
+    $zoomPercent.set(percent)
+  })
+
+  void zoom.get().then(({ percent }) => {
+    if (!receivedZoomChange) {
+      $zoomPercent.set(percent)
+    }
+  })
 }

@@ -10,7 +10,6 @@ The harness expects the ``built_image`` fixture from
 ``tests/docker/conftest.py``.  When Docker isn't available every test
 here is skipped at collection time.
 """
-
 from __future__ import annotations
 
 import subprocess
@@ -28,9 +27,8 @@ def test_clawk_help(built_image: str) -> None:
     """
     r = subprocess.run(
         ["docker", "run", "--rm", built_image, "--help"],
-        capture_output=True,
-        text=True,
-        timeout=60,
+        capture_output=True, text=True, timeout=60,
+        check=False,
     )
     assert r.returncode == 0, (
         f"clawk --help failed (exit {r.returncode}): "
@@ -51,9 +49,8 @@ def test_dashboard_subcommand_present(built_image: str) -> None:
     """
     r = subprocess.run(
         ["docker", "run", "--rm", built_image, "dashboard", "--help"],
-        capture_output=True,
-        text=True,
-        timeout=60,
+        capture_output=True, text=True, timeout=60,
+        check=False,
     )
     assert r.returncode == 0, (
         f"clawk dashboard --help failed (exit {r.returncode}): "
@@ -62,4 +59,32 @@ def test_dashboard_subcommand_present(built_image: str) -> None:
     combined = (r.stdout + r.stderr).lower()
     assert "dashboard" in combined or "usage" in combined, (
         f"dashboard --help output unexpected: {combined[-2000:]!r}"
+    )
+
+
+def test_clawk_help_under_wrapped_init(built_image: str) -> None:
+    """``docker run --init --rm <image> --help`` must exit 0.
+
+    Regression guard for #38349: platforms whose own init owns PID 1
+    (Fly Machines, ``docker run --init``, podman on some hosts) exec the
+    image entrypoint as a child.  s6-overlay's ``/init`` hard-aborts
+    there with ``s6-overlay-suexec: fatal: can only run as pid 1``.  The
+    entrypoint dispatcher must detect the non-PID-1 case and fall back
+    to the direct bootstrap path so the requested command still runs.
+    """
+    r = subprocess.run(
+        ["docker", "run", "--init", "--rm", built_image, "--help"],
+        capture_output=True, text=True, timeout=120,
+        check=False,
+    )
+    assert "can only run as pid 1" not in (r.stdout + r.stderr), (
+        f"s6-overlay-suexec aborted under a wrapped init (#38349): "
+        f"stderr={r.stderr[-2000:]!r}"
+    )
+    assert r.returncode == 0, (
+        f"clawk --help failed under `docker run --init` (exit {r.returncode}): "
+        f"stdout={r.stdout[-2000:]!r} stderr={r.stderr[-2000:]!r}"
+    )
+    assert "Traceback" not in r.stderr, (
+        f"clawk --help produced a traceback under --init: {r.stderr[-2000:]!r}"
     )

@@ -1,15 +1,20 @@
 ---
 name: teams-meeting-pipeline
-description: "Operate the Teams meeting summary pipeline via Clawksis CLI — summarize meetings, inspect pipeline status, replay jobs, manage Microsoft Graph subscriptions."
+description: Teams meeting summaries, job replay, Graph subscriptions.
 version: 1.1.0
 author: Clawksis + Teknium
 license: MIT
+platforms: [linux, macos, windows]
 prerequisites:
   env_vars: [MSGRAPH_TENANT_ID, MSGRAPH_CLIENT_ID, MSGRAPH_CLIENT_SECRET]
   commands: [clawk]
 metadata:
   clawk:
     tags: [Teams, Microsoft Graph, Meetings, Productivity, Operations]
+    # Channel-gated: this pipeline only makes sense on the Teams gateway
+    # channel (and in cron jobs, where its scheduled summary/replay work
+    # actually runs). Hidden from every other session's skills index.
+    session_platforms: [teams, cron]
     related_docs:
       - /docs/guides/microsoft-graph-app-registration
       - /docs/user-guide/messaging/teams-meetings
@@ -69,6 +74,7 @@ clawk teams-pipeline subscriptions         # current Graph webhook subscriptions
 clawk teams-pipeline run <job-id>          # replay a stored job (re-summarize, re-deliver)
 clawk teams-pipeline fetch --meeting-id <id>   # dry-run: resolve meeting + transcript without persisting
 clawk teams-pipeline fetch --join-web-url "<url>"   # dry-run by join URL
+clawk teams-pipeline fetch --join-web-url "<url>" --organizer-user-id <id>   # organizer-scoped lookup (required for /meet/ short URLs)
 ```
 
 ### Subscription management

@@ -86,7 +86,7 @@ for image_path, qa_pairs in your_dataset:
     data.append({
         "id": str(len(data)),
         "image": image_path,
-        "conversations": conversations,
+        "conversations": conversations
     })
 
 # Save
@@ -97,7 +97,7 @@ with open("custom_data.json", "w") as f:
 ### Fine-tune script
 
 ```bash
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Set paths
 DATA_PATH="custom_data.json"
@@ -154,7 +154,7 @@ lora_config = LoraConfig(
     target_modules=["q_proj", "v_proj"],
     lora_dropout=0.05,
     bias="none",
-    task_type="CAUSAL_LM",
+    task_type="CAUSAL_LM"
 )
 
 # Apply LoRA

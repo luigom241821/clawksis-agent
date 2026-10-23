@@ -1,8 +1,4 @@
-"""``clawk gui`` subcommand parser.
-
-Extracted verbatim from ``clawk_cli/main.py:main()`` (god-file Phase 2).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk gui`` subcommand parser."""
 
 from __future__ import annotations
 
@@ -11,53 +7,56 @@ from typing import Callable
 
 def build_gui_parser(subparsers, *, cmd_gui: Callable) -> None:
     """Attach the ``gui`` subcommand to ``subparsers``."""
-    # =========================================================================
     gui_parser = subparsers.add_parser(
-        "desktop",
-        aliases=["gui"],
-        help="Build and launch the native desktop app",
-        description=(
-            "Launch the Clawksis Electron desktop app. By default this installs "
+        "desktop", aliases=["gui"], help="Build and launch the native desktop app",
+        description="Launch the Clawksis Electron desktop app. By default this installs "
             "workspace Node dependencies, builds the current OS's unpacked "
-            "Electron app, then launches that packaged artifact."
-        ),
-    )
+            "Electron app, then launches that packaged artifact.")
     gui_parser.add_argument(
-        "--source",
-        action="store_true",
-        help="Launch via `electron .` against apps/desktop/dist instead of the packaged app",
-    )
+        "--source", action="store_true",
+        help="Launch via `electron .` against apps/desktop/dist instead of the packaged app")
     gui_parser.add_argument(
-        "--build-only",
-        action="store_true",
-        help="Build the desktop app but do not launch it (used by the installer's --update flow)",
-    )
+        "--build-only", action="store_true",
+        help="Build the desktop app but do not launch it (used by the installer's --update flow)")
     gui_parser.add_argument(
-        "--fake-boot",
-        action="store_true",
-        help="Enable deterministic desktop boot delays for validating startup UI",
-    )
+        "--fake-boot", action="store_true",
+        help="Enable deterministic desktop boot delays for validating startup UI")
     gui_parser.add_argument(
-        "--ignore-existing",
-        action="store_true",
-        help="Force Desktop to ignore any clawk CLI already on PATH during backend resolution",
-    )
+        "--ignore-existing", action="store_true",
+        help="Skip the installed Clawksis runtime (~/.clawksis/clawksis-agent) so no local "
+             "backend starts and Desktop offers connect or install instead. --clawk-root "
+             "and the bundled runtime still win; a runtime installed during this launch is used.")
     gui_parser.add_argument(
         "--clawk-root",
-        help="Override the Clawksis source root used by Desktop (sets CLAWK_DESKTOP_CLAWK_ROOT)",
-    )
+        help="Override the Clawksis source root used by Desktop (sets CLAWK_DESKTOP_CLAWK_ROOT)")
     gui_parser.add_argument(
         "--cwd",
-        help="Initial project directory for Desktop chat sessions (sets CLAWK_DESKTOP_CWD)",
-    )
+        help="Initial project directory for Desktop chat sessions (sets CLAWK_DESKTOP_CWD)")
     gui_parser.add_argument(
-        "--skip-build",
-        action="store_true",
+        "--skip-build", action="store_true",
         help="Skip npm install/package and launch the existing unpacked app from apps/desktop/release",
     )
     gui_parser.add_argument(
-        "--force-build",
+        "--local", action="store_true",
+        help="Show the local-models UI in the desktop app (models pane, quickstart, picker rows)")
+    gui_parser.add_argument(
+        "--force-build", action="store_true",
+        help="Force a full rebuild even if the content stamp matches")
+    gui_parser.add_argument(
+        "--setup-tcc-identity", action="store_true",
+        help="macOS only: create/import a self-signed code-signing certificate "
+            "in the login keychain and point desktop.macos_signing_identity at "
+            "it, then re-sign the packaged app. Makes macOS TCC grants (Full "
+            "Disk Access, Accessibility, Files and Folders, microphone) survive "
+            "rebuilds with a certificate-anchored identity. Idempotent — safe "
+            "to re-run after updates.")
+    gui_parser.add_argument(
+        "--identity", default="Clawksis Local Signing",
+        help="Certificate name to create/use for --setup-tcc-identity (default: Clawksis Local Signing)",
+    )
+    gui_parser.add_argument(
+        "--close-preview",
         action="store_true",
-        help="Force a full rebuild even if the content stamp matches",
+        help="Close the preview pane and exit its fullscreen (out-of-band escape hatch when the pane captured all input)",
     )
     gui_parser.set_defaults(func=cmd_gui)

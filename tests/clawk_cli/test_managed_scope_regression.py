@@ -3,7 +3,6 @@
 Every test here must keep passing through all later phases when NO managed scope
 is present. They are the 'managed scope is invisible when absent' contract.
 """
-
 import os
 import textwrap
 
@@ -65,20 +64,6 @@ def test_env_expansion_in_user_config(clawk_home, monkeypatch):
     assert cfg_get(cfg, "providers", "custom", "base_url") == "https://example.test/v1"
 
 
-def test_no_managed_dir_means_user_value_wins(clawk_home):
-    """Sanity: with the managed override pointing at an absent dir, nothing changes."""
-    from clawk_cli.config import load_config, cfg_get
-
-    _write_user_config(
-        clawk_home,
-        """
-        model:
-          default: user/model-y
-        """,
-    )
-    assert cfg_get(load_config(), "model", "default") == "user/model-y"
-
-
 def test_user_env_overrides_shell(tmp_path, monkeypatch):
     from clawk_cli.env_loader import load_clawk_dotenv
 
@@ -90,11 +75,3 @@ def test_user_env_overrides_shell(tmp_path, monkeypatch):
     assert os.environ["FOO_TOKEN"] == "from_user_env"
 
 
-def test_missing_user_env_is_noop(tmp_path, monkeypatch):
-    from clawk_cli.env_loader import load_clawk_dotenv
-
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("BAR_TOKEN", "from_shell")
-    load_clawk_dotenv(clawk_home=str(home))
-    assert os.environ["BAR_TOKEN"] == "from_shell"

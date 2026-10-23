@@ -1,14 +1,14 @@
 ---
-title: "Honcho"
+title: "Honcho — Configure and troubleshoot Honcho memory for Clawksis"
 sidebar_label: "Honcho"
-description: "Configure and use Honcho memory with Clawksis -- cross-session user modeling, multi-profile peer isolation, observation config, dialectic reasoning, session su..."
+description: "Configure and troubleshoot Honcho memory for Clawksis"
 ---
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
 # Honcho
 
-Configure and use Honcho memory with Clawksis -- cross-session user modeling, multi-profile peer isolation, observation config, dialectic reasoning, session summaries, and context budget enforcement. Use when setting up Honcho, troubleshooting memory, managing profiles with Honcho peers, or tuning observation, recall, and dialectic settings.
+Configure and troubleshoot Honcho memory for Clawksis.
 
 ## Skill metadata
 
@@ -21,7 +21,7 @@ Configure and use Honcho memory with Clawksis -- cross-session user modeling, mu
 | License | MIT |
 | Platforms | linux, macos, windows |
 | Tags | `Honcho`, `Memory`, `Profiles`, `Observation`, `Dialectic`, `User-Modeling`, `Session-Summary` |
-| Related skills | [`clawksis-agent`](/docs/user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-clawksis-agent) |
+| Related skills | [`clawksis-agent`](../../bundled/autonomous-ai-agents/autonomous-ai-agents-clawksis-agent.md) |
 
 ## Reference: full SKILL.md
 
@@ -43,6 +43,12 @@ Honcho provides AI-native cross-session user modeling. It learns who the user is
 - Configuring context budgets and session summary injection
 
 ## Setup
+
+Honcho is a plugin-catalog memory provider maintained by Plastic Labs. Install it once per machine (homes upgraded from a release that bundled Honcho get it automatically):
+
+```bash
+clawk plugins install honcho
+```
 
 ### Cloud (app.honcho.dev)
 

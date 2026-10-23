@@ -8,7 +8,7 @@ description: "When and how to use subagent delegation — patterns for parallel 
 
 Clawksis can spawn isolated child agents to work on tasks in parallel. Each subagent gets its own conversation, terminal session, and toolset. Only the final summary comes back — intermediate tool calls never enter your context window.
 
-For the full feature reference, see [Subagent Delegation](/user-guide/features/delegation).
+For the full feature reference, see [Subagent Delegation](../user-guide/features/delegation.md).
 
 ---
 
@@ -25,7 +25,7 @@ For the full feature reference, see [Subagent Delegation](/user-guide/features/d
 - Mechanical multi-step work with logic between steps → `execute_code`
 - Tasks needing user interaction → subagents can't use `clarify`
 - Quick file edits → do them directly
-- Durable long-running work that must survive session closure or process restart → `cronjob` or `terminal(background=True, notify_on_complete=True)`. Top-level delegation is asynchronous but still process-local.
+- Durable long-running work that must survive session closure or process restart → `cronjob_manage` or `terminal(background=True, notify_on_complete=True)`. Top-level delegation is asynchronous but still process-local.
 
 ---
 
@@ -45,22 +45,20 @@ Focus on recent developments and key players.
 Behind the scenes, Clawksis uses:
 
 ```python
-delegate_task(
-    tasks=[
-        {
-            "goal": "Research WebAssembly outside the browser in 2025",
-            "context": "Focus on: runtimes (Wasmtime, Wasmer), cloud/edge use cases, WASI progress",
-        },
-        {
-            "goal": "Research RISC-V server chip adoption",
-            "context": "Focus on: server chips shipping, cloud providers adopting, software ecosystem",
-        },
-        {
-            "goal": "Research practical quantum computing applications",
-            "context": "Focus on: error correction breakthroughs, real-world use cases, key companies",
-        },
-    ]
-)
+delegate_task(tasks=[
+    {
+        "goal": "Research WebAssembly outside the browser in 2025",
+        "context": "Focus on: runtimes (Wasmtime, Wasmer), cloud/edge use cases, WASI progress"
+    },
+    {
+        "goal": "Research RISC-V server chip adoption",
+        "context": "Focus on: server chips shipping, cloud providers adopting, software ecosystem"
+    },
+    {
+        "goal": "Research practical quantum computing applications",
+        "context": "Focus on: error correction breakthroughs, real-world use cases, key companies"
+    }
+])
 ```
 
 All three run concurrently. Each subagent searches the web independently and returns a summary. The parent agent then synthesizes them into a coherent briefing.
@@ -86,7 +84,7 @@ delegate_task(
     Auth files: src/auth/login.py, src/auth/jwt.py, src/auth/middleware.py
     Test command: pytest tests/auth/ -v
     Focus on: SQL injection, JWT validation, password hashing, session management.
-    Fix issues found and verify tests pass.""",
+    Fix issues found and verify tests pass."""
 )
 ```
 
@@ -120,34 +118,32 @@ Each subagent researches one option independently. Because they're isolated, the
 Split a large refactoring task across parallel subagents, each handling a different part of the codebase:
 
 ```python
-delegate_task(
-    tasks=[
-        {
-            "goal": "Refactor all API endpoint handlers to use the new response format",
-            "context": """Project at /home/user/api-server.
+delegate_task(tasks=[
+    {
+        "goal": "Refactor all API endpoint handlers to use the new response format",
+        "context": """Project at /home/user/api-server.
         Files: src/handlers/users.py, src/handlers/auth.py, src/handlers/billing.py
         Old format: return {"data": result, "status": "ok"}
         New format: return APIResponse(data=result, status=200).to_dict()
         Import: from src.responses import APIResponse
-        Run tests after: pytest tests/handlers/ -v""",
-        },
-        {
-            "goal": "Update all client SDK methods to handle the new response format",
-            "context": """Project at /home/user/api-server.
+        Run tests after: pytest tests/handlers/ -v"""
+    },
+    {
+        "goal": "Update all client SDK methods to handle the new response format",
+        "context": """Project at /home/user/api-server.
         Files: sdk/python/client.py, sdk/python/models.py
         Old parsing: result = response.json()["data"]
         New parsing: result = response.json()["data"] (same key, but add status code checking)
-        Also update sdk/python/tests/test_client.py""",
-        },
-        {
-            "goal": "Update API documentation to reflect the new response format",
-            "context": """Project at /home/user/api-server.
+        Also update sdk/python/tests/test_client.py"""
+    },
+    {
+        "goal": "Update API documentation to reflect the new response format",
+        "context": """Project at /home/user/api-server.
         Docs at: docs/api/. Format: Markdown with code examples.
         Update all response examples from old format to new format.
-        Add a 'Response Format' section to docs/api/overview.md explaining the schema.""",
-        },
-    ]
-)
+        Add a 'Response Format' section to docs/api/overview.md explaining the schema."""
+    }
+])
 ```
 
 :::tip
@@ -176,8 +172,8 @@ urls = [r["url"] for r in results[:5]]
 content = web_extract(urls)
 
 # Save for the analysis step
-import json
-with open("/tmp/ai-funding-data.json", "w") as f:
+import json, os
+with open(os.path.expanduser("~/.clawksis/cache/scratch/ai-funding-data.json"), "w") as f:
     json.dump({"search_results": results, "extracted": content["results"]}, f)
 print(f"Collected {len(results)} results, extracted {len(content['results'])} pages")
 """)
@@ -185,10 +181,10 @@ print(f"Collected {len(results)} results, extracted {len(content['results'])} pa
 # Step 2: Reasoning-heavy analysis (delegation is better here)
 delegate_task(
     goal="Analyze AI funding data and write a market report",
-    context="""Raw data at /tmp/ai-funding-data.json contains search results and
+    context="""Raw data at ~/.clawksis/cache/scratch/ai-funding-data.json contains search results and
     extracted web pages about AI funding, acquisitions, and IPOs in Q1 2026.
     Write a structured market report: key deals, trends, notable players,
-    and outlook. Focus on deals over $100M.""",
+    and outlook. Focus on deals over $100M."""
 )
 ```
 
@@ -198,20 +194,20 @@ This is often the most efficient pattern: `execute_code` handles the 10+ sequent
 
 ## Inherited Tool Access
 
-Subagents inherit the parent's enabled toolsets. `delegate_task` does not accept a model-facing `toolsets` parameter, so delegated work cannot grant itself capabilities that the parent does not have. Configure the parent's tools before starting the conversation when a delegated task needs web, terminal, file, or other access. Clawksis still strips child-blocked tools such as `clarify`, `memory`, and `execute_code`.
+Subagents inherit the parent's enabled toolsets. `delegate_task` does not accept a model-facing `toolsets` parameter, so delegated work cannot grant itself capabilities that the parent does not have. Configure the parent's tools before starting the conversation when a delegated task needs web, terminal, file, or other access. Clawksis still strips child-blocked tools such as `clarify`, `memory`, and `send_message`; children keep `execute_code` for programmatic tool calling.
 
 ---
 
 ## Constraints
 
-- **Default 3 parallel tasks**: batches default to 3 concurrent subagents (configurable via `delegation.max_concurrent_children` in config.yaml, no hard ceiling, only a floor of 1)
+- **Default 10 parallel tasks**: batches default to 10 concurrent subagents (configurable via `delegation.max_concurrent_children` in config.yaml, no hard ceiling, only a floor of 1)
 - **Nested delegation is opt-in**: leaf subagents (default) cannot call `delegate_task`, `clarify`, `memory`, or `execute_code`. Orchestrator subagents (`role="orchestrator"`) retain `delegate_task` for further delegation, but only when `delegation.max_spawn_depth` is raised above the default of 1 (floor 1, no ceiling); the other three remain blocked. Disable globally via `delegation.orchestrator_enabled: false`.
 
 ### Tuning Concurrency and Depth
 
 | Config | Default | Range | Effect |
 |--------|---------|-------|--------|
-| `max_concurrent_children` | 3 | >=1 | Parallel batch size per `delegate_task` call |
+| `max_concurrent_children` | 10 | >=1 | Parallel batch size per `delegate_task` call |
 | `max_spawn_depth` | 1 | >=1 | How many delegation levels can spawn further |
 
 Example: running 30 parallel workers with nested subagents:
@@ -224,8 +220,8 @@ delegation:
 
 - **Separate terminals** — each subagent gets its own terminal session with separate working directory and state
 - **No conversation history** — subagents see only the `goal` and `context` the parent agent passes when calling `delegate_task`
-- **Default 50 iterations** — set `max_iterations` lower for simple tasks to save cost
-- **Not durable** — top-level delegation runs in the background and posts its result back later, but it remains tied to the owning session and Clawksis process. Session closure, `/stop`, `/new`, or a process restart can cancel or strand in-progress work. Use `cronjob` or `terminal(background=True, notify_on_complete=True)` for work that must survive those boundaries.
+- **Default 250 iterations** — set `delegation.max_iterations` lower in `config.yaml` for fleets of simple tasks to save cost
+- **Not durable** — top-level delegation runs in the background and posts its result back later, but it remains tied to the owning session and Clawksis process. Session closure, `/stop`, `/new`, or a process restart can cancel or strand in-progress work. Use `cronjob_manage` or `terminal(background=True, notify_on_complete=True)` for work that must survive those boundaries.
 
 ---
 
@@ -239,6 +235,8 @@ delegation:
 
 **Check results.** Subagent summaries are just that — summaries. If a subagent says "fixed the bug and tests pass," verify by running the tests yourself or reading the diff.
 
+**Failures are surfaced.** A subagent that dies (provider error, timeout, crash) is reported with a clean one-line notice — `⚠️ Subagent failed — "your goal": <reason>` — in the CLI delegation tree and as a chat notice on gateway platforms, even when tool progress is turned off. The parent agent also receives the full error in the tool result.
+
 ---
 
-*For the complete delegation reference — all parameters, ACP integration, and advanced configuration — see [Subagent Delegation](/user-guide/features/delegation).*
+*For the complete delegation reference — all parameters, ACP integration, and advanced configuration — see [Subagent Delegation](../user-guide/features/delegation.md).*

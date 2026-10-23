@@ -5,7 +5,6 @@ For JS-rendered or anti-bot pages the agent should use the `web_extract` or
 This helper only covers plain static pages and is intentionally network-light so
 it can be mocked in tests.
 """
-
 from __future__ import annotations
 
 import urllib.error
@@ -17,11 +16,9 @@ USER_AGENT = "Mozilla/5.0 (compatible; unbroker/1.0; data opt-out)"
 def fetch(url: str, timeout: int = 20) -> tuple[int, str]:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (https only by convention)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             charset = resp.headers.get_content_charset() or "utf-8"
-            return getattr(resp, "status", 200), resp.read().decode(
-                charset, errors="replace"
-            )
+            return getattr(resp, "status", 200), resp.read().decode(charset, errors="replace")
     except urllib.error.HTTPError as exc:
         return exc.code, ""
     except (urllib.error.URLError, TimeoutError, ValueError):

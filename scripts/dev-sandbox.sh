@@ -28,33 +28,44 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENTRYPOINT="$(basename "$0")"
+# The minimal entrypoint is an alias, but its existing data and app identity stay separate.
+if [ "$ENTRYPOINT" = dev-minimal-sandbox.sh ]; then
+  DEFAULT_DIR=.clawk-minimal-sandbox
+  APP_PREFIX=ClawksisMinimalSandbox
+  TEMP_PREFIX=clawk-minimal-sandbox
+else
+  DEFAULT_DIR=.clawk-sandbox
+  APP_PREFIX=ClawksisSandbox
+  TEMP_PREFIX=clawk-sandbox
+fi
 
 print_help() {
-  cat <<'EOF'
-Usage: dev-sandbox.sh [--persistent] [--from DIR] [--] <command...>
+  cat <<EOF
+Usage: $ENTRYPOINT [--persistent] [--from DIR] [--] <command...>
 
 Run a Clawksis instance in an isolated sandbox.
 
 Options:
   --persistent    Keep the sandbox dir across restarts (under the worktree
-                  git root, in .clawk-sandbox/). Without this flag the
+                  git root, in $DEFAULT_DIR/). Without this flag the
                   sandbox is a temp dir that is removed on exit.
   --from DIR      Copy DIR into the sandbox CLAWK_HOME as the starting
                   point (config, sessions, skills, etc.).
                   Ignored if the sandbox CLAWK_HOME already has content
                   (e.g. reusing a --persistent sandbox) to avoid clobbering.
-  --delete        Delete the existing persistent sandbox in .clawk-sandbox.
+  --delete        Delete the existing persistent sandbox in $DEFAULT_DIR.
   -h, --help      Show this help message.
 
 Environment:
-  CLAWK_DEV_SANDBOX_NAME  Override the app name (default: ClawksisSandbox)
-  CLAWK_DEV_SANDBOX_DIR   Override the persistent dir name (default: .clawk-sandbox)
+  CLAWK_DEV_SANDBOX_NAME  Override the app name (default prefix: $APP_PREFIX)
+  CLAWK_DEV_SANDBOX_DIR   Override the persistent dir name (default: $DEFAULT_DIR)
 
 Examples:
-  dev-sandbox.sh clawk desktop
-  dev-sandbox.sh --persistent clawk desktop
-  dev-sandbox.sh --from ~/.clawksis clawk desktop
-  dev-sandbox.sh -- npm run dev
+  $ENTRYPOINT clawk desktop
+  $ENTRYPOINT --persistent clawk desktop
+  $ENTRYPOINT --from ~/.clawksis clawk desktop
+  $ENTRYPOINT -- npm run dev
 EOF
 }
 
@@ -117,7 +128,7 @@ if [ "$#" -eq 0 ]; then
 fi
 
 
-SANDBOX_DIR_NAME="${CLAWK_DEV_SANDBOX_DIR:-.clawk-sandbox}"
+SANDBOX_DIR_NAME="${CLAWK_DEV_SANDBOX_DIR:-$DEFAULT_DIR}"
 GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$SCRIPT_DIR/..")"
 GIT_ROOT="$(cd "$GIT_ROOT" && pwd)"
 PERSISTENT_SANDBOX_ROOT="$GIT_ROOT/$SANDBOX_DIR_NAME"
@@ -148,14 +159,14 @@ WORKTREE_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$SCRIPT_DIR/
 WORKTREE_ROOT="$(cd "$WORKTREE_ROOT" && pwd)"
 WORKTREE_HASH="$(printf '%s' "$WORKTREE_ROOT" | cksum | cut -d' ' -f1)"
 WORKTREE_NAME="$(basename "$WORKTREE_ROOT")"
-DEFAULT_SANDBOX_NAME="ClawksisSandbox-${WORKTREE_NAME}-${WORKTREE_HASH}"
+DEFAULT_SANDBOX_NAME="${APP_PREFIX}-${WORKTREE_NAME}-${WORKTREE_HASH}"
 
 SANDBOX_NAME="${CLAWK_DEV_SANDBOX_NAME:-$DEFAULT_SANDBOX_NAME}"
 
 if [ "$PERSISTENT" = true ]; then
   SANDBOX_ROOT="$PERSISTENT_SANDBOX_ROOT"
 else
-  SANDBOX_ROOT="$(mktemp -d -t clawk-sandbox.XXXXXX)"
+  SANDBOX_ROOT="$(mktemp -d -t "${TEMP_PREFIX}.XXXXXX")"
 fi
 
 export CLAWK_HOME="$SANDBOX_ROOT/clawk-home"
@@ -185,6 +196,7 @@ else
 fi
 
 if [ "$PERSISTENT" = false ]; then
+  # shellcheck disable=SC2329  # invoked via trap
   cleanup() {
     chmod -R u+w "$SANDBOX_ROOT"
     rm -rf -- "$SANDBOX_ROOT"
