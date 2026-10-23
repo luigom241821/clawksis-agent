@@ -10,6 +10,9 @@ on:
 jobs:
   typecheck:
     runs-on: ubuntu-latest
+    env:
+      # tsc sobre apps/desktop supera el heap por defecto de node (~4 GB).
+      NODE_OPTIONS: --max-old-space-size=7168
     strategy:
       matrix:
         package:

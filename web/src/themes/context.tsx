@@ -29,29 +29,11 @@ import type {
   ThemeTypography,
 } from "./types";
 import { api } from "@/lib/api";
-
 import {
-
-  FONT_CHOICES,
-
-  THEME_DEFAULT_FONT_ID,
-
-  getFontChoice,
-
-  type FontChoice,
-
-} from "./fonts";
-
-import {
-
   BACKGROUND_CHOICES,
-
   THEME_DEFAULT_BACKGROUND_ID,
-
   getBackgroundChoice,
-
   type BackgroundChoice,
-
 } from "./backgrounds";
 
 /** LocalStorage key — pre-applied before the React tree mounts to avoid
@@ -63,6 +45,10 @@ const STORAGE_KEY = "clawksis-dashboard-theme";
  *  sentinel / absent = "use the active theme's font". Pre-applied before
  *  the React tree mounts (see `main.tsx`) to avoid a font flash. */
 const FONT_STORAGE_KEY = "clawksis-dashboard-font";
+
+/** LocalStorage key for the selected background (independent of theme).
+ *  Clawksis: background picker (see ./backgrounds and components/Backdrop). */
+const BACKGROUND_STORAGE_KEY = "clawksis-dashboard-background";
 
 /** Renames of built-in theme keys we've shipped previously. Without this,
  *  users who saved one of the old names in localStorage (or had it
@@ -123,8 +109,6 @@ function typographyVars(typo: ThemeTypography): Record<string, string> {
     "--theme-base-size": typo.baseSize,
     "--theme-line-height": typo.lineHeight,
     "--theme-letter-spacing": typo.letterSpacing,
-
-    "--theme-font-weight": typo.fontWeight ?? "500",
   };
 }
 
@@ -370,43 +354,6 @@ function applyFontOverride(fontId: string | undefined) {
 // Apply a full theme to :root
 // ---------------------------------------------------------------------------
 
-
-// ---------------------------------------------------------------------------
-// Font override (independent of theme)
-// ---------------------------------------------------------------------------
-
-/** LocalStorage key for the font override (independent of theme). Holds a
- *  font id from the catalog in `fonts.ts`, or the `THEME_DEFAULT_FONT_ID`
- *  sentinel / absent = "use the active theme's font". */
-const FONT_STORAGE_KEY = "clawksis-dashboard-font";
-
-/** LocalStorage key for the selected background (independent of theme).
- *  Local-only, no backend — the `<Backdrop />` reads the id from context. */
-const BACKGROUND_STORAGE_KEY = "clawksis-dashboard-background";
-
-/** The active font-override id, mirrored at module scope so `applyTheme`
- *  can re-assert it after it rewrites the theme's font vars. */
-let _ACTIVE_FONT_OVERRIDE: string = THEME_DEFAULT_FONT_ID;
-
-/** Apply (or clear) the font override on `:root`. When a catalog font is
- *  active we override the body/display font vars and inject its webfont; the
- *  theme keeps ownership of `--theme-font-mono` (code/terminal) so picking a
- *  body font doesn't mangle code blocks. Clearing it lets the theme's own
- *  font show through again. */
-function applyFontOverride(fontId: string | undefined) {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  const choice: FontChoice | undefined = getFontChoice(fontId);
-  if (!choice) {
-    root.style.removeProperty("--theme-font-override-sans");
-    return;
-  }
-  injectFontStylesheet(choice.fontUrl);
-  root.style.setProperty("--theme-font-override-sans", choice.stack);
-  root.style.setProperty("--theme-font-sans", choice.stack);
-  root.style.setProperty("--theme-font-display", choice.stack);
-}
-
 function applyTheme(theme: DashboardTheme) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
@@ -474,10 +421,8 @@ function applyTheme(theme: DashboardTheme) {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   /** Name of the currently active theme (built-in id or user YAML name). */
   const [themeName, setThemeName] = useState<string>(() => {
-
-    if (typeof window === "undefined") return "midnight";
-
-    const stored = window.localStorage.getItem(STORAGE_KEY) ?? "midnight";
+    if (typeof window === "undefined") return "default";
+    const stored = window.localStorage.getItem(STORAGE_KEY) ?? "default";
     const migrated = migrateThemeName(stored);
     // Write the migrated name back so future reads converge on the new
     // key and we eventually retire the alias entry.
@@ -486,80 +431,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     return migrated;
   });
-
-
-  /** Active font-override id (independent of theme). `THEME_DEFAULT_FONT_ID`
-
-   *  = no override; use the active theme's own font. Local-only (localStorage). */
-
-  const [fontId, setFontId] = useState<string>(() => {
-
-    if (typeof window === "undefined") return THEME_DEFAULT_FONT_ID;
-
-    const stored = window.localStorage.getItem(FONT_STORAGE_KEY);
-
-    const valid = stored && getFontChoice(stored) ? stored : THEME_DEFAULT_FONT_ID;
-
-    _ACTIVE_FONT_OVERRIDE = valid;
-
-    return valid;
-
-  });
-
-
-  const setFont = useCallback((id: string) => {
-
-    const next = getFontChoice(id) ? id : THEME_DEFAULT_FONT_ID;
-
-    setFontId(next);
-
-    if (typeof window !== "undefined") {
-
-      window.localStorage.setItem(FONT_STORAGE_KEY, next);
-
-    }
-
-  }, []);
-
-
-  /** Active background id (independent of theme). `THEME_DEFAULT_BACKGROUND_ID`
-
-   *  = use the theme's default backdrop. Local-only (localStorage). */
-
-  const [bgId, setBgId] = useState<string>(() => {
-
-    if (typeof window === "undefined") return THEME_DEFAULT_BACKGROUND_ID;
-
-    const stored = window.localStorage.getItem(BACKGROUND_STORAGE_KEY);
-
-    return stored && getBackgroundChoice(stored)
-
-      ? stored
-
-      : THEME_DEFAULT_BACKGROUND_ID;
-
-  });
-
-
-  const setBackground = useCallback((id: string) => {
-
-    const next =
-
-      id === THEME_DEFAULT_BACKGROUND_ID || getBackgroundChoice(id)
-
-        ? id
-
-        : THEME_DEFAULT_BACKGROUND_ID;
-
-    setBgId(next);
-
-    if (typeof window !== "undefined") {
-
-      window.localStorage.setItem(BACKGROUND_STORAGE_KEY, next);
-
-    }
-
-  }, []);
 
   /** All selectable themes (shown in the picker). Starts with just the
    *  built-ins; the API call below merges in user themes. */
@@ -704,6 +575,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       window.localStorage.setItem(FONT_STORAGE_KEY, next);
     }
     api.setFontPref(next).catch(() => {});
+  }, []);
+
+  /** Active background id (independent of theme). `THEME_DEFAULT_BACKGROUND_ID`
+   *  = use the theme's default backdrop. Local-only (localStorage). */
+  const [bgId, setBgId] = useState<string>(() => {
+    if (typeof window === "undefined") return THEME_DEFAULT_BACKGROUND_ID;
+    const stored = window.localStorage.getItem(BACKGROUND_STORAGE_KEY);
+    return stored && getBackgroundChoice(stored)
+      ? stored
+      : THEME_DEFAULT_BACKGROUND_ID;
+  });
+
+  const setBackground = useCallback((id: string) => {
+    const next =
+      id === THEME_DEFAULT_BACKGROUND_ID || getBackgroundChoice(id)
+        ? id
+        : THEME_DEFAULT_BACKGROUND_ID;
+    setBgId(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(BACKGROUND_STORAGE_KEY, next);
+    }
   }, []);
 
   const value = useMemo<ThemeContextValue>(

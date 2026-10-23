@@ -154,9 +154,11 @@ export function useImageAttachments(
 
       setUploading(true);
       try {
+        // El data URL queda como preview persistente (el object URL se revoca).
         const dataUrl = await blobToDataUrl(file);
         const uploadPath = `chat-uploads/${Date.now()}_${sanitizeName(file.name)}`;
-        const res = await api.uploadFile(uploadPath, dataUrl, true);
+        // /api/files/upload ahora recibe multipart (el File crudo), no un data URL.
+        const res = await api.uploadFile(uploadPath, file, true);
         // image.attach resuelve por path absoluto. /api/files/upload devuelve
         // res.path YA absoluto (display_path = str(resolved)); NO concatenar
         // res.root — eso doble-prefijaba ("/root/.../root/...") cuando root!=None
