@@ -195,9 +195,7 @@ def test_release_claims_the_first_attempt_creates_a_draft_and_dispatches(source)
             "databaseId,url,headBranch,headSha,displayTitle,status",
         ],
     ]
-    assert (
-        result["run_url"] == "https://github.com/example/hermes-agent/actions/runs/7"
-    )
+    assert result["run_url"] == "https://github.com/example/hermes-agent/actions/runs/7"
     # The claim push names the claim ref and nothing else.
     pushed = git(source, "ls-remote", "origin", "refs/tags/*")
     assert pushed.splitlines() == [
@@ -845,8 +843,7 @@ def test_publish_and_abandon_output_name_the_result():
     )
     assert "Requested publication of v0.21.5." in published
     assert (
-        "Workflow: https://github.com/example/hermes-agent/actions/runs/9"
-        in published
+        "Workflow: https://github.com/example/hermes-agent/actions/runs/9" in published
     )
     assert "moves the stable channel" in published
 
