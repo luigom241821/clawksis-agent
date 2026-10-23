@@ -2,10 +2,10 @@
   "cli-code.claude": {
     "prompt_tokens": {
       "context": 249,
-      "stable": 1935,
-      "volatile": 1813
+      "stable": 2298,
+      "volatile": 2550
     },
-    "tool_tokens": 13277,
+    "tool_tokens": 14273,
     "tools": [
       "browser_back",
       "browser_cdp",
@@ -27,6 +27,8 @@
       "memory",
       "patch",
       "read_file",
+      "scrape",
+      "scrapegraph",
       "search_files",
       "skill_manage",
       "skill_view",
@@ -45,10 +47,10 @@
   "cli.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1445,
-      "volatile": 1813
+      "stable": 1808,
+      "volatile": 2550
     },
-    "tool_tokens": 13277,
+    "tool_tokens": 14273,
     "tools": [
       "browser_back",
       "browser_cdp",
@@ -70,92 +72,8 @@
       "memory",
       "patch",
       "read_file",
-      "search_files",
-      "skill_manage",
-      "skill_view",
-      "skills_list",
-      "terminal",
-      "text_to_speech",
-      "tool_call",
-      "tool_describe",
-      "tool_search",
-      "vision_analyze",
-      "web_extract",
-      "web_search",
-      "write_file"
-    ]
-  },
-  "cli.gemini": {
-    "prompt_tokens": {
-      "context": 0,
-      "stable": 1866,
-      "volatile": 1811
-    },
-    "tool_tokens": 13277,
-    "tools": [
-      "browser_back",
-      "browser_cdp",
-      "browser_click",
-      "browser_console",
-      "browser_dialog",
-      "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
-      "clarify",
-      "delegate_task",
-      "execute_code",
-      "manage_connections",
-      "memory",
-      "patch",
-      "read_file",
-      "search_files",
-      "skill_manage",
-      "skill_view",
-      "skills_list",
-      "terminal",
-      "text_to_speech",
-      "tool_call",
-      "tool_describe",
-      "tool_search",
-      "vision_analyze",
-      "web_extract",
-      "web_search",
-      "write_file"
-    ]
-  },
-  "cli.gpt": {
-    "prompt_tokens": {
-      "context": 0,
-      "stable": 2640,
-      "volatile": 1809
-    },
-    "tool_tokens": 13433,
-    "tools": [
-      "browser_back",
-      "browser_cdp",
-      "browser_click",
-      "browser_console",
-      "browser_dialog",
-      "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
-      "clarify",
-      "delegate_task",
-      "execute_code",
-      "manage_connections",
-      "memory",
-      "patch",
-      "read_file",
+      "scrape",
+      "scrapegraph",
       "search_files",
       "skill_manage",
       "skill_view",
@@ -174,10 +92,10 @@
   "cli.clawk": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1445,
-      "volatile": 1813
+      "stable": 1808,
+      "volatile": 2550
     },
-    "tool_tokens": 13277,
+    "tool_tokens": 14273,
     "tools": [
       "browser_back",
       "browser_cdp",
@@ -199,6 +117,98 @@
       "memory",
       "patch",
       "read_file",
+      "scrape",
+      "scrapegraph",
+      "search_files",
+      "skill_manage",
+      "skill_view",
+      "skills_list",
+      "terminal",
+      "text_to_speech",
+      "tool_call",
+      "tool_describe",
+      "tool_search",
+      "vision_analyze",
+      "web_extract",
+      "web_search",
+      "write_file"
+    ]
+  },
+  "cli.gemini": {
+    "prompt_tokens": {
+      "context": 0,
+      "stable": 2230,
+      "volatile": 2548
+    },
+    "tool_tokens": 14273,
+    "tools": [
+      "browser_back",
+      "browser_cdp",
+      "browser_click",
+      "browser_console",
+      "browser_dialog",
+      "browser_exec",
+      "browser_get_images",
+      "browser_navigate",
+      "browser_press",
+      "browser_scroll",
+      "browser_snapshot",
+      "browser_type",
+      "browser_vision",
+      "clarify",
+      "delegate_task",
+      "execute_code",
+      "manage_connections",
+      "memory",
+      "patch",
+      "read_file",
+      "scrape",
+      "scrapegraph",
+      "search_files",
+      "skill_manage",
+      "skill_view",
+      "skills_list",
+      "terminal",
+      "text_to_speech",
+      "tool_call",
+      "tool_describe",
+      "tool_search",
+      "vision_analyze",
+      "web_extract",
+      "web_search",
+      "write_file"
+    ]
+  },
+  "cli.gpt": {
+    "prompt_tokens": {
+      "context": 0,
+      "stable": 3231,
+      "volatile": 2546
+    },
+    "tool_tokens": 14429,
+    "tools": [
+      "browser_back",
+      "browser_cdp",
+      "browser_click",
+      "browser_console",
+      "browser_dialog",
+      "browser_exec",
+      "browser_get_images",
+      "browser_navigate",
+      "browser_press",
+      "browser_scroll",
+      "browser_snapshot",
+      "browser_type",
+      "browser_vision",
+      "clarify",
+      "delegate_task",
+      "execute_code",
+      "manage_connections",
+      "memory",
+      "patch",
+      "read_file",
+      "scrape",
+      "scrapegraph",
       "search_files",
       "skill_manage",
       "skill_view",
@@ -217,10 +227,10 @@
   "cron.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1317,
-      "volatile": 1813
+      "stable": 1771,
+      "volatile": 2550
     },
-    "tool_tokens": 13277,
+    "tool_tokens": 14273,
     "tools": [
       "browser_back",
       "browser_cdp",
@@ -242,6 +252,8 @@
       "memory",
       "patch",
       "read_file",
+      "scrape",
+      "scrapegraph",
       "search_files",
       "skill_manage",
       "skill_view",
@@ -260,10 +272,10 @@
   "desktop.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1579,
-      "volatile": 1814
+      "stable": 1942,
+      "volatile": 2551
     },
-    "tool_tokens": 13912,
+    "tool_tokens": 14907,
     "tools": [
       "browser_back",
       "browser_cdp",
@@ -286,6 +298,8 @@
       "patch",
       "react_to_message",
       "read_file",
+      "scrape",
+      "scrapegraph",
       "search_files",
       "skill_manage",
       "skill_view",
@@ -304,10 +318,10 @@
   "discord.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1349,
-      "volatile": 1814
+      "stable": 1713,
+      "volatile": 2551
     },
-    "tool_tokens": 13277,
+    "tool_tokens": 14273,
     "tools": [
       "browser_back",
       "browser_cdp",
@@ -329,6 +343,8 @@
       "memory",
       "patch",
       "read_file",
+      "scrape",
+      "scrapegraph",
       "search_files",
       "skill_manage",
       "skill_view",
@@ -347,10 +363,10 @@
   "telegram.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1382,
-      "volatile": 1814
+      "stable": 1745,
+      "volatile": 2551
     },
-    "tool_tokens": 13277,
+    "tool_tokens": 14273,
     "tools": [
       "browser_back",
       "browser_cdp",
@@ -372,6 +388,8 @@
       "memory",
       "patch",
       "read_file",
+      "scrape",
+      "scrapegraph",
       "search_files",
       "skill_manage",
       "skill_view",

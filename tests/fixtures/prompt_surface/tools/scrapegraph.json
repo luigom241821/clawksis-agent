@@ -1,0 +1,39 @@
+{
+  "description": "Extract STRUCTURED data from one or more web pages using ScrapeGraphAI (runs locally on our own infrastructure + the agent's LLM — no paid scraping API). Describe what you want in `prompt` and get back JSON. PREFER this over Firecrawl/Browserbase/web_extract when you need DATA (tables, prices, product specs, listings, contacts, structured article fields) rather than raw page text. It renders JavaScript pages with a local headless browser. For plain page text use `web_extract`/`scrape`; to find pages use `web_search` (don't scrape search engines).",
+  "name": "scrapegraph",
+  "parameters": {
+    "properties": {
+      "output_schema": {
+        "description": "Optional JSON Schema describing the exact shape you want the result in (keys/types). Forces structured output.",
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "prompt": {
+        "description": "What to extract, in plain language. E.g. 'List every product with its name, price and rating as JSON.' Defaults to extracting the main content.",
+        "type": "string"
+      },
+      "render_js": {
+        "description": "Render JavaScript with a local headless browser (default true). ⚠️ On headless servers NEVER set this to false — the headed browser mode requires a display server (X11) and will crash. Just omit it (defaults to headless=true).",
+        "type": "boolean"
+      },
+      "timeout": {
+        "description": "Max seconds for the LLM extraction (default: no timeout, min 10, max 300). Increase for large pages with many data points; decrease to fail fast on slow models.",
+        "type": "integer"
+      },
+      "url": {
+        "description": "The page URL to extract from. Either this or `urls` is required.",
+        "type": "string"
+      },
+      "urls": {
+        "description": "Extract from several pages with the same prompt (returns one combined result). Either this or `url` is required.",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      }
+    },
+    "required": [],
+    "type": "object"
+  }
+}
