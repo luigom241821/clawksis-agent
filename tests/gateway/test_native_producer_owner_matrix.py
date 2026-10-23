@@ -15,7 +15,7 @@ from clawk_constants import get_clawk_home
 @pytest.fixture(params=[None, False, True, "override", "managed", "null"])
 def owners(request, tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     root.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(root))
     managed = tmp_path / "managed"

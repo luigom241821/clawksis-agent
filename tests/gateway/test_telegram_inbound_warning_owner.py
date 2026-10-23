@@ -27,7 +27,7 @@ async def test_inbound_cache_failure_keeps_owner_policy_and_context(
     tmp_path, monkeypatch, caplog, ambient, setting, kind
 ):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     root.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(tmp_path / "managed"))

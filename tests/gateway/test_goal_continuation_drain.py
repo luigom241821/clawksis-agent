@@ -80,7 +80,7 @@ CONTINUATION_TEXT = "[Continuing toward your standing goal]\nGoal: ship it"
 def clawk_home(tmp_path, monkeypatch):
     from pathlib import Path
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

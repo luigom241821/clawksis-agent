@@ -166,7 +166,7 @@ class TestResolve:
 
 class TestSetChannel:
     def _home(self, tmp_path, monkeypatch):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir(exist_ok=True)
         monkeypatch.setenv("CLAWK_HOME", str(home))
         return home
@@ -276,7 +276,7 @@ class TestSetChannelCLI:
         monkeypatch.setenv("CLAWK_INSTALL_ROOT", str(tmp_path))
 
     def _home(self, tmp_path, monkeypatch):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir(exist_ok=True)
         monkeypatch.setenv("CLAWK_HOME", str(home))
         return home
@@ -428,7 +428,7 @@ class TestSetChannelCLI:
 def test_doctor_channel_records_are_read_only(tmp_path, monkeypatch, kind, expected):
     from copy import deepcopy
 
-    home, root = tmp_path / ".clawk", tmp_path / "install"
+    home, root = tmp_path / ".clawksis", tmp_path / "install"
     monkeypatch.setenv("CLAWK_HOME", str(home))
     if kind != "missing":
         root.mkdir()

@@ -27,7 +27,7 @@ def host_gateways(tmp_path):
     other = tmp_path / "other-user"
     installs = {
         "own": {"CLAWK_HOME": os.environ["CLAWK_HOME"]},
-        "foreign": {"CLAWK_HOME": str(other / ".clawk")},
+        "foreign": {"CLAWK_HOME": str(other / ".clawksis")},
         # Another install at its platform default home: no CLAWK_HOME in its environment.
         "foreign_default": {
             "HOME": str(other),

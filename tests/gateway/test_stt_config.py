@@ -19,7 +19,7 @@ def test_gateway_config_stt_disabled_from_dict_nested():
 def test_load_gateway_config_bridges_stt_enabled_from_config_yaml(
     tmp_path, monkeypatch
 ):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         yaml.safe_dump({"stt": {"enabled": False}}),

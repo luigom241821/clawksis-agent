@@ -338,7 +338,7 @@ def test_a_refused_build_join_is_logged_and_noted_in_the_receipt(
     import clawk_cli.update_receipt as ur
     from clawk_cli import update_custody
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     report = tmp_path / "report.txt"
@@ -387,7 +387,7 @@ def test_a_swallowed_refusal_is_what_the_update_reports(tmp_path, monkeypatch, c
     monkeypatch.setattr(
         update_owning_install, "retarget_to_owning_install", lambda root: None
     )
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     (tmp_path / "checkout").mkdir()
     monkeypatch.setattr(main, "PROJECT_ROOT", tmp_path / "checkout")
     monkeypatch.setattr(main, "_update_preflight_handled", lambda args: False)

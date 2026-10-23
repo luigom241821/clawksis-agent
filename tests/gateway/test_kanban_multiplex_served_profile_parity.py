@@ -23,7 +23,7 @@ from clawk_constants import get_clawk_home
 
 @pytest.fixture
 def served(tmp_path, monkeypatch):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     alpha = root / "profiles" / "alpha"
     alpha.mkdir(parents=True)
     (root / ".env").write_text("CLAWK_MODEL=default-model\nTERMINAL_ENV=docker\n")

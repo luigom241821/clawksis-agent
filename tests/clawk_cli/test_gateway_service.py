@@ -706,7 +706,7 @@ class TestLaunchdServiceRecovery:
             "generate_launchd_plist",
             lambda: (
                 "<plist>--replace\n<key>CLAWK_HOME</key>"
-                "<string>/Users/alice/.clawk</string></plist>"
+                "<string>/Users/alice/.clawksis</string></plist>"
             ),
         )
         monkeypatch.setattr("gateway.status.get_running_pid", lambda *a, **k: 4242)
@@ -758,7 +758,7 @@ class TestLaunchdServiceRecovery:
             "generate_launchd_plist",
             lambda: (
                 "<plist>--replace\n<key>CLAWK_HOME</key>"
-                "<string>/Users/alice/.clawk</string></plist>"
+                "<string>/Users/alice/.clawksis</string></plist>"
             ),
         )
         monkeypatch.setattr("gateway.status.get_running_pid", lambda *a, **k: 4242)
@@ -1593,13 +1593,13 @@ class TestSystemUnitClawkHome:
 
     def test_no_pm_node_never_bakes_the_invokers_path_node(self, monkeypatch, tmp_path):
         """Clawksis runs only its PM-managed Node: a PATH node is never written into a unit."""
-        (tmp_path / ".clawk" / "tools").mkdir(parents=True)
+        (tmp_path / ".clawksis" / "tools").mkdir(parents=True)
         monkeypatch.setattr(
             gateway_cli.shutil, "which", lambda name: "/opt/external-node/bin/node"
         )
         entries: list[str] = []
 
-        gateway_cli._append_node_dir_for_service(entries, tmp_path / ".clawk")
+        gateway_cli._append_node_dir_for_service(entries, tmp_path / ".clawksis")
 
         assert entries == []
 
@@ -1609,7 +1609,7 @@ class TestSystemUnitClawkHome:
         """Recorded entries whose store dirs are gone contribute nothing, and no PATH node replaces them."""
         import shutil as _shutil
 
-        clawk_root = tmp_path / ".clawk"
+        clawk_root = tmp_path / ".clawksis"
         for entry in _seed_pm_node_facts(clawk_root):
             _shutil.rmtree(entry)
         monkeypatch.setattr(
@@ -1658,7 +1658,7 @@ class TestSystemUnitClawkHome:
     def test_system_unit_orders_after_target_user_manager(self, monkeypatch, tmp_path):
         """#104893: restart-safe workers need user@<uid>.service; the system unit must not race it at boot."""
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         monkeypatch.setattr(
             gateway_cli,
             "_system_service_identity",
@@ -2008,7 +2008,7 @@ class TestProfileArg:
     def test_launchd_plist_wraps_gateway_stderr_with_timestamps(
         self, tmp_path, monkeypatch
     ):
-        profile_dir = tmp_path / ".clawk" / "profiles" / "mybot"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "mybot"
         profile_dir.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(profile_dir))
@@ -2050,7 +2050,7 @@ class TestProfileArg:
         self, tmp_path, monkeypatch
     ):
         """A home with spaces, quotes and a backslash survives shlex + JXA + plist quoting."""
-        profile_dir = tmp_path / 'my "odd" dir \\ here' / ".clawk"
+        profile_dir = tmp_path / 'my "odd" dir \\ here' / ".clawksis"
         profile_dir.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(profile_dir))
@@ -2172,7 +2172,7 @@ class TestProfileArg:
         self, tmp_path, monkeypatch
     ):
         """Sandboxed macOS shells can expose a UID that pwd cannot resolve (#57292)."""
-        profile_dir = tmp_path / ".clawk" / "profiles" / "mybot"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "mybot"
         profile_dir.mkdir(parents=True)
         machine_home = tmp_path / "Users" / "example"
         machine_home.mkdir(parents=True)
@@ -2201,7 +2201,7 @@ class TestProfileArg:
         self, tmp_path, monkeypatch
     ):
         """CLAWK_REAL_HOME is the explicit operator override for unresolvable UIDs (#57292)."""
-        profile_dir = tmp_path / ".clawk" / "profiles" / "mybot"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "mybot"
         profile_dir.mkdir(parents=True)
         real_home = tmp_path / "real-home"
         other_home = tmp_path / "other-home"
@@ -2229,7 +2229,7 @@ class TestProfileArg:
         self, tmp_path, monkeypatch
     ):
         """When pwd fails and HOME IS the profile home, the fallback must skip it (#57292)."""
-        profile_dir = tmp_path / ".clawk" / "profiles" / "mybot"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "mybot"
         profile_dir.mkdir(parents=True)
         profile_home = profile_dir / "home"
         profile_home.mkdir(parents=True)
@@ -2256,7 +2256,7 @@ class TestProfileArg:
         machine_home = tmp_path / "Users" / "example"
         machine_home.mkdir(parents=True)
 
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         monkeypatch.delenv("CLAWK_REAL_HOME", raising=False)
         monkeypatch.setenv("HOME", str(machine_home))
 
@@ -2887,7 +2887,7 @@ class TestServiceTakeoverGovernance:
     """
 
     def test_launchd_plist_does_not_arm_takeover(self, tmp_path, monkeypatch):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setattr(gateway_cli, "get_clawk_home", lambda: home)
         plist = gateway_cli.generate_launchd_plist()
@@ -2912,7 +2912,7 @@ class TestServiceTakeoverGovernance:
         mapping 78→0 is the launchd twin: a clean stop stays down, exit 75 and
         crashes still relaunch.
         """
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setattr(gateway_cli, "get_clawk_home", lambda: home)
         parsed = plistlib.loads(gateway_cli.generate_launchd_plist().encode("utf-8"))
@@ -2920,7 +2920,7 @@ class TestServiceTakeoverGovernance:
         assert parsed["RunAtLoad"] is True
 
     def test_systemd_unit_does_not_arm_takeover(self, tmp_path, monkeypatch):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setattr(gateway_cli, "get_clawk_home", lambda: home)
         unit = gateway_cli.generate_systemd_unit(system=False)
@@ -3179,7 +3179,7 @@ class TestTimeoutStopSecCoversCronFloor:
     max(restart_drain, cron_floor) + 30 — not the restart drain alone."""
 
     def _unit_with_config(self, tmp_path, monkeypatch, config_yaml, env=None):
-        clawk = tmp_path / "home" / ".clawk"
+        clawk = tmp_path / "home" / ".clawksis"
         clawk.mkdir(parents=True)
         (clawk / "config.yaml").write_text(config_yaml, encoding="utf-8")
         monkeypatch.setenv("CLAWK_HOME", str(clawk))
@@ -3236,11 +3236,11 @@ class TestUnitAnchoredServiceIdentity:
 
     @pytest.mark.platforms("linux")
     def test_home_not_pinned_by_unit_keeps_its_suffix(self, tmp_path, monkeypatch):
-        alice_home = tmp_path / "alice" / ".clawk"
+        alice_home = tmp_path / "alice" / ".clawksis"
         alice_home.mkdir(parents=True)
-        bob_home = tmp_path / "bob" / ".clawk"
+        bob_home = tmp_path / "bob" / ".clawksis"
         bob_home.mkdir(parents=True)
-        root_home = tmp_path / "root" / ".clawk"
+        root_home = tmp_path / "root" / ".clawksis"
         root_home.mkdir(parents=True)
         unit_dir = tmp_path / "systemd"
         unit_dir.mkdir()
@@ -3262,7 +3262,7 @@ class TestUnitAnchoredServiceIdentity:
     ):
         """A bare system unit pinning ``profiles/<name>`` must not alias that profile onto the user's
         default unit when an unprivileged user-scope command resolves the name."""
-        profile_home = tmp_path / "alice" / ".clawk" / "profiles" / "kimi"
+        profile_home = tmp_path / "alice" / ".clawksis" / "profiles" / "kimi"
         profile_home.mkdir(parents=True)
         unit_dir = tmp_path / "systemd"
         unit_dir.mkdir()
@@ -3283,9 +3283,9 @@ class TestUnitAnchoredServiceIdentity:
         remapped home, so the BARE unit legitimately carries a ``profiles/<name>`` home. The unit-pinned
         check therefore has to win over the profile branch, which would answer ``-kimi`` for a unit that
         was installed bare."""
-        profile_home = tmp_path / "alice" / ".clawk" / "profiles" / "kimi"
+        profile_home = tmp_path / "alice" / ".clawksis" / "profiles" / "kimi"
         profile_home.mkdir(parents=True)
-        root_home = tmp_path / "root" / ".clawk"
+        root_home = tmp_path / "root" / ".clawksis"
         root_home.mkdir(parents=True)
         unit_dir = tmp_path / "systemd"
         unit_dir.mkdir()
@@ -3313,9 +3313,9 @@ class TestUnitAnchoredServiceIdentity:
     def test_real_unit_sync_keeps_the_name_it_validated(self, tmp_path, monkeypatch):
         """Drive the production sync instead of simulating the adoption with setenv: the name resolved
         before ``_sync_clawk_home_from_systemd_unit()`` must survive the mutation it performs."""
-        alice_home = tmp_path / "alice" / ".clawk"
+        alice_home = tmp_path / "alice" / ".clawksis"
         alice_home.mkdir(parents=True)
-        root_home = tmp_path / "root" / ".clawk"
+        root_home = tmp_path / "root" / ".clawksis"
         root_home.mkdir(parents=True)
         unit_dir = tmp_path / "systemd"
         unit_dir.mkdir()

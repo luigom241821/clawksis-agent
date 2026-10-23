@@ -108,7 +108,7 @@ async def test_goal_command_slow_db_init_still_persists(tmp_path, monkeypatch):
 
     monkeypatch.setattr(clawk_state, "SessionDB", _SlowSessionDB)
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text("goals:\n  max_turns: 7\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(home))

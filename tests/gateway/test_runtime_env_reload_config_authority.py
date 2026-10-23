@@ -18,7 +18,7 @@ from gateway import run as gateway_run
 def test_reload_runtime_env_preserves_config_max_turns(
     tmp_path: Path, monkeypatch
 ) -> None:
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         yaml.safe_dump({"agent": {"max_turns": 9000}}),
@@ -51,7 +51,7 @@ def test_reload_runtime_env_preserves_config_terminal_backend(
     execute_code / read_file call starts trying Docker — while
     ``clawk config get terminal.backend`` still says local.
     """
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         yaml.safe_dump({"terminal": {"backend": "local"}}),

@@ -102,7 +102,7 @@ class TestTelegramAllowedChats:
         """slack-style config.yaml → env var bridge works."""
         from gateway.config import load_gateway_config
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "telegram:\n  allowed_chats:\n    - -100\n    - -200\n",
@@ -187,7 +187,7 @@ class TestMattermostAllowedChannels:
     def test_config_bridge(self, monkeypatch, tmp_path):
         from gateway.config import load_gateway_config
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "mattermost:\n  allowed_channels:\n    - chanABC\n    - chanDEF\n",

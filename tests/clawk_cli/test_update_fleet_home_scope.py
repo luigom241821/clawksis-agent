@@ -23,7 +23,7 @@ FOREIGN_HOME = "/srv/other-account-home/.clawk"
 
 @pytest.fixture
 def own_home(monkeypatch, tmp_path):
-    home = tmp_path / "homeA" / ".clawk"
+    home = tmp_path / "homeA" / ".clawksis"
     home.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     # The plan inventory is this install only; the fixture home has no profiles dir.

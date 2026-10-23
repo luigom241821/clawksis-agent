@@ -26,7 +26,7 @@ def test_media_delivery_denies_encrypted_bitwarden_cache(tmp_path, monkeypatch):
     """Encrypted Bitwarden cache is covered by the media credential guard."""
     from gateway.platforms import base
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setattr(base, "_CLAWK_HOME", clawk_home)
     monkeypatch.setattr(base, "_CLAWK_ROOT", clawk_home)
@@ -871,7 +871,7 @@ class TestMediaDeliveryDefaultMode:
 
         # Stand-in for the literal /root deny prefix in the deployment.
         denied_root = tmp_path / "root"
-        clawk_root = denied_root / ".clawk"
+        clawk_root = denied_root / ".clawksis"
         prof_cache = clawk_root / "profiles" / "myprof" / "cache" / "images"
         prof_cache.mkdir(parents=True)
         image = prof_cache / "gen.png"
@@ -1053,7 +1053,7 @@ class TestDockerContainerMediaPathTranslation:
         """MEDIA:/root/.clawksis/cache/images/... (the agent_visible_image path
         under docker) must translate to the HOST cache file, not the sandbox
         home copy."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         cache = clawk_home / "cache" / "images"
         cache.mkdir(parents=True)
         media = cache / "generated.png"
@@ -1078,7 +1078,7 @@ class TestDockerContainerMediaPathTranslation:
         secret = home / ".clawksis"
         secret.mkdir(parents=True)
         (secret / "auth.json").write_text('{"token": "SECRET"}')
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         monkeypatch.setenv("TERMINAL_ENV", "docker")
@@ -1658,7 +1658,7 @@ class TestDockerProfileSandboxMediaTranslation:
         in the profile layout AND the legacy session layout."""
         self._enable_docker(monkeypatch)
         for task in ("default", f"session:{self.SESSION_KEY}"):
-            secrets = self._sandbox_dir(task) / "home" / ".clawk"
+            secrets = self._sandbox_dir(task) / "home" / ".clawksis"
             secrets.mkdir(parents=True, exist_ok=True)
             (secrets / "auth.json").write_text("{}")
 

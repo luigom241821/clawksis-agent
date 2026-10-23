@@ -322,7 +322,7 @@ def test_bot_uid_none_processes_channel_message():
 def test_config_bridges_slack_free_response_channels(monkeypatch, tmp_path):
     from gateway.config import load_gateway_config
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         "slack:\n"
@@ -355,7 +355,7 @@ def test_config_bridges_slack_free_response_channels(monkeypatch, tmp_path):
 def test_top_level_slack_settings_do_not_disable_env_token_setup(monkeypatch, tmp_path):
     from gateway.config import load_gateway_config
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         "slack:\n  require_mention: false\n",
@@ -380,7 +380,7 @@ def test_explicit_platforms_slack_enabled_false_wins_over_env_token(
 ):
     from gateway.config import load_gateway_config
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         "platforms:\n"
@@ -406,7 +406,7 @@ def test_explicit_platforms_slack_enabled_false_wins_over_env_token(
 def test_config_bridges_slack_reply_in_thread(monkeypatch, tmp_path):
     from gateway.config import load_gateway_config
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         "slack:\n  reply_in_thread: false\n",

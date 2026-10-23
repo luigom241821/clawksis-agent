@@ -23,7 +23,7 @@ from clawk_cli import update_cmd, update_cmd_maint
 @pytest.fixture()
 def receipt_home(tmp_path, monkeypatch):
     """Isolated CLAWK_HOME for receipt writes."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     # ``_receipt_dir`` resolves through ``clawk_constants.get_clawk_home`` (env var), not
     # ``clawk_cli.config`` — patch where production reads.

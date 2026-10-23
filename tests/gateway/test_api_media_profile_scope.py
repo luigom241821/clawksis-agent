@@ -54,7 +54,7 @@ async def test_restart_recovery_keeps_every_profiles_held_images_and_collects_ea
         settle_session_input,
     )
 
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     beta = launch / "profiles" / "beta"
     beta.mkdir(parents=True)
     for home in (launch, beta):

@@ -18,7 +18,7 @@ def _build_runtime(tmp_path, monkeypatch):
     from gateway.session_authorities import SessionAuthorities
     from gateway import run
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     root.mkdir(mode=0o700, exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(root))
     # The autouse isolation fixture pins clawk_state.DEFAULT_DB_PATH to its own fake home once

@@ -318,7 +318,7 @@ def test_spawn_detached_warns_and_marks_no_breakaway_fallback(
 
 class TestStableWindowsGatewayWorkingDir:
     def test_stable_gateway_working_dir_uses_clawk_home(self, tmp_path, monkeypatch):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: home)
         assert gateway_windows._stable_gateway_working_dir(
@@ -328,7 +328,7 @@ class TestStableWindowsGatewayWorkingDir:
     def test_stable_gateway_working_dir_falls_back_to_project_root(
         self, tmp_path, monkeypatch
     ):
-        missing = tmp_path / "missing" / ".clawk"
+        missing = tmp_path / "missing" / ".clawksis"
         project = tmp_path / "checkout"
         monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: missing)
         assert gateway_windows._stable_gateway_working_dir(project) == str(project)

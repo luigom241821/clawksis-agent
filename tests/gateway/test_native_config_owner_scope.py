@@ -14,7 +14,7 @@ def test_launch_ticket_overrides_foreign_ambient_scope(tmp_path, monkeypatch):
         set_clawk_home_override,
     )
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

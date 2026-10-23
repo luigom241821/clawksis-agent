@@ -40,7 +40,7 @@ async def _connect(tmp_path, monkeypatch, *, native=True, config=None, free_tier
     from gateway.session_controls import AuthorityConnection
     from tui_gateway import server
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     config = (FREE_TIER_OPT_IN if free_tier else "") + (config or "")
     if config:

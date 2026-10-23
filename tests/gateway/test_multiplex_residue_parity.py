@@ -13,7 +13,7 @@ from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
 @pytest.fixture
 def two_homes(tmp_path, monkeypatch):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     alpha = root / "profiles" / "alpha"
     for home in (root, alpha):
         (home / "sessions").mkdir(parents=True)

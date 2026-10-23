@@ -14,7 +14,7 @@ import gateway.run as gateway_run
 
 
 def _write_home(tmp_path: Path, sessions_cfg: dict, env_text: str = "") -> Path:
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         yaml.safe_dump({"sessions": sessions_cfg}), encoding="utf-8"

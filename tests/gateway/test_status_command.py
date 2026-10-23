@@ -675,7 +675,7 @@ async def test_profile_command_reports_source_stamped_profile(monkeypatch, tmp_p
     source (source.profile — URL prefix / per-credential adapter / room map),
     not the multiplexer's active profile, which is always the default and
     made /profile answer "default" in every persona chat."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     profile_home = clawk_home / "profiles" / "milo"
     profile_home.mkdir(parents=True)
     (profile_home / "config.yaml").write_text(

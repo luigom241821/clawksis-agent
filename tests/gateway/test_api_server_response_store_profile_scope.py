@@ -46,7 +46,7 @@ async def test_a_profile_key_never_reaches_another_profiles_responses(
     from gateway.platforms import api_server as api
     from gateway.platforms.api_server import APIServerAdapter
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     for name, key in (("alice", ALICE), ("bob", BOB)):
         (home / "profiles" / name).mkdir(parents=True)
         (home / "profiles" / name / ".env").write_text(

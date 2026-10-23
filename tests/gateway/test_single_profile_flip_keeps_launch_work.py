@@ -18,7 +18,7 @@ from clawk_cli.gateway_multiplex_mode import SINGLE_PROFILE_REASON
 
 @pytest.fixture
 def standalone_host(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "profiles").mkdir(parents=True)
     (home / "config.yaml").write_text("model: {default: m}\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(home))

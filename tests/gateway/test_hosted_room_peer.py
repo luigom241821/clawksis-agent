@@ -36,7 +36,7 @@ EXECUTION_POLICY = execution_policy_mapping(
 def test_gateway_room_grant_secret_is_private_persistent_and_not_an_api_key(
     tmp_path, monkeypatch
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     profile_home = home / "profiles" / "reviewer"
     profile_home.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -65,7 +65,7 @@ def test_gateway_room_grant_secret_has_owner_only_mode(tmp_path, monkeypatch):
 def test_gateway_room_grant_secret_is_atomic_across_concurrent_workers(
     tmp_path, monkeypatch
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -89,7 +89,7 @@ def test_room_link_protocol_fixture_matches_backend_contract():
 def test_room_link_endpoint_reads_supported_config_with_env_override(
     tmp_path, monkeypatch
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text(
         "gateway:\n  room_link_url: https://configured.example.test/clawk\n",

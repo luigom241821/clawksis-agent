@@ -104,7 +104,7 @@ class _FakeHttpSession:
 @pytest.fixture
 def served(tmp_path, monkeypatch):
     """Default multiplex home serving a route-only secondary ``builder`` (no adapters, no key)."""
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles" / "builder").mkdir(parents=True)
     (root / "profiles" / "atlas").mkdir(parents=True)
     (root / "config.yaml").write_text(

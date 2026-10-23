@@ -27,7 +27,7 @@ from tools.credential_files import (
 @pytest.fixture
 def two_homes(tmp_path, monkeypatch):
     """Launch home A (CLAWK_HOME, local backend) and routed profile B (docker backend)."""
-    a = tmp_path / ".clawk"
+    a = tmp_path / ".clawksis"
     b = a / "profiles" / "b"
     b.mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

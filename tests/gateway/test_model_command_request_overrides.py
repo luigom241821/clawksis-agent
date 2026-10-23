@@ -43,7 +43,7 @@ async def test_handle_model_command_stores_request_overrides_for_named_custom_pr
     import gateway.run as gateway_run
     from clawk_cli.model_switch import ModelSwitchResult
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         """

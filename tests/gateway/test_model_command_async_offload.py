@@ -42,7 +42,7 @@ def _isolated_config(tmp_path, monkeypatch):
     and deterministic (no real provider creds / network)."""
     import gateway.run as gateway_run
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         "model:\n  default: gpt-x\n  provider: openrouter\nproviders: {}\n",

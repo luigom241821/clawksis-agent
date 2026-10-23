@@ -18,7 +18,7 @@ _LIVE_PID = 4242
 
 @pytest.fixture
 def fake_root(tmp_path, monkeypatch):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     root.mkdir()
     monkeypatch.setattr(clawk_constants.Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(root))

@@ -460,8 +460,8 @@ class TestCronCreateLifecycleBlock:
         # A no_agent job whose script IS the job (the issue's real abuse path:
         # restart_clawk_gateway_once.sh). The script must live under
         # CLAWK_HOME/scripts so the scheduler — and the guard — resolve it.
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        scripts_dir = tmp_path / ".clawk" / "scripts"
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+        scripts_dir = tmp_path / ".clawksis" / "scripts"
         scripts_dir.mkdir(parents=True)
         (scripts_dir / "restart.sh").write_text(
             "#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8"
@@ -1101,8 +1101,8 @@ class TestLifecycleGuardModule:
             check_gateway_lifecycle,
         )
 
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        scripts_dir = tmp_path / ".clawk" / "scripts"
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+        scripts_dir = tmp_path / ".clawksis" / "scripts"
         scripts_dir.mkdir(parents=True)
         (scripts_dir / "restart.sh").write_text(
             "launchctl kickstart -k gui/501/ai.clawk.gateway\n"
@@ -1725,8 +1725,8 @@ class TestCreateJobBlocksLifecycleCommands:
     def test_cronjob_tool_surfaces_block_as_error(self, tmp_path, monkeypatch):
         """End-to-end through the model tool: the block comes back as
         result['error'] with the #30719 hint, not an unhandled exception."""
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        (tmp_path / ".clawk").mkdir(parents=True)
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+        (tmp_path / ".clawksis").mkdir(parents=True)
         from tools.cronjob_tools import cronjob
 
         result = json.loads(
@@ -1752,8 +1752,8 @@ class TestRestartLoopGuard:
 
     @pytest.fixture(autouse=True)
     def _isolate_state(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        (tmp_path / ".clawk").mkdir(parents=True)
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+        (tmp_path / ".clawksis").mkdir(parents=True)
         import gateway.restart_loop_guard as rlg
 
         rlg.clear()

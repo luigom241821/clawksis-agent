@@ -34,8 +34,8 @@ def test_secondary_profile_pairing_stores_created(tmp_path, monkeypatch):
     Pre-fix this silently did nothing: the ``PairingStore(profile=name)``
     reference raised NameError inside the swallowed try/except.
     """
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
 
     runner = _bare_runner()
 
@@ -49,7 +49,7 @@ def test_secondary_profile_pairing_stores_created(tmp_path, monkeypatch):
         patch(
             "clawk_cli.profiles.profiles_to_serve",
             return_value=[
-                ("coder", tmp_path / ".clawk" / "profiles" / "coder"),
+                ("coder", tmp_path / ".clawksis" / "profiles" / "coder"),
             ],
         ),
         patch("clawk_cli.profiles.get_active_profile_name", return_value="default"),
@@ -69,8 +69,8 @@ def test_secondary_profile_pairing_stores_created(tmp_path, monkeypatch):
 
 def test_pairing_store_scoped_to_profile_dir(tmp_path, monkeypatch):
     """The created store must live under the profile's pairing directory."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
 
     runner = _bare_runner()
 
@@ -84,7 +84,7 @@ def test_pairing_store_scoped_to_profile_dir(tmp_path, monkeypatch):
         patch(
             "clawk_cli.profiles.profiles_to_serve",
             return_value=[
-                ("ops", tmp_path / ".clawk" / "profiles" / "ops"),
+                ("ops", tmp_path / ".clawksis" / "profiles" / "ops"),
             ],
         ),
         patch("clawk_cli.profiles.get_active_profile_name", return_value="default"),
@@ -110,7 +110,7 @@ def test_routed_pairing_grant_mirror_stays_in_profile_scope(tmp_path, monkeypatc
     from gateway.run import _profile_runtime_scope
     from clawk_cli.config import save_env_value
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     prof = root / "profiles" / "b"
     prof.mkdir(parents=True)
     (root / ".env").write_text("DISCORD_ALLOWED_USERS=default-admin\n")
@@ -156,7 +156,7 @@ def test_allowlist_env_read_never_borrows_on_scope_failure(tmp_path, monkeypatch
     from agent import secret_scope as ss
     from gateway import pairing
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setenv("DISCORD_ALLOWED_USERS", "default-admin")
 
     was_active = ss.is_multiplex_active()
@@ -191,7 +191,7 @@ def test_allowlist_sync_does_not_persist_foreign_allowlist(tmp_path, monkeypatch
     from agent import secret_scope as ss
     from gateway import pairing
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     root.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setenv("DISCORD_ALLOWED_USERS", "default-admin")
@@ -223,7 +223,7 @@ def test_allowlist_scoped_miss_configures_nothing(tmp_path, monkeypatch):
     from gateway import pairing
     from gateway.run import _profile_runtime_scope
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     prof = root / "profiles" / "b"
     prof.mkdir(parents=True)
     (prof / ".env").write_text("OTHER_KEY=x\n")

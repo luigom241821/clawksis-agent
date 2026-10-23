@@ -241,7 +241,7 @@ def test_live_payload_launched_gateway_is_found_for_its_home(
     started through the payload ``bin/clawk`` proves its home's runtime record (#127865)."""
     import clawk_constants
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     home = root / "profiles" / profile if profile else root
     home.mkdir(parents=True)
     monkeypatch.setattr(clawk_constants.Path, "home", lambda: tmp_path)

@@ -21,7 +21,7 @@ async def test_restore_retries_persisted_routes_in_their_own_profiles(
 ):
     from gateway.run_heartbeat_restore import restore_heartbeat_watches
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     named = home / "profiles" / "work"
     named.mkdir(parents=True)
     (named / "config.yaml").write_text("{}")
@@ -106,7 +106,7 @@ async def test_restore_skips_session_sweep_when_no_heartbeats_exist(
     row, or a store the probe cannot read, brings the sweep back."""
     from gateway.run_heartbeat_restore import restore_heartbeat_watches
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     named = home / "profiles" / "work"
     named.mkdir(parents=True)
     (named / "config.yaml").write_text("{}")
@@ -223,7 +223,7 @@ async def test_restore_enters_each_profile_scope_once_per_scan(tmp_path, monkeyp
     from gateway import run_heartbeat_restore
     from gateway.run_heartbeat_restore import restore_heartbeat_watches
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     named = home / "profiles" / "work"
     named.mkdir(parents=True)
     (named / "config.yaml").write_text("{}")

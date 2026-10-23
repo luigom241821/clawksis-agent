@@ -186,7 +186,7 @@ def test_persist_dm_topic_thread_id_writes_config(tmp_path):
         }
     }
 
-    config_file = tmp_path / ".clawk" / "config.yaml"
+    config_file = tmp_path / ".clawksis" / "config.yaml"
     config_file.parent.mkdir(parents=True)
     with open(config_file, "w") as f:
         yaml.safe_dump(config_data, f)
@@ -195,7 +195,7 @@ def test_persist_dm_topic_thread_id_writes_config(tmp_path):
 
     with (
         patch.object(Path, "home", return_value=tmp_path),
-        patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}),
+        patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawksis")}),
     ):
         adapter._persist_dm_topic_thread_id(111, "General", 999)
 
@@ -231,7 +231,7 @@ def test_persist_dm_topic_thread_id_preserves_config_on_write_failure(tmp_path):
         }
     }
 
-    config_file = tmp_path / ".clawk" / "config.yaml"
+    config_file = tmp_path / ".clawksis" / "config.yaml"
     config_file.parent.mkdir(parents=True)
     original_text = yaml.safe_dump(config_data)
     config_file.write_text(original_text, encoding="utf-8")
@@ -243,7 +243,7 @@ def test_persist_dm_topic_thread_id_preserves_config_on_write_failure(tmp_path):
 
     with (
         patch.object(Path, "home", return_value=tmp_path),
-        patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}),
+        patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawksis")}),
         patch("ruamel.yaml.YAML.dump", side_effect=fail_dump),
     ):
         adapter._persist_dm_topic_thread_id(111, "General", 999)
@@ -299,14 +299,14 @@ def test_get_dm_topic_info_hot_reloads_from_config(tmp_path):
             }
         }
     }
-    config_file = tmp_path / ".clawk" / "config.yaml"
+    config_file = tmp_path / ".clawksis" / "config.yaml"
     config_file.parent.mkdir(parents=True)
     with open(config_file, "w") as f:
         yaml.safe_dump(config_data, f)
 
     with (
         patch.object(Path, "home", return_value=tmp_path),
-        patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}),
+        patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawksis")}),
     ):
         result = adapter._get_dm_topic_info("111", "555")
 

@@ -34,7 +34,7 @@ def test_restart_heals_a_world_readable_pointer_left_by_an_older_gateway(tmp_pat
     from gateway.control_socket import GatewayControlServer
     from clawk_cli.gateway_runtime_discovery import _socket_path
 
-    home = tmp_path / ("p" * 90) / ".clawk"
+    home = tmp_path / ("p" * 90) / ".clawksis"
     home.mkdir(parents=True, mode=0o700)
     pointer = home / "gateway.sock.path"
     pointer.write_text("/old/control.sock")
@@ -64,7 +64,7 @@ def test_a_client_polling_during_pointer_publication_never_sees_an_invalid_point
     from gateway.control_socket import GatewayControlServer
     from clawk_cli.gateway_runtime_discovery import DiscoveryError, _socket_path
 
-    home = tmp_path / ("p" * 90) / ".clawk"
+    home = tmp_path / ("p" * 90) / ".clawksis"
     home.mkdir(parents=True, mode=0o700)
     seen, state = [], {"armed": False}
 
@@ -185,7 +185,7 @@ def test_long_home_survives_a_squatted_shared_fallback_directory(tmp_path, monke
     from clawk_cli.gateway_runtime_discovery import _socket_path
 
     monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
-    home = tmp_path / ("p" * 90) / ".clawk"
+    home = tmp_path / ("p" * 90) / ".clawksis"
     home.mkdir(parents=True, mode=0o700)
     squatted = resolve_server_socket_path(home)[0].parent
     squatted.write_text("not yours")
@@ -213,7 +213,7 @@ def test_long_home_prefers_the_private_runtime_dir(tmp_path, monkeypatch):
     runtime = Path(tempfile.mkdtemp(prefix="xr-"))
     try:
         monkeypatch.setenv("XDG_RUNTIME_DIR", str(runtime))
-        home = tmp_path / ("p" * 90) / ".clawk"
+        home = tmp_path / ("p" * 90) / ".clawksis"
         home.mkdir(parents=True, mode=0o700)
         assert resolve_server_socket_path(home)[0].parent.parent == runtime
         runtime.chmod(0o755)  # not a private runtime dir: never trusted

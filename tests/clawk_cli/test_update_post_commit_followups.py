@@ -126,7 +126,7 @@ def test_live_running_record_is_not_reclaimed(tmp_path, monkeypatch):
 
 
 def test_profile_process_writes_receipts_to_the_root_home(tmp_path, monkeypatch):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     profile = root / "profiles/work"
     profile.mkdir(parents=True)
     monkeypatch.setattr(

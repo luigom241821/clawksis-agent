@@ -36,7 +36,7 @@ class _Gateway:
     def __init__(self, tmp_path, monkeypatch):
         from pathlib import Path
 
-        self.tmp_path, root = tmp_path, tmp_path / ".clawk"
+        self.tmp_path, root = tmp_path, tmp_path / ".clawksis"
         self.homes = (("default", root), ("beta", root / "profiles" / "beta"))
         for name, home in self.homes:
             home.mkdir(parents=True, exist_ok=True, mode=0o700)

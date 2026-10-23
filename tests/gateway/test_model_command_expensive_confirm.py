@@ -71,7 +71,7 @@ def _fake_warning():
 def _setup_isolated_home(tmp_path, monkeypatch, *, warn):
     import gateway.run as gateway_run
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     cfg_path = clawk_home / "config.yaml"
     cfg_path.write_text(

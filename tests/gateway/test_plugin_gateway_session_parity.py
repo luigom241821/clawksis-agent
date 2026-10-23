@@ -98,7 +98,7 @@ async def test_keyed_local_injection_stays_inside_the_plugins_own_profile(
     from clawk_state import SessionDB
     from clawk_state_runtime import begin_runtime_epoch
 
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     beta = launch / "profiles" / "beta"
     beta.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(launch))
@@ -263,7 +263,7 @@ async def test_keyed_messaging_injection_stays_inside_the_plugins_own_profile(
     from gateway.run import GatewayRunner
     from gateway.session import SessionEntry, SessionSource
 
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     beta = launch / "profiles" / "beta"
     beta.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(launch))

@@ -33,7 +33,7 @@ class _FakeSessionStore:
 
 @pytest.fixture
 def loop_env(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     goals._DB_CACHE.clear()

@@ -10,7 +10,7 @@ import pytest
 def homes(tmp_path, monkeypatch):
     from clawk_cli import profiles
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     secondary = root / "profiles" / "worker"
     secondary.mkdir(parents=True)
     (secondary / "config.yaml").write_text("model: {default: worker-model}\n")

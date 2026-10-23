@@ -24,7 +24,7 @@ from gateway import delivery_ledger as dl
 def _fresh_db(tmp_path, monkeypatch):
     """Isolated state.db per test (autouse CLAWK_HOME isolation already
     redirects get_clawk_home; make the redirect explicit and per-test)."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(dl, "_db_path", lambda: home / "state.db")
     yield

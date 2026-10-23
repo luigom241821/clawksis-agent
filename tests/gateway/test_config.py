@@ -307,7 +307,7 @@ class TestLoadGatewayConfig:
         """``${VAR}`` refs under ``platforms:`` reach the adapter config expanded — the gateway
         YAML layer expands them the same way the CLI loader does (webhook secret used as the
         HMAC key; api_server caller-auth key)."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "platforms:\n"
@@ -342,7 +342,7 @@ class TestLoadGatewayConfig:
     def test_platforms_env_ref_unresolved_stays_literal(self, tmp_path, monkeypatch):
         """An unset env var keeps the literal placeholder (loader is fail-open; the adapter's
         startup validation is what reports a bad secret)."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "platforms:\n"
@@ -363,7 +363,7 @@ class TestLoadGatewayConfig:
         )
 
     def test_slack_ignored_channels_config_sets_env_bridge(self, tmp_path, monkeypatch):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "slack:\n  ignored_channels:\n    - C0123456789\n    - C0987654321\n",
@@ -382,7 +382,7 @@ class TestLoadGatewayConfig:
     ):
         """``platforms.slack.typing_status_text`` reaches PlatformConfig via
         _merge_platform_map + the from_dict top-level read."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "platforms:\n"
@@ -411,7 +411,7 @@ class TestLoadGatewayConfig:
         load_gateway_config builds gw_data from the top-level keys before
         calling from_dict, so the nested value never reached it.)
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -428,7 +428,7 @@ class TestLoadGatewayConfig:
     def test_stale_multiplex_allowlist_key_is_ignored(self, tmp_path, monkeypatch):
         # The removed ``multiplex_profile_allowlist`` key may linger in an un-migrated
         # config.yaml; it must not break loading or the multiplex flag.
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "gateway:\n"
@@ -447,7 +447,7 @@ class TestLoadGatewayConfig:
     def test_discord_websocket_health_settings_seed_platform_extra(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "discord:\n"
@@ -475,7 +475,7 @@ class TestLoadGatewayConfig:
         assert extra["websocket_event_max_silence_seconds"] == 7200
 
     def test_quick_commands_from_nested_gateway_section(self, tmp_path, monkeypatch):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -494,7 +494,7 @@ class TestLoadGatewayConfig:
         """Asserts False (not the True default) so the test fails if the
         nested gateway.stt value never reaches from_dict() and silently
         falls back to the class default instead."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -530,7 +530,7 @@ class TestLoadGatewayConfig:
         server unless API_SERVER_* env vars were also set.
         """
         self._clear_api_server_env(monkeypatch)
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "gateway:\n  api_server:\n    enabled: true\n",
@@ -549,7 +549,7 @@ class TestLoadGatewayConfig:
         (gateway/platforms/api_server.py), and from_dict discards unknown
         top-level keys, so without the bridge the port is silently lost."""
         self._clear_api_server_env(monkeypatch)
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "gateway:\n"
@@ -573,7 +573,7 @@ class TestLoadGatewayConfig:
 
     def test_room_link_url_from_nested_gateway_section(self, tmp_path, monkeypatch):
         """The supported config path advertises no endpoint until restart."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "gateway:\n  room_link_url: https://peer.example.test/clawk\n",
@@ -595,7 +595,7 @@ class TestLoadGatewayConfig:
         Platform enum: ``gateway.streaming`` / ``gateway.timeout`` must not
         be turned into phantom platform entries or break loading."""
         self._clear_api_server_env(monkeypatch)
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "gateway:\n"
@@ -619,7 +619,7 @@ class TestLoadGatewayConfig:
     def test_group_sessions_per_user_from_nested_gateway_section(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -633,7 +633,7 @@ class TestLoadGatewayConfig:
         assert config.group_sessions_per_user is False
 
     def test_reset_triggers_from_nested_gateway_section(self, tmp_path, monkeypatch):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -647,7 +647,7 @@ class TestLoadGatewayConfig:
         assert config.reset_triggers == ["/new", "/clear"]
 
     def test_always_log_local_from_nested_gateway_section(self, tmp_path, monkeypatch):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -663,7 +663,7 @@ class TestLoadGatewayConfig:
     def test_unauthorized_dm_behavior_from_nested_gateway_section(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -682,7 +682,7 @@ class TestLoadGatewayConfig:
         the adapter in the platform_registry is NOT enough — the connect loop
         iterates config.platforms, so an un-enabled RELAY never connects (the
         'relay registered but no inbound' bug)."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         monkeypatch.setenv("GATEWAY_RELAY_URL", "https://connector.example/relay/")
@@ -703,7 +703,7 @@ class TestLoadGatewayConfig:
         connections: directly-connected messaging platforms must be disabled,
         even when explicitly enabled in config.yaml, while non-messaging
         surfaces (api_server et al.) survive."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -733,7 +733,7 @@ class TestLoadGatewayConfig:
     def test_relay_yaml_url_keeps_other_platforms_enabled(self, tmp_path, monkeypatch):
         """gateway.relay_url in config.yaml (no env stamp) keeps the old
         additive behavior: relay runs beside directly-connected platforms."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -760,7 +760,7 @@ class TestLoadGatewayConfig:
         """GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS=true opts a deployment out of
         the relay-exclusive sweep: direct adapters stay enabled beside the
         relay even with the GATEWAY_RELAY_URL env stamp present."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -792,7 +792,7 @@ class TestLoadGatewayConfig:
         load_clawk_dotenv exports that file into os.environ at startup.)"""
         from agent import secret_scope as ss
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -850,7 +850,7 @@ class TestLoadGatewayConfig:
         load."""
         import logging as _logging
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -889,7 +889,7 @@ class TestLoadGatewayConfig:
         self, tmp_path, monkeypatch
     ):
         """Explicit env var should win over config.yaml (env > yaml precedence)."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -914,7 +914,7 @@ class TestLoadGatewayConfig:
         adapter reads it from PlatformConfig.extra, but gateway auth
         (_is_user_authorized) only consults the env var.
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -951,7 +951,7 @@ class TestLoadGatewayConfig:
         from gateway.authz_mixin import GatewayAuthorizationMixin
         from gateway.session import SessionSource
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(yaml_text, encoding="utf-8")
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -987,7 +987,7 @@ class TestLoadGatewayConfig:
         from gateway.authz_mixin import GatewayAuthorizationMixin
         from gateway.session import SessionSource
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(yaml_text, encoding="utf-8")
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -1014,7 +1014,7 @@ class TestLoadGatewayConfig:
         from gateway.run_shutdown import GatewayShutdownMixin
         from clawk_cli.web_server_gateway import _profile_action_environment
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "gateway:\n  allow_all_users: true\n", encoding="utf-8"
@@ -1046,7 +1046,7 @@ class TestLoadGatewayConfig:
         from gateway.run import _profile_runtime_scope
         from gateway.session import SessionSource
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         secondary = clawk_home / "profiles" / "other"
         secondary.mkdir(parents=True)
         (clawk_home / "config.yaml").write_text(
@@ -1074,7 +1074,7 @@ class TestLoadGatewayConfig:
     def test_top_level_platforms_override_nested_gateway_platforms(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -1115,7 +1115,7 @@ class TestLoadGatewayConfig:
         and allow_from was silently ignored.  The apply_yaml_config_fn dispatch
         received the same fix in #44f3e51; the shared-key loop now mirrors it.
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -1145,7 +1145,7 @@ class TestLoadGatewayConfig:
     def test_bridges_unauthorized_dm_behavior_from_config_yaml(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -1168,7 +1168,7 @@ class TestLoadGatewayConfig:
     def test_loads_telegram_rich_messages_from_gateway_platform_extra(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -1189,7 +1189,7 @@ class TestLoadGatewayConfig:
     def test_telegram_proxy_env_takes_precedence_over_config(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -1269,7 +1269,7 @@ class TestWebhookPortBridging:
     causing port conflicts between profiles that configure different ports."""
 
     def test_webhook_port_bridged_from_toplevel(self, tmp_path, monkeypatch):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -1297,7 +1297,7 @@ class TestWebhookPortBridging:
     ):
         """A ROOT-level ``webhook:`` block (not under ``platforms:``) is a supported spelling; its
         adapter keys must reach ``extra`` like the nested form, with nested ``extra:`` winning."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "webhook:\n  enabled: true\n  port: 9100\n  host: 127.0.0.2\n  secret: fixture\n"
@@ -1318,7 +1318,7 @@ class TestWebhookPortBridging:
     ):
         """msgraph_webhook top-level port/host/secret must be bridged into extra,
         with an explicit extra: value still winning over the top-level one."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -1463,7 +1463,7 @@ class TestMultiplexProfilesEnvOverride:
     """
 
     def _load(self, tmp_path, monkeypatch, config_text=None):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir(exist_ok=True)
         if config_text is not None:
             (clawk_home / "config.yaml").write_text(config_text, encoding="utf-8")
@@ -1512,7 +1512,7 @@ class TestMultiplexProfilesConfig:
         the silent-fallback bug where the loader only forwarded the top-level
         key, so users who wrote it under gateway: got multiplex_profiles=False
         with no warning."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "gateway:\n  multiplex_profiles: true\n",
@@ -1535,7 +1535,7 @@ class TestMultiplexProfilesConfig:
         nested form (so a stale `gateway.multiplex_profiles: true` cannot
         silently re-enable multiplexing). Guards against a future regression
         that flips the check to `not _mp`."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "multiplex_profiles: false\ngateway:\n  multiplex_profiles: true\n",
@@ -1594,7 +1594,7 @@ class TestWebhookEnvOverride:
         self, tmp_path, monkeypatch
     ):
         """A config.yaml-enabled webhook still receives its .env listener settings."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "platforms:\n  webhook:\n    enabled: true\n",
@@ -1615,7 +1615,7 @@ class TestWebhookEnvOverride:
         """``WEBHOOK_SECRET=`` (present but empty) must not erase a config.yaml secret: the
         widened bridge now runs for yaml-enabled webhooks, so an empty env value has to stay a
         no-op rather than turning a working HMAC key into an empty one."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "platforms:\n  webhook:\n    enabled: true\n    secret: yaml-secret\n",

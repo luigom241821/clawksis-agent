@@ -30,7 +30,7 @@ def converged_host(tmp_path, monkeypatch):
     Returns the root home. ``signals`` on the returned object records every service operation and
     process stop the migration would perform — a converged host must produce none.
     """
-    root = tmp_path / "home" / ".clawk"
+    root = tmp_path / "home" / ".clawksis"
     for sub in ("profiles/coder", "profiles/ops"):
         (root / sub).mkdir(parents=True)
         (root / sub / "SOUL.md").write_text("x\n", encoding="utf-8")

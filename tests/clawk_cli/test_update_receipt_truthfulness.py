@@ -55,7 +55,7 @@ from clawk_cli.update_inventory import (
 @pytest.fixture()
 def receipt_home(tmp_path, monkeypatch):
     """Hermetic CLAWK_HOME so receipts never touch the real profile."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: home, raising=False)
     ur._current.set(None)

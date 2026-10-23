@@ -10,7 +10,7 @@ import pytest
 def test_secondary_profile_worker_gets_no_launch_credentials(
     tmp_path, monkeypatch, multiplex
 ):
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     sec = launch / "profiles" / "l106742sec"
     sec.mkdir(parents=True)
     (launch / ".env").write_text(
@@ -53,7 +53,7 @@ def test_launch_profile_worker_keeps_env_only_tool_credentials_under_multiplex(
     """Under multiplex the launch profile's own worker resolves what its owner resolves for that
     profile (``launch_secret_scope``): a tool key injected only into the launch environment
     (systemd ``Environment=``, ``op run``) reaches it, while a secondary's worker never sees it."""
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     sec = launch / "profiles" / "l106742sec"
     sec.mkdir(parents=True)
     (launch / ".env").write_text("OPENROUTER_API_KEY=LAUNCH-or\n")

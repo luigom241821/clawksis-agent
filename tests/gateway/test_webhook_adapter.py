@@ -1064,7 +1064,7 @@ class TestCrossPlatformDeliveryMirror:
         import clawk_state
         from clawk_cli.profiles import get_profile_dir
 
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
         default_home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(default_home))

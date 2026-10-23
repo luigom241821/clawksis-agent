@@ -80,7 +80,7 @@ class TestCollectProfileGatewayTopology:
     def test_running_standalone_profile_is_in_topology(self, tmp_path, monkeypatch):
         from clawk_cli import profiles
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         solo = root / "profiles" / "solo"
         solo.mkdir(parents=True)
         (solo / "config.yaml").write_text("gateway:\n  standalone: true\n")
@@ -418,7 +418,9 @@ class TestStatusEndpointTopology:
         import clawk_cli.web_routers.status as status_router
         from clawk_cli import web_server_profiles
 
-        home = tmp_path / ".clawk"  # the shipped default root: basename != profile id
+        home = (
+            tmp_path / ".clawksis"
+        )  # the shipped default root: basename != profile id
         home.mkdir()
         # The resolver names a default root by IDENTITY, not basename: only the root the
         # process resolves (CLAWK_HOME here) folds as "default".

@@ -23,7 +23,7 @@ from tests.waiting import async_wait_until
 
 
 def _homes(tmp_path, monkeypatch):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     root.mkdir(mode=0o700)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(root))

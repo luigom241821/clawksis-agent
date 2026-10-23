@@ -13,7 +13,7 @@ from gateway.run import GatewayRunner
 @pytest.mark.asyncio
 @pytest.mark.parametrize("startup", [False, True])
 async def test_config_saved_during_connect_is_rescanned(tmp_path, monkeypatch, startup):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     profile = home / "profiles" / "worker"
     profile.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))

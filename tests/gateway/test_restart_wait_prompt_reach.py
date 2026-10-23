@@ -383,7 +383,7 @@ def test_update_drain_hint_names_the_draining_profile(tmp_path, monkeypatch):
     ``clawk --tui`` opens the default profile, where that session isn't listed (#139041)."""
     from clawk_cli.update_cmd_drain_report import format_drain_report
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles" / "work").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_HOME", str(root))

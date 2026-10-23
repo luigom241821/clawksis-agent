@@ -29,7 +29,7 @@ def _run(coro):
 
 @pytest.fixture()
 def home(tmp_path: Path) -> Path:
-    d = tmp_path / "home" / ".clawk"
+    d = tmp_path / "home" / ".clawksis"
     d.mkdir(parents=True)
     return d
 
@@ -55,7 +55,7 @@ def test_short_home_binds_in_home(tmp_path: Path):
     except OSError:
         pytest.skip("/tmp not writable on this host")
     try:
-        short_home = short_root / ".clawk"
+        short_home = short_root / ".clawksis"
         short_home.mkdir()
         assert len(str(short_home / "gateway.sock").encode()) <= 100
         bind, pointer = resolve_server_socket_path(short_home)
@@ -68,7 +68,7 @@ def test_short_home_binds_in_home(tmp_path: Path):
 
 
 def test_long_home_uses_pointer_fallback(tmp_path: Path):
-    deep = tmp_path / ("x" * 120) / ".clawk"
+    deep = tmp_path / ("x" * 120) / ".clawksis"
     deep.mkdir(parents=True)
     bind, pointer = resolve_server_socket_path(deep)
     assert bind != deep / "gateway.sock"
@@ -240,7 +240,7 @@ def test_stale_socket_file_is_replaced_on_bind(home: Path):
 
 
 def test_long_home_end_to_end_via_pointer(tmp_path: Path):
-    deep = tmp_path / ("p" * 120) / ".clawk"
+    deep = tmp_path / ("p" * 120) / ".clawksis"
     deep.mkdir(parents=True)
 
     async def scenario():
@@ -312,7 +312,7 @@ def _fake_identity(pid: int, sha: str):
 def test_collect_fleet_versions_prefers_socket(tmp_path: Path, monkeypatch):
     import clawk_cli.update_receipt as ur
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
 
     monkeypatch.setattr(
@@ -352,7 +352,7 @@ def test_collect_fleet_versions_falls_back_to_state_file(tmp_path: Path, monkeyp
 
     import clawk_cli.update_receipt as ur
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
 
     monkeypatch.setattr(
@@ -398,7 +398,7 @@ def test_runtime_inventory_dedupes_same_pid_across_homes(tmp_path: Path, monkeyp
     yield exactly ONE runtime record (reviewer point on #92447)."""
     import clawk_cli.update_inventory as ui
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     profiles_root = tmp_path / "profiles"
     (profiles_root / "coder").mkdir(parents=True)
@@ -423,7 +423,7 @@ def test_runtime_inventory_dedupes_same_pid_across_homes(tmp_path: Path, monkeyp
 def test_runtime_inventory_prefers_socket_supervisor(tmp_path: Path, monkeypatch):
     import clawk_cli.update_inventory as ui
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
 
     monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)

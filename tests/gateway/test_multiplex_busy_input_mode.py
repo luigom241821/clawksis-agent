@@ -468,7 +468,7 @@ async def test_primary_adapter_busy_origin_uses_routed_privacy(
     from clawk_constants import get_clawk_home_override
     from run_agent import AIAgent
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     secondary = home / "profiles" / "research"
     secondary.mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

@@ -127,7 +127,7 @@ def test_keyless_worker_reads_its_own_profile_home_not_the_default(
     import os
     from gateway.session_managed_worker import _worker_env
 
-    default = tmp_path / ".clawk"
+    default = tmp_path / ".clawksis"
     profile = default / "profiles" / "kb5"
     profile.mkdir(parents=True)
     own, other = (

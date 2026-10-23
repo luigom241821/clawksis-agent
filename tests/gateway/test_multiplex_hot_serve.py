@@ -41,7 +41,7 @@ class _Adapter:
 
 
 def _runner(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "profiles").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

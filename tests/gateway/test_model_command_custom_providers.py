@@ -35,7 +35,7 @@ async def test_direct_model_switch_runs_off_the_event_loop(tmp_path, monkeypatch
     blocking models.dev HTTP fetch can't freeze the gateway event loop (#20525)."""
     from clawk_cli.model_switch import ModelSwitchResult
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         yaml.safe_dump({"model": {"default": "gpt-5.4", "provider": "openrouter"}}),

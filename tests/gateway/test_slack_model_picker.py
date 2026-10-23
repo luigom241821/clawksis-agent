@@ -707,7 +707,7 @@ class TestSlackModelPickerGatewayIntegration:
         runner._session_model_overrides = {}
         runner._running_agents = {}
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         cfg_path = clawk_home / "config.yaml"
         cfg_path.write_text(
@@ -769,7 +769,7 @@ class TestSlackModelPickerGatewayIntegration:
         runner._session_model_overrides = {}
         runner._running_agents = {}
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         cfg_path = clawk_home / "config.yaml"
         cfg_path.write_text(

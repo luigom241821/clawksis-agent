@@ -108,7 +108,7 @@ async def test_discord_admin_alert_uses_owner_and_logical_destination(
     from clawk_constants import get_clawk_home
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     root.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(root))
     (root / "config.yaml").write_text(

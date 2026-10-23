@@ -148,7 +148,7 @@ class TestCronJobTrigger:
     ):
         """/p/<profile>/ routes must fire the job from THAT profile's cron store, not the gateway's
         default home (and route-level skills stay out of the per-run context — the job's own apply)."""
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         (home / "profiles" / "sec").mkdir(parents=True)
         monkeypatch.setenv("CLAWK_HOME", str(home))
         monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)

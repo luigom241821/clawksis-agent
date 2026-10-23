@@ -230,7 +230,7 @@ class TestLoadGatewayConfigApiServerExplicitDisable:
     def test_load_gateway_config_honors_explicit_api_server_disable(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "platforms:\n  api_server:\n    enabled: false\n",

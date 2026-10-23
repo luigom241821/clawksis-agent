@@ -14,7 +14,7 @@ import pytest
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))

@@ -78,7 +78,7 @@ def local_gateway(tmp_path, monkeypatch):
     monkeypatch.setattr(GatewayConnection, "_shared", None)
 
     def configure(multiplex):
-        home = user / ".clawk"
+        home = user / ".clawksis"
         config = {
             "gateway": {"multiplex_profiles": multiplex},
             "model": {"provider": "custom", "default": "fixture", "base_url": url},

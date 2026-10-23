@@ -37,7 +37,7 @@ def _ready(home: Path) -> GatewayDiscovery:
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    home = (tmp_path / ".clawk").resolve()
+    home = (tmp_path / ".clawksis").resolve()
     home.mkdir()
     monkeypatch.setattr(runtime, "_update_fenced", lambda homes: False)
     return home

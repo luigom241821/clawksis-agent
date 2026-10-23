@@ -699,8 +699,8 @@ class TestResolveUpdatePrompt:
         self, tmp_path, monkeypatch
     ):
         adapter = _make_adapter()
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        (tmp_path / ".clawk").mkdir()
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+        (tmp_path / ".clawksis").mkdir()
         adapter._allowed_group_users = {"ou_allowed"}
         adapter._group_policy = "open"
         adapter._default_group_policy = "open"
@@ -714,7 +714,7 @@ class TestResolveUpdatePrompt:
             2, "y", "Mallory", open_id="ou_intruder", chat_id="oc_12345"
         )
 
-        assert not (tmp_path / ".clawk" / ".update_response").exists()
+        assert not (tmp_path / ".clawksis" / ".update_response").exists()
         assert 2 in adapter._update_prompt_state
 
     @pytest.mark.asyncio
@@ -722,8 +722,8 @@ class TestResolveUpdatePrompt:
         self, tmp_path, monkeypatch
     ):
         adapter = _make_adapter()
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        (tmp_path / ".clawk").mkdir()
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+        (tmp_path / ".clawksis").mkdir()
         adapter._allowed_group_users = {"ou_allowed"}
         adapter._update_prompt_state[3] = {
             "session_key": "sess-up-3",
@@ -735,5 +735,5 @@ class TestResolveUpdatePrompt:
             3, "y", "Anonymous", open_id="", chat_id="oc_12345"
         )
 
-        assert not (tmp_path / ".clawk" / ".update_response").exists()
+        assert not (tmp_path / ".clawksis" / ".update_response").exists()
         assert 3 in adapter._update_prompt_state

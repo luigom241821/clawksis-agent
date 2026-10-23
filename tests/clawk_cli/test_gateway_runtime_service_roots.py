@@ -22,7 +22,7 @@ def test_requested_service_name_does_not_borrow_callers_home(
     requested.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(requested))
     installed = _profile_suffix()
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     assert service_suffix(requested) == installed
 
 

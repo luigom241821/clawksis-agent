@@ -215,7 +215,7 @@ def test_a_replayed_gateway_keeps_its_own_exported_token_and_no_one_elses(tmp_pa
     """A named profile's hand-started gateway, replayed by an update launched under that profile,
     starts as the restart watcher started it: with the launcher's environment (an exported bot
     token may be its only credential). Any other profile, and the multiplexing root, never get it."""
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     for name in ("alpha", "beta"):
         (root / "profiles" / name).mkdir(parents=True)
     probe = _child(

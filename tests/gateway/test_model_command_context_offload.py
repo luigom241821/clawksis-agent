@@ -47,7 +47,7 @@ def _runner_with_store(tmp_path, monkeypatch):
     from gateway.run import GatewayRunner
     from clawk_cli.model_switch import ModelSwitchResult
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         _yaml.safe_dump({"model": {"default": "old-model", "provider": "openrouter"}}),

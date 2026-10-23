@@ -127,7 +127,7 @@ def test_update_copies_bundled_skill_bytes_to_default_active_and_sibling(
     from pathlib import Path
     from clawk_cli import update_cmd_maint
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     homes = (
         [home, home / "profiles/active", home / "profiles/sibling"] if named else [home]
     )
@@ -155,7 +155,7 @@ def test_active_config_write_failure_still_migrates_siblings_and_restores_snapsh
 
     from clawk_cli import backup, update_cmd_config
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     sibling = root / "profiles" / "sibling"
     jobs = {
         "jobs": [

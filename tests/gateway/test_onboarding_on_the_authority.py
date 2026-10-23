@@ -35,7 +35,7 @@ async def _desktop(tmp_path, monkeypatch, turns):
     from gateway.session_controls import AuthorityConnection
     from tui_gateway import server
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -188,8 +188,8 @@ async def test_a_rerun_with_no_model_opens_no_chat(tmp_path, monkeypatch):
     """Nothing can run the chat: error 5080 and no row, never a session whose launch policy cannot be
     restored (every later resume of it would answer storage_unavailable)."""
     desktop = await _desktop(tmp_path, monkeypatch, [])
-    (tmp_path / ".clawk" / "config.yaml").write_text("{}\n", encoding="utf-8")
-    (tmp_path / ".clawk" / ".env").write_text("", encoding="utf-8")
+    (tmp_path / ".clawksis" / "config.yaml").write_text("{}\n", encoding="utf-8")
+    (tmp_path / ".clawksis" / ".env").write_text("", encoding="utf-8")
     monkeypatch.setattr("gateway.run._resolve_gateway_model", lambda config=None: None)
     try:
         before = {row["id"] for row in desktop.db.search_sessions(limit=100)}
@@ -292,7 +292,7 @@ async def test_start_from_a_secondary_profile_claims_in_the_default_home(
     from clawk_state import SessionDB
 
     desktop = await _desktop(tmp_path, monkeypatch, [])
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     work = home / "profiles" / "work"
     work.mkdir(parents=True)
     (work / "config.yaml").write_text(

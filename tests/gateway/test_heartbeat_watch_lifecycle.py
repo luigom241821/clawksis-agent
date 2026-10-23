@@ -20,7 +20,7 @@ from clawk_constants import get_clawk_home
 @pytest.mark.asyncio
 async def test_watches_read_and_admit_in_each_owner_profile(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     runner = object.__new__(GatewayRunner)
     runner.config = SimpleNamespace(multiplex_profiles=True)
     runner._run_in_executor_with_context = asyncio.to_thread
@@ -39,7 +39,7 @@ async def test_watches_read_and_admit_in_each_owner_profile(tmp_path, monkeypatc
     runner._delivery_adapter_for = lambda source: Adapter()
     watch = {}
     for name in ("alpha", "beta"):
-        home = tmp_path / ".clawk" / "profiles" / name
+        home = tmp_path / ".clawksis" / "profiles" / name
         home.mkdir(parents=True, exist_ok=True)
         (home / "config.yaml").write_text("{}\n")
         with _profile_runtime_scope(home):
@@ -51,10 +51,12 @@ async def test_watches_read_and_admit_in_each_owner_profile(tmp_path, monkeypatc
             SessionSource(platform=Platform.TELEGRAM, chat_id=name, profile=name),
             name,
         )
-    with _profile_runtime_scope(tmp_path / ".clawk" / "profiles" / "alpha"):
+    with _profile_runtime_scope(tmp_path / ".clawksis" / "profiles" / "alpha"):
         await runner._heartbeat_poll_once(watch)
     assert {row[0] for row in rows} == {"alpha", "beta"}
-    assert all(row[1] == str(tmp_path / ".clawk" / "profiles" / row[0]) for row in rows)
+    assert all(
+        row[1] == str(tmp_path / ".clawksis" / "profiles" / row[0]) for row in rows
+    )
     assert len(watch) == 2
 
 

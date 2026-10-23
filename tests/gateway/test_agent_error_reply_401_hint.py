@@ -40,7 +40,7 @@ def _reply_for_401(provider):
 
 
 def test_gateway_401_reply_names_the_provider_and_the_profile(monkeypatch, tmp_path):
-    profile_home = tmp_path / ".clawk" / "profiles" / "codex"
+    profile_home = tmp_path / ".clawksis" / "profiles" / "codex"
     profile_home.mkdir(parents=True)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_HOME", str(profile_home))

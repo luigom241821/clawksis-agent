@@ -27,7 +27,7 @@ def test_cron_profile_homes_serve_every_live_profile(tmp_path, monkeypatch):
     """The helper wired into in-process cron returns default + every live named profile;
     a tombstoned profile dir is skipped."""
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
     monkeypatch.setenv("CLAWK_HOME", str(default_home))
     for name in ("worker", "guest", "gone"):
         (default_home / "profiles" / name).mkdir(parents=True)
@@ -49,7 +49,7 @@ def test_cron_tick_homes_include_active_named_host(tmp_path, monkeypatch):
     """A named-profile host running the multiplexer ticks its own store exactly once:
     it is part of the served set, and cron must not union it a second time."""
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
     for name in ("host", "worker"):
         (default_home / "profiles" / name).mkdir(parents=True)
         (default_home / "profiles" / name / "config.yaml").write_text(

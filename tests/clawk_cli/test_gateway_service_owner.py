@@ -23,8 +23,8 @@ UNIT = (
 
 @pytest.fixture
 def unit(tmp_path, monkeypatch):
-    real = tmp_path / "account" / ".clawk"
-    scratch = tmp_path / "scratch" / "fakehome" / ".clawk"
+    real = tmp_path / "account" / ".clawksis"
+    scratch = tmp_path / "scratch" / "fakehome" / ".clawksis"
     real.mkdir(parents=True)
     scratch.mkdir(parents=True)
     path = tmp_path / "systemd" / "clawk-gateway.service"

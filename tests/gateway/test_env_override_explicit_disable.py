@@ -85,7 +85,7 @@ def _isolate(monkeypatch, tmp_path, env):
     for key in list(os.environ):
         if key.startswith(_PLATFORM_ENV_PREFIXES):
             monkeypatch.delenv(key, raising=False)
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     for k, v in env.items():

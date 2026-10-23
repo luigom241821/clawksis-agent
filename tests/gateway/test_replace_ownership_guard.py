@@ -40,7 +40,7 @@ import pytest
 def profile_env(tmp_path, monkeypatch):
     """Isolated CLAWK_HOME mirroring tests/clawk_cli/test_profiles.py."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
     default_home.mkdir(exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(default_home))
     return tmp_home if (tmp_home := default_home) else default_home
@@ -63,11 +63,11 @@ class TestRecordAuthority:
         with (
             patch(
                 "gateway.status._read_pid_record",
-                return_value=_record(home=str(profile_env / ".clawk")),
+                return_value=_record(home=str(profile_env / ".clawksis")),
             ),
             patch(
                 "gateway.status._get_pid_path",
-                return_value=profile_env / ".clawk" / "gateway.pid",
+                return_value=profile_env / ".clawksis" / "gateway.pid",
             ),
             patch(
                 "gateway.status._get_process_start_time",
@@ -76,7 +76,7 @@ class TestRecordAuthority:
             patch("gateway.status._read_process_cmdline", return_value=None),
             patch(
                 "gateway.status._get_process_clawk_home",
-                return_value=profile_env / ".clawk",
+                return_value=profile_env / ".clawksis",
             ),
         ):
             assert _replace_target_belongs_to_other_profile(424242) is False
@@ -93,7 +93,7 @@ class TestRecordAuthority:
             ),
             patch(
                 "gateway.status._get_pid_path",
-                return_value=profile_env / ".clawk" / "gateway.pid",
+                return_value=profile_env / ".clawksis" / "gateway.pid",
             ),
             patch(
                 "gateway.status._get_process_start_time",
@@ -102,7 +102,7 @@ class TestRecordAuthority:
             patch("gateway.status._read_process_cmdline", return_value=None),
             patch(
                 "gateway.status._get_process_clawk_home",
-                return_value=profile_env / ".clawk" / "profiles" / "tim",
+                return_value=profile_env / ".clawksis" / "profiles" / "tim",
             ),
         ):
             assert _replace_target_belongs_to_other_profile(424242) is True
@@ -115,11 +115,11 @@ class TestRecordAuthority:
             patch("gateway.status._read_pid_record", return_value=None),
             patch(
                 "gateway.status._get_pid_path",
-                return_value=profile_env / ".clawk" / "gateway.pid",
+                return_value=profile_env / ".clawksis" / "gateway.pid",
             ),
             patch(
                 "gateway.status._get_process_clawk_home",
-                return_value=profile_env / ".clawk",
+                return_value=profile_env / ".clawksis",
             ),
         ):
             assert _replace_target_belongs_to_other_profile(424242) is True
@@ -138,7 +138,7 @@ class TestRecordAuthority:
             ),
             patch(
                 "gateway.status._get_pid_path",
-                return_value=profile_env / ".clawk" / "gateway.pid",
+                return_value=profile_env / ".clawksis" / "gateway.pid",
             ),
             patch(
                 "gateway.status._get_process_start_time",
@@ -146,7 +146,7 @@ class TestRecordAuthority:
             ),
             patch(
                 "gateway.status._get_process_clawk_home",
-                return_value=profile_env / ".clawk",
+                return_value=profile_env / ".clawksis",
             ),
         ):
             assert _replace_target_belongs_to_other_profile(424242) is True
@@ -158,11 +158,11 @@ class TestRecordAuthority:
         with (
             patch(
                 "gateway.status._read_pid_record",
-                return_value=_record(pid=999999, home=str(profile_env / ".clawk")),
+                return_value=_record(pid=999999, home=str(profile_env / ".clawksis")),
             ),
             patch(
                 "gateway.status._get_pid_path",
-                return_value=profile_env / ".clawk" / "gateway.pid",
+                return_value=profile_env / ".clawksis" / "gateway.pid",
             ),
             patch(
                 "gateway.status._get_process_start_time",
@@ -170,7 +170,7 @@ class TestRecordAuthority:
             ),
             patch(
                 "gateway.status._get_process_clawk_home",
-                return_value=profile_env / ".clawk",
+                return_value=profile_env / ".clawksis",
             ),
         ):
             assert _replace_target_belongs_to_other_profile(424242) is True
@@ -183,11 +183,11 @@ class TestRecordAuthority:
         with (
             patch(
                 "gateway.status._read_pid_record",
-                return_value=_record(start=1, home=str(profile_env / ".clawk")),
+                return_value=_record(start=1, home=str(profile_env / ".clawksis")),
             ),
             patch(
                 "gateway.status._get_pid_path",
-                return_value=profile_env / ".clawk" / "gateway.pid",
+                return_value=profile_env / ".clawksis" / "gateway.pid",
             ),
             patch(
                 "gateway.status._get_process_start_time",
@@ -195,7 +195,7 @@ class TestRecordAuthority:
             ),
             patch(
                 "gateway.status._get_process_clawk_home",
-                return_value=profile_env / ".clawk",
+                return_value=profile_env / ".clawksis",
             ),
         ):
             assert _replace_target_belongs_to_other_profile(424242) is True
@@ -277,11 +277,11 @@ class TestArgvConsistencyCheck:
         with (
             patch(
                 "gateway.status._read_pid_record",
-                return_value=_record(home=str(profile_env / ".clawk")),
+                return_value=_record(home=str(profile_env / ".clawksis")),
             ),
             patch(
                 "gateway.status._get_pid_path",
-                return_value=profile_env / ".clawk" / "gateway.pid",
+                return_value=profile_env / ".clawksis" / "gateway.pid",
             ),
             patch(
                 "gateway.status._get_process_start_time",
@@ -293,7 +293,7 @@ class TestArgvConsistencyCheck:
             ),
             patch(
                 "gateway.status._get_process_clawk_home",
-                return_value=profile_env / ".clawk",
+                return_value=profile_env / ".clawksis",
             ),
         ):
             assert _replace_target_belongs_to_other_profile(424242) is True

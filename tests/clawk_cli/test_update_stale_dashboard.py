@@ -629,7 +629,7 @@ class TestManualBackendRespawn:
     def test_respawn_adds_no_open_to_dashboard_commands(self, tmp_path, monkeypatch):
         """Respawned `dashboard` argv gains --no-open; `serve` argv untouched."""
         live = self._live()
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         spawned: list[list[str]] = []
 
         class _FakePopen:
@@ -656,7 +656,7 @@ class TestManualBackendRespawn:
 
     def test_respawn_failure_returned(self, tmp_path, monkeypatch, capsys):
         live = self._live()
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
         with (
             patch.object(live.subprocess, "Popen", side_effect=OSError("no such file")),
@@ -673,7 +673,7 @@ class TestManualBackendRespawn:
         this install's launcher command instead of being replayed verbatim after the PM
         takeover rewrote the launcher into a shell shim (#124778)."""
         live = self._live()
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         spawned: list[list[str]] = []
 
         class _FakePopen:
@@ -716,7 +716,7 @@ class TestManualBackendRespawn:
         must surface as a failure, never as ``✓ restarted`` (#124778), reported with the
         caller's argv so it matches the stopped PID's cmdline (#109290)."""
         live = self._live()
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
         class _DyingPopen:
             returncode = 1

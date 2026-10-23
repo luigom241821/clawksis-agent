@@ -77,7 +77,7 @@ _PROBE = textwrap.dedent("""
 
 
 def test_session_listener_serves_native_ws_before_importing_the_dashboard(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     env = {
         k: v
