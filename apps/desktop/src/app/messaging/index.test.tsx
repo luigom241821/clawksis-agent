@@ -311,7 +311,7 @@ describe('MessagingView setup-guide link', () => {
   })
 
   it('opens a real docs URL through the validated external opener', async () => {
-    const docsUrl = 'https://clawksis-agent.nousresearch.com/docs/user-guide/messaging/teams'
+    const docsUrl = 'https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/teams'
     getMessagingPlatforms.mockResolvedValue({ platforms: [platform({ docs_url: docsUrl })] })
 
     await renderMessaging()

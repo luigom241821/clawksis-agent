@@ -1479,7 +1479,7 @@ export const en: Translations = {
       sshErrHostKey:
         'The host key has CHANGED since you last connected. Verify this is expected, then run ssh-keygen -R <host> and reconnect.',
       sshErrNotInstalled:
-        'Clawksis is not installed on the remote host. Install it there (curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | sh) or set the Clawksis path.',
+        'Clawksis is not installed on the remote host. Install it there (curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | sh) or set the Clawksis path.',
       sshErrPlatform:
         'Unsupported remote platform. Clawksis Desktop SSH mode supports Linux, macOS, and Windows remote hosts.',
       sshErrTimeout: 'SSH connection timed out. The host may be unreachable or asleep.',

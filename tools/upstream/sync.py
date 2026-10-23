@@ -67,7 +67,19 @@ PATH_MAP = [
 # Reemplazos de contenido en el MISMO orden que tools/rebrand.sh del monorepo
 # (mas especifico primero). El orden importa: reproduce el transform historico
 # tal cual se aplico al fork, incluidas sus redundancias.
+_RAW = "https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts"
+_PAGES = "https://samuelgradientai-sys.github.io/clawksis-agent"
 CONTENT_MAP = [
+    # URLs del sitio de upstream -> equivalentes del fork (instalador en GitHub
+    # raw, docs en el GitHub Pages del fork). Van primero: el blanket
+    # hermes-agent -> clawksis-agent las dejaria en un host inexistente.
+    ("https://hermes-agent.nousresearch.com/install.sh", f"{_RAW}/install.sh"),
+    ("https://hermes-agent.nousresearch.com/install.ps1", f"{_RAW}/install.ps1"),
+    ("https://hermes-agent.nousresearch.com/install.cmd", f"{_RAW}/install.cmd"),
+    ("https://hermes-agent.nousresearch.com/docs/", f"{_PAGES}/"),
+    ("https://hermes-agent.nousresearch.com/docs", _PAGES),
+    ("https://hermes-agent.nousresearch.com/", "https://github.com/samuelgradientai-sys/clawksis-agent/"),
+    ("https://hermes-agent.nousresearch.com", "https://github.com/samuelgradientai-sys/clawksis-agent"),
     ("NousResearch/hermes-agent", "samuelgradientai-sys/clawksis-agent"),
     ("hermes_cli", "clawk_cli"),
     ("hermes_bootstrap", "clawk_bootstrap"),
@@ -140,6 +152,9 @@ _MODEL_ID_RE = re.compile(
     # confundir con los releases de Hermes (source_releases.py), que el fork no
     # debe descargar.
     r"|https://hermes-assets\.nousresearch\.com/upstream/[\w/.\-]*"
+    # Imagen publica de sandbox (computer use) de upstream en Docker Hub: el
+    # fork la usa tal cual (no publica una propia).
+    r"|nousresearch/hermes-sandbox"
 )
 
 # Carpeta HOME del usuario: en el fork es ``~/.clawksis``. El blanket

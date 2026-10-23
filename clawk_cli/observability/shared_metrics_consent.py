@@ -30,7 +30,7 @@ OFFER_CHOICES = (
     ("No thanks", False, False),
 )
 _NO_THANKS = len(OFFER_CHOICES) - 1
-DOCS_URL = "https://clawksis-agent.nousresearch.com/docs/developer-guide/relay-shared-metrics"
+DOCS_URL = "https://samuelgradientai-sys.github.io/clawksis-agent/developer-guide/relay-shared-metrics"
 _OFFER_DESCRIPTION = "\n".join((
     "Shared metrics are bounded counters: activity, outcomes, error classes (with a",
     "fixed-list reason when a memory write, compression, update or install fails),",

@@ -87,7 +87,7 @@ class TestBuildAnthropicClient:
             )
             kwargs = mock_sdk.Anthropic.call_args[1]
             headers = kwargs["default_headers"]
-            assert headers["HTTP-Referer"] == "https://clawksis-agent.nousresearch.com"
+            assert headers["HTTP-Referer"] == "https://github.com/samuelgradientai-sys/clawksis-agent"
             assert headers["X-Title"] == "Clawksis"
             from clawk_cli.version_info import get_version_info
             assert headers["User-Agent"] == f"ClawksisAgent/{get_version_info().base_version}"
@@ -1814,7 +1814,7 @@ def test_oauth_system_prompt_sanitizer_preserves_docs_url():
                 "role": "system",
                 "content": (
                     "Clawksis by Nous Research uses clawksis-agent skills. "
-                    "Docs: https://clawksis-agent.nousresearch.com/docs ; "
+                    "Docs: https://samuelgradientai-sys.github.io/clawksis-agent ; "
                     "interpreter ~/.clawksis/clawksis-agent/venv/bin/python ; "
                     "source github.com/samuelgradientai-sys/clawksis-agent ; mail clawksis-agent@example.com ; "
                     "skill_view(name='clawksis-agent') ; clawksis-agent's docs ; built by clawksis-agent."
@@ -1830,7 +1830,7 @@ def test_oauth_system_prompt_sanitizer_preserves_docs_url():
 
     system_text = "\n".join(block["text"] for block in kwargs["system"])
     assert "Claude Code by Anthropic uses claude-code skills." in system_text
-    assert "https://clawksis-agent.nousresearch.com/docs" in system_text
+    assert "https://samuelgradientai-sys.github.io/clawksis-agent" in system_text
     # Paths and repo slugs are addresses too: a subagent told to run
     # ``~/.clawksis/claude-code/venv/bin/python`` fails on a file that does not exist.
     assert "~/.clawksis/clawksis-agent/venv/bin/python" in system_text

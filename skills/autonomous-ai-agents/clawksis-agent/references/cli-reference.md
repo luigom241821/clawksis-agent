@@ -1,7 +1,7 @@
 # Clawksis CLI Reference
 
 Live sources when anything looks stale: `clawk --help`, `clawk <command> --help`,
-https://clawksis-agent.nousresearch.com/docs/reference/cli-commands
+https://samuelgradientai-sys.github.io/clawksis-agent/reference/cli-commands
 
 ### Global Flags
 
@@ -79,7 +79,7 @@ clawk gateway run|install|start|stop|restart|status|setup
 ```
 
 20+ platforms: Telegram, Discord, Slack, WhatsApp (Baileys + Business Cloud API), iMessage (Photon — `clawk photon setup`), Signal, Email, SMS, Matrix, Mattermost, Teams, LINE, SimpleX, ntfy, Google Chat, Home Assistant, DingTalk, Feishu, WeCom, Weixin, API Server, Webhooks. Open WebUI connects via the API Server adapter. Most adapters ship under `plugins/platforms/`.
-Docs: https://clawksis-agent.nousresearch.com/docs/user-guide/messaging/
+Docs: https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/
 
 ### Sessions
 
@@ -142,10 +142,10 @@ Plugin- and provider-supplied subcommands (e.g. `clawk photon setup`) only appea
 
 | Looking for... | Location |
 |---|---|
-| Config options | `clawk config edit` · [Configuration docs](https://clawksis-agent.nousresearch.com/docs/user-guide/configuration) |
-| Tools / toolsets | `clawk tools list` · [Tools reference](https://clawksis-agent.nousresearch.com/docs/reference/tools-reference) |
-| Skills catalog | `clawk skills browse` · [Skills catalog](https://clawksis-agent.nousresearch.com/docs/reference/skills-catalog) |
-| Provider setup | `clawk model` · [Providers guide](https://clawksis-agent.nousresearch.com/docs/integrations/providers) |
-| Env variables | `clawk config env-path` · [Env vars reference](https://clawksis-agent.nousresearch.com/docs/reference/environment-variables) |
+| Config options | `clawk config edit` · [Configuration docs](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/configuration) |
+| Tools / toolsets | `clawk tools list` · [Tools reference](https://samuelgradientai-sys.github.io/clawksis-agent/reference/tools-reference) |
+| Skills catalog | `clawk skills browse` · [Skills catalog](https://samuelgradientai-sys.github.io/clawksis-agent/reference/skills-catalog) |
+| Provider setup | `clawk model` · [Providers guide](https://samuelgradientai-sys.github.io/clawksis-agent/integrations/providers) |
+| Env variables | `clawk config env-path` · [Env vars reference](https://samuelgradientai-sys.github.io/clawksis-agent/reference/environment-variables) |
 | Gateway logs | `~/.clawksis/logs/gateway.log` (or `clawk logs`) |
 | Sessions | `clawk sessions browse` (reads state.db) |

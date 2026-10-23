@@ -5,7 +5,7 @@ import { useProfileScope } from "@/contexts/useProfileScope";
 import { useI18n } from "@/i18n";
 
 const DOCS_URL =
-  "https://clawksis-agent.nousresearch.com/docs/developer-guide/relay-shared-metrics";
+  "https://samuelgradientai-sys.github.io/clawksis-agent/developer-guide/relay-shared-metrics";
 const STORAGE_KEY = "sharedMetricsOfferDismissed";
 
 /**

@@ -5,9 +5,9 @@
 # Bot Screen, computer_use and the browser can live INSIDE the sandbox instead of
 # on the gateway host. No Clawksis runtime in here; the gateway shells in.
 #
-#   docker build -f docker/sandbox-desktop.Dockerfile -t nousresearch/clawk-sandbox:desktop .
+#   docker build -f docker/sandbox-desktop.Dockerfile -t nousresearch/hermes-sandbox:desktop .
 #
-# Published as nousresearch/clawk-sandbox:desktop by .github/workflows/sandbox-image.yml
+# Published as nousresearch/hermes-sandbox:desktop by .github/workflows/sandbox-image.yml
 # on releases and manual dispatch only: it carries no Clawksis code, so it does not track main.
 # The tag lives in the ARG so CI and a local build read one place; hadolint cannot
 # see through the substitution, hence the inline ignore.

@@ -17,8 +17,8 @@ use, web search, and 22 messaging platforms were absent from the index every
 LLM reads to learn what Clawksis does.
 
 Both publish at:
-  https://clawksis-agent.nousresearch.com/docs/llms.txt
-  https://clawksis-agent.nousresearch.com/docs/llms-full.txt
+  https://samuelgradientai-sys.github.io/clawksis-agent/llms.txt
+  https://samuelgradientai-sys.github.io/clawksis-agent/llms-full.txt
 
 The `/docs/` prefix is not a mistake — Docusaurus serves `website/static/`
 at the `docs/` base path. Clients and IDE plugins that probe the classic

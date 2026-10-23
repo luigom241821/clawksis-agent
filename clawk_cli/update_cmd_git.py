@@ -503,10 +503,10 @@ def _damaged_checkout_message(root: Path) -> str:
     would rebuild the default directory and leave a ``--dir`` install broken)."""
     if sys.platform == "win32":
         quoted = "'" + str(root).replace("'", "''") + "'"
-        repair = ("& ([scriptblock]::Create((irm https://clawksis-agent.nousresearch.com/install.ps1)))"
+        repair = ("& ([scriptblock]::Create((irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)))"
                   f" -InstallDir {quoted}")
     else:
-        repair = f"curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash -s -- --dir {shlex.quote(str(root))}"
+        repair = f"curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash -s -- --dir {shlex.quote(str(root))}"
     return (f"✗ This Clawksis checkout's git data is damaged (git no longer recognizes {root / '.git'}),"
             " so it cannot be updated in place.\n"
             "  Run the installer again to repair it; it moves the damaged checkout aside and keeps"

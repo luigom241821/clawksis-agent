@@ -84,7 +84,7 @@ clawk webhook subscribe todoist-clawk \
   --deliver telegram --deliver-chat-id "12345"
 ```
 
-Full filter syntax: https://clawksis-agent.nousresearch.com/docs/user-guide/messaging/webhooks#payload-filters
+Full filter syntax: https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/webhooks#payload-filters
 
 ### List subscriptions
 ```bash

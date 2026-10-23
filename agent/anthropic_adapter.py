@@ -465,7 +465,7 @@ def _beta_header(betas: list) -> dict[str, str]:
 def _attribution_headers() -> dict[str, str]:
     """Same client-attribution set sent to OpenRouter / Vercel AI Gateway / Fireworks."""
     return {
-        "HTTP-Referer": "https://clawksis-agent.nousresearch.com",
+        "HTTP-Referer": "https://github.com/samuelgradientai-sys/clawksis-agent",
         "X-Title": "Clawksis",
         "User-Agent": f"ClawksisAgent/{get_version_info().base_version}",
     }

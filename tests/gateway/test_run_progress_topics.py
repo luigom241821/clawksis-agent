@@ -358,7 +358,7 @@ class LongPreviewAgent:
 
 
 class UrlPreviewAgent:
-    URL = "https://clawksis-agent.nousresearch.com/docs/gateway/discord/tool-progress"
+    URL = "https://samuelgradientai-sys.github.io/clawksis-agent/gateway/discord/tool-progress"
 
     def __init__(self, **kwargs):
         self.tool_progress_callback = kwargs.get("tool_progress_callback")

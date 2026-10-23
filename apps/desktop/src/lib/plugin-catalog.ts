@@ -26,7 +26,7 @@ import { BACKEND_BOOT_WAIT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import { activeGatewayProfileKey, requestGatewayForProfile } from '@/store/gateway'
 import { $gatewayState } from '@/store/session'
 
-export const CATALOG_ORIGIN = 'https://clawksis-agent.nousresearch.com'
+export const CATALOG_ORIGIN = 'https://github.com/samuelgradientai-sys/clawksis-agent'
 export const PLUGIN_CATALOG_URL = `${CATALOG_ORIGIN}/docs/api/plugins.json`
 export const PLUGIN_CATALOG_DOCS_URL = `${CATALOG_ORIGIN}/docs/user-guide/features/plugin-catalog`
 export const SKILLS_DOCS_URL = `${CATALOG_ORIGIN}/docs/skills/`

@@ -238,7 +238,7 @@ describe('buildToolView browser_navigate title', () => {
     const view = buildToolView(
       part({
         toolName: 'browser_navigate',
-        args: { url: 'https://clawksis-agent.nousresearch.com/docs' },
+        args: { url: 'https://samuelgradientai-sys.github.io/clawksis-agent' },
         result: { success: false, error: 'Command timed out after 60 seconds' }
       }),
       ''
@@ -252,8 +252,8 @@ describe('buildToolView browser_navigate title', () => {
     const view = buildToolView(
       part({
         toolName: 'browser_navigate',
-        args: { url: 'https://clawksis-agent.nousresearch.com/docs' },
-        result: { success: true, url: 'https://clawksis-agent.nousresearch.com/docs', title: 'Docs' }
+        args: { url: 'https://samuelgradientai-sys.github.io/clawksis-agent' },
+        result: { success: true, url: 'https://samuelgradientai-sys.github.io/clawksis-agent', title: 'Docs' }
       }),
       ''
     )

@@ -1089,7 +1089,7 @@ export const jaOverrides = {
       sshErrHostKey:
         '前回の接続以降、ホスト鍵が変更されています。想定どおりか確認し、ssh-keygen -R <host> を実行してから再接続してください。',
       sshErrNotInstalled:
-        'リモートホストに Clawksis がインストールされていません。リモートでインストールする（curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | sh）か、Clawksis パスを設定してください。',
+        'リモートホストに Clawksis がインストールされていません。リモートでインストールする（curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | sh）か、Clawksis パスを設定してください。',
       sshErrPlatform:
         'サポートされていないリモートプラットフォームです。Clawksis Desktop の SSH モードは Linux、macOS、Windows のリモートホストに対応しています。',
       sshErrTimeout: 'SSH 接続がタイムアウトしました。ホストが到達不能、またはスリープ中の可能性があります。',

@@ -17,7 +17,7 @@ platform-gated features are supported), see **[Platform Support](./platform-supp
 ### Desktop packages on macOS or Windows
 
 Download the package for your platform from the
-[Clawksis website](https://clawksis-agent.nousresearch.com/).
+[Clawksis website](https://github.com/samuelgradientai-sys/clawksis-agent/).
 
 - **Windows:** open the `.appinstaller` download with Windows App Installer.
   It installs the signed MSIX bundle and records its update source.
@@ -46,14 +46,14 @@ For a command-line only install without Clawksis Desktop, run:
 
 #### Linux / macOS / WSL2
 ```bash
-curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
 ```
 
 #### Windows (native)
 
 Run in powershell:
 ```powershell
-iex (irm https://clawksis-agent.nousresearch.com/install.ps1)
+iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)
 ```
 
 If you want to install & run Clawksis Desktop after a command-line only install, simply run
@@ -210,7 +210,7 @@ configuration, and launcher must belong to that user.
 2. As the service user, run the regular installer:
 
    ```bash
-   curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
    ```
 
 3. Add the actual launcher directory to the service user's shell environment:

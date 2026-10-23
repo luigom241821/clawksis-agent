@@ -26,7 +26,7 @@ import {
 } from '@/store/updates'
 
 const RELEASE_NOTES_URL = 'https://github.com/samuelgradientai-sys/clawksis-agent/releases'
-const INSTALLER_URL = 'https://clawksis-agent.nousresearch.com/'
+const INSTALLER_URL = 'https://github.com/samuelgradientai-sys/clawksis-agent/'
 
 export type UpdateStatusTone = 'idle' | 'available' | 'error' | 'unsupported'
 

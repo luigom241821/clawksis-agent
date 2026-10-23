@@ -314,8 +314,8 @@ The CLI uses argparse, so `--help` is a good first probe for "did my new flag re
 
 ## See also
 
-- User-facing setup + troubleshooting: [Egress proxy](https://clawksis-agent.nousresearch.com/docs/user-guide/egress/iron-proxy)
-- Docker backend internals: [Docker](https://clawksis-agent.nousresearch.com/docs/user-guide/docker)
-- Bitwarden Secrets Manager integration: [`clawk secrets bitwarden`](https://clawksis-agent.nousresearch.com/docs/user-guide/secrets/bitwarden)
-- CLI command reference: [`clawk egress`](https://clawksis-agent.nousresearch.com/docs/reference/cli-commands#clawk-egress)
-- Sandbox-injected environment variables: [Egress proxy (sandbox-injected)](https://clawksis-agent.nousresearch.com/docs/reference/environment-variables#egress-proxy-sandbox-injected)
+- User-facing setup + troubleshooting: [Egress proxy](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/egress/iron-proxy)
+- Docker backend internals: [Docker](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/docker)
+- Bitwarden Secrets Manager integration: [`clawk secrets bitwarden`](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/secrets/bitwarden)
+- CLI command reference: [`clawk egress`](https://samuelgradientai-sys.github.io/clawksis-agent/reference/cli-commands#clawk-egress)
+- Sandbox-injected environment variables: [Egress proxy (sandbox-injected)](https://samuelgradientai-sys.github.io/clawksis-agent/reference/environment-variables#egress-proxy-sandbox-injected)

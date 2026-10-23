@@ -1280,7 +1280,7 @@ def register(ctx) -> None:
         adapter_factory=lambda cfg: LineAdapter(cfg),
         check_fn=check_requirements,
         dashboard_description="Use Clawksis from LINE via the LINE Messaging API webhook.",
-        docs_url="https://clawksis-agent.nousresearch.com/docs/user-guide/messaging/line",
+        docs_url="https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/line",
         validate_config=validate_config,
         is_connected=is_connected,
         required_env=["LINE_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],

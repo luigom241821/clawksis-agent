@@ -73,7 +73,7 @@ def test_how_clawk_works_reads_the_docs_and_builds_three_screens():
 
     assert text.split("\n")[1] == ("Load these skills with skill_view first: clawksis-agent, claude-design, p5js, "
                                    "humanizer.")
-    assert "https://clawksis-agent.nousresearch.com/docs" in text and "web_extract" in text
+    assert "https://samuelgradientai-sys.github.io/clawksis-agent" in text and "web_extract" in text
     assert all(f"Screen {n}" in text for n in (1, 2, 3)) and "~/clawk-first-task/" in text
 
 

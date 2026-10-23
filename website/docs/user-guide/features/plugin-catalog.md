@@ -222,7 +222,7 @@ unreviewed name index. Install such plugins by `owner/repo` or Git URL instead
 ### Live refresh
 
 The docs build publishes the catalog as one JSON document
-(`https://clawksis-agent.nousresearch.com/docs/api/plugin-catalog.json`).
+(`https://samuelgradientai-sys.github.io/clawksis-agent/api/plugin-catalog.json`).
 `search`/`install`/`update` fetch it at most every six hours and cache it under
 `~/.clawksis/cache/`, so new entries and removals reach installed clients without
 updating Clawksis. Offline, the cached copy is used for up to 24 hours, then the

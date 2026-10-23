@@ -264,7 +264,7 @@ async function locateClawksis(ssh, remoteClawksisPath) {
 
   const err: any = new Error(
     'Clawksis is not installed on the remote host (could not find a `clawk` executable). ' +
-      'Install it on the remote with:  curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | sh  ' +
+      'Install it on the remote with:  curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | sh  ' +
       '— or set the Clawksis path explicitly in the SSH connection settings.'
   )
 

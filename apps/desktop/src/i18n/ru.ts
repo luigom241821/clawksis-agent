@@ -1216,7 +1216,7 @@ export const ruOverrides = {
       sshErrHostKey:
         'Ключ хоста ИЗМЕНИЛСЯ с последнего подключения. Убедитесь, что это ожидаемо, затем выполните ssh-keygen -R <host> и переподключитесь.',
       sshErrNotInstalled:
-        'Clawksis не установлен на удалённой машине. Установите его там (curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | sh) или задайте путь к Clawksis.',
+        'Clawksis не установлен на удалённой машине. Установите его там (curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | sh) или задайте путь к Clawksis.',
       sshErrPlatform:
         'Неподдерживаемая удалённая платформа. SSH-режим Clawksis Desktop поддерживает удалённые хосты Linux, macOS и Windows.',
       sshErrTimeout: 'SSH-соединение истекло. Хост может быть недоступен или «спит».',

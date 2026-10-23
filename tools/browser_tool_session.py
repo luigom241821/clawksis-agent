@@ -689,7 +689,7 @@ def _interpret_browser_command_output(command: str, stdout: str, stderr: str, re
     return parsed
 
 
-_SANDBOX_AGENT_BROWSER = "agent-browser"  # the CLI baked into nousresearch/clawk-sandbox:desktop
+_SANDBOX_AGENT_BROWSER = "agent-browser"  # the CLI baked into nousresearch/hermes-sandbox:desktop
 _SANDBOX_ENV_KEYS = ("AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_IDLE_TIMEOUT_MS", "AGENT_BROWSER_ARGS",
                      "AGENT_BROWSER_PROFILE", "AGENT_BROWSER_EXECUTABLE_PATH", "AGENT_BROWSER_HEADED",
                      "DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "ANONYMIZED_TELEMETRY", "TMPDIR")

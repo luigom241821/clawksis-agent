@@ -21,7 +21,7 @@ describe('hub-iframe-policy predicates', () => {
     expect(isClawksisHubOrigin('')).toBe(false)
     expect(isClawksisHubOrigin(null)).toBe(false)
     expect(isClawksisHubOrigin(undefined)).toBe(false)
-    expect(isClawksisHubOrigin('https://clawksis-agent.nousresearch.com.evil.example')).toBe(false)
+    expect(isClawksisHubOrigin('https://github.com/samuelgradientai-sys/clawksis-agent.evil.example')).toBe(false)
     expect(isClawksisHubOrigin('https://evil.example')).toBe(false)
     expect(isClawksisHubOrigin('file://')).toBe(false)
   })
@@ -103,7 +103,7 @@ describe('createWindowOpenHandler trusted-hub delegation', () => {
     const openExternalUrl = vi.fn()
 
     const handler = createWindowOpenHandler(undefined, {
-      getOpenerOrigin: () => 'https://clawksis-agent.nousresearch.com.evil.example',
+      getOpenerOrigin: () => 'https://github.com/samuelgradientai-sys/clawksis-agent.evil.example',
       openExternalUrl
     })
 

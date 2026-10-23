@@ -20,7 +20,7 @@ import uuid
 
 from clawk_cli.gateway_client import GatewayClientError
 
-PARITY_DOC = "https://clawksis-agent.nousresearch.com/docs/developer-guide/gateway-command-parity"
+PARITY_DOC = "https://samuelgradientai-sys.github.io/clawksis-agent/developer-guide/gateway-command-parity"
 
 # Registry command (canonical name) -> how the classic view answers it itself. Every other
 # registry command goes to the owner through ``slash.exec``. Read by the parity inventory

@@ -21,7 +21,7 @@ class VercelAIGatewayProfile(ProviderProfile):
 vercel = VercelAIGatewayProfile(
     name="ai-gateway", aliases=("vercel", "vercel-ai-gateway", "ai_gateway", "aigateway"),
     env_vars=("AI_GATEWAY_API_KEY",), base_url="https://ai-gateway.vercel.sh/v1",
-    default_headers={"HTTP-Referer": "https://clawksis-agent.nousresearch.com", "X-Title": "Clawksis"},
+    default_headers={"HTTP-Referer": "https://github.com/samuelgradientai-sys/clawksis-agent", "X-Title": "Clawksis"},
     default_aux_model="google/gemini-3-flash",
 )
 

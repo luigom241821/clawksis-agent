@@ -94,9 +94,9 @@ def test_sandbox_status_offers_the_image_switch_instead_of_a_config_hint(monkeyp
     monkeypatch.setattr(sandbox_host, "missing_binaries", lambda env: ["Xvnc"])
     monkeypatch.setattr(sandbox_host, "published_env", lambda env, profile: {})
 
-    monkeypatch.setattr(sw, "pending", lambda: sw.PendingSwitch("old/base:1", "nousresearch/clawk-sandbox:desktop", ["clawk-a"]))
+    monkeypatch.setattr(sw, "pending", lambda: sw.PendingSwitch("old/base:1", "nousresearch/hermes-sandbox:desktop", ["clawk-a"]))
     st = runtime.status()
-    assert st.image_switch == {"current_image": "old/base:1", "target_image": "nousresearch/clawk-sandbox:desktop", "containers": 1}
+    assert st.image_switch == {"current_image": "old/base:1", "target_image": "nousresearch/hermes-sandbox:desktop", "containers": 1}
     assert "old/base:1" in st.blocker and "/root and /workspace" in st.blocker
     assert st.installed and not st.running
 

@@ -482,7 +482,7 @@ terminal:
 #   cwd: "/workspace"  # Path INSIDE the container (default: /)
 #   timeout: 180
 #   lifetime_seconds: 300
-#   docker_image: "nousresearch/clawk-sandbox:desktop"
+#   docker_image: "nousresearch/hermes-sandbox:desktop"
 #   docker_mount_cwd_to_workspace: true   # Explicit opt-in: mount your launch cwd into /workspace
 #   # Optional: run the container as your host user's uid:gid so files written
 #   # into bind-mounted dirs are owned by you, not root. Drops SETUID/SETGID
@@ -513,7 +513,7 @@ terminal:
 #   cwd: "/workspace"  # Path INSIDE the container (default: /root)
 #   timeout: 180
 #   lifetime_seconds: 300
-#   singularity_image: "docker://nousresearch/clawk-sandbox:desktop"
+#   singularity_image: "docker://nousresearch/hermes-sandbox:desktop"
 
 # -----------------------------------------------------------------------------
 # OPTION 5: Modal cloud execution
@@ -525,7 +525,7 @@ terminal:
 #   cwd: "/workspace"  # Path INSIDE the sandbox (default: /root)
 #   timeout: 180
 #   lifetime_seconds: 300
-#   modal_image: "nousresearch/clawk-sandbox:desktop"
+#   modal_image: "nousresearch/hermes-sandbox:desktop"
 
 # -----------------------------------------------------------------------------
 # OPTION 6: Daytona cloud execution
@@ -538,7 +538,7 @@ terminal:
 #   cwd: "~"
 #   timeout: 180
 #   lifetime_seconds: 300
-#   daytona_image: "nousresearch/clawk-sandbox:desktop"
+#   daytona_image: "nousresearch/hermes-sandbox:desktop"
 #   container_disk: 10240          # Daytona max is 10GB per sandbox
 
 #
@@ -2346,7 +2346,7 @@ updates:
 #     are skipped with a startup warning (never a silent clobber)
 #   - a source's override_existing lets it beat .env/shell values, but
 #     never another secret source's claim
-# Docs: https://clawksis-agent.nousresearch.com/docs/user-guide/secrets/
+# Docs: https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/secrets/
 #
 # secrets:
 #   # Optional explicit ordering of enabled sources.

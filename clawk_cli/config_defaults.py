@@ -9,7 +9,7 @@ docs of config.yaml.
 #: user pins one. LEGACY_SANDBOX_IMAGES are the plain defaults that preceded the desktop stack
 #: (the 3.14 pin shipped between the two without a migration); a saved config still holding one
 #: is the template copied, and the config migration unsets it, never a user's own pin.
-DEFAULT_SANDBOX_IMAGE = "nousresearch/clawk-sandbox:desktop"
+DEFAULT_SANDBOX_IMAGE = "nousresearch/hermes-sandbox:desktop"
 LEGACY_SANDBOX_IMAGES = ("nikolaik/python-nodejs:python3.11-nodejs20", "nikolaik/python-nodejs:python3.14-nodejs22")
 LEGACY_SANDBOX_IMAGE = LEGACY_SANDBOX_IMAGES[0]
 # Vercel Sandbox managed image (Vercel deprecated its `runtime` presets in Aug 2026).
@@ -2582,7 +2582,7 @@ DEFAULT_CONFIG = {
         #   terminal  always inside the terminal backend (error when it cannot host one).
         #   gateway   always on the gateway host, even with a sandbox terminal: the agent's screen, browser
         #             and computer_use then act OUTSIDE the terminal sandbox. Explicit opt-in.
-        # The sandbox image needs the desktop stack: nousresearch/clawk-sandbox:desktop.
+        # The sandbox image needs the desktop stack: nousresearch/hermes-sandbox:desktop.
         "placement": "auto",
     },
     "computer_use": {

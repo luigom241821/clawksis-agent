@@ -235,8 +235,8 @@ terminal:
   env_passthrough: []  # Env var names to forward to sandboxed execution (terminal + execute_code)
   client_env_passthrough: []  # Extra non-secret toolchain names (e.g. GEM_HOME) a local CLI/TUI session's tools take from its launching shell
   sync_back_max_bytes: 2147483648  # Remote backends: refuse to extract a state archive larger than this (bytes)
-  modal_image: "nousresearch/clawk-sandbox:desktop"                 # Container image for Modal backend
-  daytona_image: "nousresearch/clawk-sandbox:desktop"               # Container image for Daytona backend
+  modal_image: "nousresearch/hermes-sandbox:desktop"                 # Container image for Modal backend
+  daytona_image: "nousresearch/hermes-sandbox:desktop"               # Container image for Daytona backend
 ```
 
 `terminal.temp_dir` controls where Clawksis puts session temp artifacts on the
@@ -375,7 +375,7 @@ terminal:
   # Any other image works for shell work; the screen then needs bot_desktop.placement: gateway.
   # Writing this key is a decision: a persisted container on another image is recreated on the next
   # terminal call. Left unset, an existing container is kept and the CLI / Screen pane ask first.
-  docker_image: "nousresearch/clawk-sandbox:desktop"
+  docker_image: "nousresearch/hermes-sandbox:desktop"
   docker_mount_cwd_to_workspace: false  # Mount launch dir into /workspace
   docker_run_as_host_user: false   # See "Running container as host user" below
   docker_snap_compat: false        # See "Snap-packaged Docker (AppArmor)" below
@@ -611,7 +611,7 @@ clawk plugins install singularity
 ```yaml
 terminal:
   backend: singularity
-  singularity_image: "docker://nousresearch/clawk-sandbox:desktop"
+  singularity_image: "docker://nousresearch/hermes-sandbox:desktop"
   container_cpu: 1                 # CPU cores
   container_memory: 5120           # MB
   container_persistent: true       # Writable overlay persists across sessions

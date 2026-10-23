@@ -21,7 +21,7 @@ def _assert_clawk_identity_headers(headers):
     plus Perplexity's integration header."""
     from clawk_cli.version_info import get_version_info
 
-    assert headers["HTTP-Referer"] == "https://clawksis-agent.nousresearch.com"
+    assert headers["HTTP-Referer"] == "https://github.com/samuelgradientai-sys/clawksis-agent"
     assert headers["X-Title"] == "Clawksis"
     assert headers["User-Agent"] == f"ClawksisAgent/{get_version_info().base_version}"
     assert headers["X-Pplx-Integration"] == "clawksis-agent"

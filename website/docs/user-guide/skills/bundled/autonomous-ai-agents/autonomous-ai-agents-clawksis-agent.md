@@ -54,7 +54,7 @@ People use Clawksis for software development, research, system administration, d
 
 ```bash
 # Install (shell installer — bootstraps PM, Python, dependencies, and the launcher)
-curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
 
 # Interactive chat (default surface; set display.interface: tui to launch the Ink TUI instead)
 clawk
@@ -96,7 +96,7 @@ Profiles use `~/.clawksis/profiles/<name>/` with the same layout. When a profile
 
 | User wants... | Load |
 |---|---|
-| **Anything not listed below — "can Clawksis do X?", "how do I set up X?"** | **https://clawksis-agent.nousresearch.com/docs/llms.txt** |
+| **Anything not listed below — "can Clawksis do X?", "how do I set up X?"** | **https://samuelgradientai-sys.github.io/clawksis-agent/llms.txt** |
 | Bots that chat, run routines, or message each other; the Bots tab | docs: `/user-guide/bot-mode` |
 | CLI commands, subcommands, flags, "how do I run X" | `references/cli-reference.md` |
 | In-session slash commands | `references/slash-commands.md` |

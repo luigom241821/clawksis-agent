@@ -1652,7 +1652,7 @@ def cmd_gui(args: argparse.Namespace):
             print(
                 "  This Clawksis came from Homebrew, which does not ship the desktop app's\n"
                 "  source tree, so it cannot be built from this install.\n"
-                "  Install the desktop app from https://clawksis-agent.nousresearch.com,\n"
+                "  Install the desktop app from https://github.com/samuelgradientai-sys/clawksis-agent,\n"
                 "  or run `clawk desktop` from a source checkout."
             )
         sys.exit(1)

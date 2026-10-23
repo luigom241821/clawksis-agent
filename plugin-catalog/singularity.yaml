@@ -8,7 +8,7 @@ description: 'Singularity/Apptainer terminal backend: Clawksis''s terminal, file
   `terminal.singularity_image`). Formerly built into Clawksis core; existing users are migrated automatically.
   Disclosure — no Python dependencies and no network calls of its own: it drives the `apptainer` (or
   `singularity`) CLI you install, which pulls the configured image (default
-  `docker://nousresearch/clawk-sandbox:desktop`) and caches a SIF under your scratch directory. Your skills
+  `docker://nousresearch/hermes-sandbox:desktop`) and caches a SIF under your scratch directory. Your skills
   and registered credential files are bind-mounted read-only into the container, and because the container
   is a disposable sandbox Clawksis skips its dangerous-command prompts there, as for its other container backends.'
 maintainer: NousResearch

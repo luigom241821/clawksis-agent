@@ -771,7 +771,7 @@ def register(ctx):
     ctx.register_platform(
         name="irc",
         dashboard_description="Relay messages between an IRC channel (or DMs) and Clawksis.",
-        docs_url="https://clawksis-agent.nousresearch.com/docs/user-guide/messaging/irc",
+        docs_url="https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/irc",
         label="IRC",
         adapter_factory=IRCAdapter,
         check_fn=check_requirements,

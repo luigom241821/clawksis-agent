@@ -1,7 +1,7 @@
 # Configuration, Toolsets & Voice
 
 Edit with `clawk config edit` or `clawk config set section.key value`.
-Full reference: https://clawksis-agent.nousresearch.com/docs/user-guide/configuration
+Full reference: https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/configuration
 
 ### Config Sections (most-used keys)
 

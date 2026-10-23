@@ -34,7 +34,7 @@ fireworks = FireworksProfile(
     # Attribution headers (canonical Clawksis set); via default_headers so they
     # survive switch_model and credential rotation.
     default_headers={
-        "HTTP-Referer": "https://clawksis-agent.nousresearch.com",
+        "HTTP-Referer": "https://github.com/samuelgradientai-sys/clawksis-agent",
         "X-Title": "Clawksis",
         "User-Agent": f"ClawksisAgent/{get_version_info().base_version}",
     },

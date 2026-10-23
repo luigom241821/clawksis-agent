@@ -256,7 +256,7 @@ it, so the restarted gateway re-attaches to a still-running sandbox, and
 
 ### The sandbox image
 
-The sandbox needs the desktop stack. `nousresearch/clawk-sandbox:desktop` is
+The sandbox needs the desktop stack. `nousresearch/hermes-sandbox:desktop` is
 the default image for every container backend (Docker, Modal, Daytona,
 Singularity): the `nikolaik/python-nodejs` base (Python 3.13 / Node 26) plus
 TigerVNC, the Xfce components, a headed Chromium, `agent-browser`, `cua-driver`
@@ -268,14 +268,14 @@ the screen then tells you it needs this image or `bot_desktop.placement: gateway
 ```yaml
 terminal:
   backend: docker
-  docker_image: nousresearch/clawk-sandbox:desktop
+  docker_image: nousresearch/hermes-sandbox:desktop
 ```
 
 With a plain image the Screen pane reports the missing binaries and names
 this tag.
 
 Under Singularity/Apptainer the same image is converted to a SIF
-(`docker://nousresearch/clawk-sandbox:desktop`); Dockerfile `ENV` survives the
+(`docker://nousresearch/hermes-sandbox:desktop`); Dockerfile `ENV` survives the
 conversion, the image's `USER` does not: everything runs as you, so the browser
 profile lands in your `$HOME` inside the container, which is the persistent
 overlay by default. The instance runs `--containall`, so its temp dir (where the
@@ -298,7 +298,7 @@ another image (the old default, `nikolaik/python-nodejs:python3.11-nodejs20`),
 the terminal keeps using that container and you decide the switch. The
 interactive CLI asks once at startup; the Screen pane shows the same choice
 with **Switch image** / **Keep current image**; `clawk config set
-terminal.docker_image nousresearch/clawk-sandbox:desktop` is the same answer
+terminal.docker_image nousresearch/hermes-sandbox:desktop` is the same answer
 from any shell. Either answer writes `terminal.docker_image`, and a written
 image is a decision: the container is recreated on the next terminal call only
 when you chose the new image, and only once the new image has been pulled (a

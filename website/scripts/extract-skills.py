@@ -43,7 +43,7 @@ LEGACY_INDEX_CACHE_DIR = os.path.join(REPO_ROOT, "skills", "index-cache")
 OUTPUT = os.path.join(REPO_ROOT, "website", "static", "api", "skills.json")
 # Curated artwork ships in website/static/img/catalog/, which the docs site serves
 # from its own host (docusaurus `url` + `baseUrl`); one place to change if it moves.
-CATALOG_ART_URL = "https://clawksis-agent.nousresearch.com/docs/img/catalog/"
+CATALOG_ART_URL = "https://samuelgradientai-sys.github.io/clawksis-agent/img/catalog/"
 META_OUTPUT = os.path.join(REPO_ROOT, "website", "static", "api", "skills-meta.json")
 
 CATEGORY_LABELS = {

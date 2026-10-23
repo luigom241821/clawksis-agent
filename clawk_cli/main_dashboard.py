@@ -676,7 +676,7 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
             "    clawk dashboard register\n"
             "  It provisions a Nous Portal OAuth client and writes "
             "CLAWK_DASHBOARD_OAUTH_CLIENT_ID into ~/.clawksis/.env for you.\n"
-            "  Docs: https://clawksis-agent.nousresearch.com/docs/"
+            "  Docs: https://samuelgradientai-sys.github.io/clawksis-agent/"
             "user-guide/features/web-dashboard#authentication-gated-mode"
         )
         sys.exit(0)

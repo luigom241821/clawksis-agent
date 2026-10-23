@@ -43,7 +43,7 @@ Use `terminal` with the Python from a PM-prepared Clawksis source checkout. The
 Clawksis with raw pip or project-discovering `uv run`.
 
 From that checkout, first follow the isolated development-home setup in
-[Package Management](https://clawksis-agent.nousresearch.com/docs/reference/package-management#developer-workflow),
+[Package Management](https://samuelgradientai-sys.github.io/clawksis-agent/reference/package-management#developer-workflow),
 then prepare the extra and reactivate before running the helper:
 
 ```bash

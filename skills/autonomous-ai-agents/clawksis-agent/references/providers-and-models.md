@@ -2,7 +2,7 @@
 
 Set via `clawk model` (picker) or `clawk setup`. 35+ provider profiles ship as
 plugins under `plugins/model-providers/`; user plugins of the same name override.
-Full docs: https://clawksis-agent.nousresearch.com/docs/integrations/providers
+Full docs: https://samuelgradientai-sys.github.io/clawksis-agent/integrations/providers
 
 ### Providers
 

@@ -632,7 +632,7 @@ def _migrate_to_46(results: dict[str, Any], quiet: bool) -> None:
 
 
 def _migrate_to_48(results: dict[str, Any], quiet: bool) -> None:
-    # 47 → 48: the container sandbox default gains a display stack (nousresearch/clawk-sandbox:
+    # 47 → 48: the container sandbox default gains a display stack (nousresearch/hermes-sandbox:
     # desktop) so Bot Screen / computer_use / the browser run inside the sandbox. A saved value
     # still equal to the OLD default is the template copied, not a choice: the key is DROPPED so
     # the file follows the default. It is not rewritten to the new image, because a written image

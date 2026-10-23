@@ -202,7 +202,7 @@ class AcmeBoxEnvironment:
 ```
 
 The sandbox image still needs the desktop stack (Xvnc, Xfce, Chromium,
-`cua-driver`); `nousresearch/clawk-sandbox:desktop` has it. Bot Desktop and
+`cua-driver`); `nousresearch/hermes-sandbox:desktop` has it. Bot Desktop and
 the browser keep their scratch files under the environment's
 `get_temp_dir()`. An environment that doesn't subclass `BaseEnvironment` and
 has no such method gets the same default `BaseEnvironment` uses.

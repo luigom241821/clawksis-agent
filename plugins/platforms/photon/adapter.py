@@ -2381,7 +2381,7 @@ def register(ctx) -> None:
         label="iMessage via Photon",
         adapter_factory=lambda cfg: PhotonAdapter(cfg),
         dashboard_description="Use Clawksis through iMessage via Photon's managed Spectrum platform.",
-        docs_url="https://clawksis-agent.nousresearch.com/docs/user-guide/messaging/photon",
+        docs_url="https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/photon",
         check_fn=check_requirements,
         validate_config=validate_config,
         is_connected=is_connected,

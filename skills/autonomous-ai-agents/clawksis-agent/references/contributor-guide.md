@@ -1,6 +1,6 @@
 # Contributor Quick Reference
 
-For occasional contributors and PR authors. Full developer docs: https://clawksis-agent.nousresearch.com/docs/developer-guide/
+For occasional contributors and PR authors. Full developer docs: https://samuelgradientai-sys.github.io/clawksis-agent/developer-guide/
 
 ### Project Layout
 

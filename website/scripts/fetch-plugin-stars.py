@@ -39,7 +39,7 @@ import clawk_yaml as yaml
 
 DEFAULT_CATALOG_DIR = REPO_ROOT / "plugin-catalog"
 DEFAULT_OUTPUT = REPO_ROOT / "website" / "static" / "api" / "plugin-stars.json"
-LIVE_URL = "https://clawksis-agent.nousresearch.com/docs/api/plugin-stars.json"
+LIVE_URL = "https://samuelgradientai-sys.github.io/clawksis-agent/api/plugin-stars.json"
 _GITHUB_REPO_RE = re.compile(r"^https://github\.com/([^/\s]+)/([^/\s#?]+?)(?:\.git)?/?$")
 
 

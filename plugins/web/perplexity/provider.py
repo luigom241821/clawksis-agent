@@ -54,7 +54,7 @@ _KEY_URL = "https://www.perplexity.ai/account/api"
 # OpenCode, plus Perplexity's integration header. No per-user identifier and no separate
 # request; the call already carries the user's own API key.
 _HEADERS = {
-    "HTTP-Referer": "https://clawksis-agent.nousresearch.com",
+    "HTTP-Referer": "https://github.com/samuelgradientai-sys/clawksis-agent",
     "X-Title": "Clawksis",
     "User-Agent": f"ClawksisAgent/{get_version_info().base_version}",
     "X-Pplx-Integration": "clawksis-agent",

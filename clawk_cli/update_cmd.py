@@ -1598,7 +1598,7 @@ def _prepare_git_command(*, checkout_move=None) -> tuple[bool, list, bool]:
     use_zip_update = not git_dir.exists()
     if use_zip_update and sys.platform != "win32":
         print("✗ Not a git repository. Please reinstall:")
-        print("  curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash")
+        print("  curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash")
         _record_stop("not_git_checkout")
         sys.exit(1)
 
@@ -1916,7 +1916,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
         if fetch_result.returncode != 0:
             if is_partial_clone_pack_objects_crash(fetch_result.stderr or ""):
                 print("✗ git still crashed after marking this checkout's packs. See 'Fetch fails with"
-                      " should_include_obj' in https://clawksis-agent.nousresearch.com/docs/getting-started/updating")
+                      " should_include_obj' in https://samuelgradientai-sys.github.io/clawksis-agent/getting-started/updating")
             _print_fetch_failure(fetch_result.stderr, git_cmd=git_cmd, root=_m().PROJECT_ROOT)
             _m()._resume_windows_gateways_after_update(_windows_gateway_resume)
             _record_stop("git_timeout" if fetch_result.returncode == 124 else "disk_full"

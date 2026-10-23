@@ -47,7 +47,7 @@ local` that is the gateway host. With a sandboxed terminal (`docker`, `ssh`,
 or a plugin backend that declares `supports_streams`, such as `singularity`) the
 driver runs **inside the sandbox** on the sandbox's own
 display, so it can only ever touch what the terminal can; the sandbox image
-must carry `cua-driver` (`nousresearch/clawk-sandbox:desktop` does). Modal,
+must carry `cua-driver` (`nousresearch/hermes-sandbox:desktop` does). Modal,
 Daytona and Vercel sandboxes cannot host a display yet, so with those
 backends `computer_use` refuses unless `bot_desktop.placement: gateway` opts
 into driving the host. Details: [Bot Screen → Where the screen

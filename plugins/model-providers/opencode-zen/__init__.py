@@ -15,7 +15,7 @@ from datetime import UTC
 # Attribution headers (same values as OpenRouter / Vercel / Fireworks); via
 # default_headers so they survive model switches and credential rotation.
 _ATTRIBUTION_HEADERS = {
-    "HTTP-Referer": "https://clawksis-agent.nousresearch.com",
+    "HTTP-Referer": "https://github.com/samuelgradientai-sys/clawksis-agent",
     "X-Title": "Clawksis",
     "User-Agent": f"ClawksisAgent/{get_version_info().base_version}",
 }

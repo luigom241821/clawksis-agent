@@ -14,13 +14,13 @@ import { requestForBot } from './routing'
 import type { RosterRow } from './types'
 
 // ── skills hub section: the REAL hub page (docs) embedded as a picker ──────
-// https://clawksis-agent.nousresearch.com/docs/skills?embed=picker hides the
+// https://samuelgradientai-sys.github.io/clawksis-agent/skills?embed=picker hides the
 // docs chrome and adds "+ Add to this Agent" per card, posting
 // {type: 'clawk-skill-pick', ...} to us (clawksis-agent#86243). We validate
 // the origin, install via skills.manage, and bubble onInstalled so the
 // checklist above gains the row. Search-box fallback kept for offline use.
 
-const HUB_ORIGIN = 'https://clawksis-agent.nousresearch.com'
+const HUB_ORIGIN = 'https://github.com/samuelgradientai-sys/clawksis-agent'
 const FALLBACK_HUB_ORIGIN = 'https://nousresearch.github.io'
 const HUB_PICKER_URL = HUB_ORIGIN + '/docs/skills?embed=picker'
 const FALLBACK_HUB_PICKER_URL = FALLBACK_HUB_ORIGIN + '/clawksis-agent/docs/skills?embed=picker'

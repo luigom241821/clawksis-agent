@@ -605,7 +605,7 @@ def _download_and_swap_zip(branch: str, zip_url: str, target_sha: str | None = N
         print(f"✗ ZIP update failed: {e}")
         # Two-phase replace commits all or rolls all back, so no mixed tree here — don't push a needless reinstall.
         print("  Your existing install was left in place.")
-        print("  Re-run `clawk update` to retry; if the agent won't start, reinstall from https://clawksis-agent.nousresearch.com")
+        print("  Re-run `clawk update` to retry; if the agent won't start, reinstall from https://github.com/samuelgradientai-sys/clawksis-agent")
         _record_stop(_zip_stop_class(e, downloaded=downloaded))
         _m().sys.exit(1)
     finally:

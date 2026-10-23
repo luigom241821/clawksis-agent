@@ -905,7 +905,7 @@ export default function PluginsPage() {
               {t.pluginsPage.catalogEmpty ?? "No catalog entries match."}{" "}
               <a
                 className="underline"
-                href="https://clawksis-agent.nousresearch.com/docs/plugins"
+                href="https://samuelgradientai-sys.github.io/clawksis-agent/plugins"
                 target="_blank"
                 rel="noreferrer"
               >

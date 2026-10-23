@@ -17,7 +17,7 @@ Usage::
 Output: ``website/static/api/model-catalog.json``
 
 Live URL (after ``deploy-site.yml`` runs on merge to main):
-``https://clawksis-agent.nousresearch.com/docs/api/model-catalog.json``
+``https://samuelgradientai-sys.github.io/clawksis-agent/api/model-catalog.json``
 """
 
 from __future__ import annotations

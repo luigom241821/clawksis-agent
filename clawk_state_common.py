@@ -782,7 +782,7 @@ BEFORE DELETE ON sessions
 WHEN EXISTS (SELECT 1 FROM session_admissions WHERE target_session_id = old.id)
   OR EXISTS (SELECT 1 FROM worker_executions WHERE session_id = old.id)
 BEGIN
-    SELECT RAISE(ABORT, 'Refused to delete a session that has gateway runtime history: state.db was upgraded by a newer Clawksis, and this older Clawksis cannot delete such sessions. Downgrading is unsupported. Run clawk update to go back to the newer release, or restore the pre-update snapshot: https://clawksis-agent.nousresearch.com/docs/getting-started/updating#rolling-back-to-an-older-release');
+    SELECT RAISE(ABORT, 'Refused to delete a session that has gateway runtime history: state.db was upgraded by a newer Clawksis, and this older Clawksis cannot delete such sessions. Downgrading is unsupported. Run clawk update to go back to the newer release, or restore the pre-update snapshot: https://samuelgradientai-sys.github.io/clawksis-agent/getting-started/updating#rolling-back-to-an-older-release');
 END;
 DROP TRIGGER IF EXISTS messages_transcript_revision_update;
 CREATE TRIGGER IF NOT EXISTS messages_transcript_revision_update

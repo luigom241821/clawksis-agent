@@ -4,4 +4,4 @@
  * (bundled installs with a damaged payload) and any future doc links point
  * at the same place.
  */
-export const DESKTOP_DOCS_URL = 'https://clawksis-agent.nousresearch.com/docs/user-guide/desktop'
+export const DESKTOP_DOCS_URL = 'https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/desktop'
