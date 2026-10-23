@@ -79,7 +79,14 @@ def _require_linux_systemd_root(cmd_label: str) -> None:
 
 def _run(cmd: list, check: bool = True) -> "subprocess.CompletedProcess":
     print(f"{_D}  $ {' '.join(cmd)}{_X}")
-    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    res = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     if check and res.returncode != 0:
         err = (res.stderr or res.stdout or "").strip()
         _fail(f"`{' '.join(cmd)}` falló ({res.returncode}): {err}")
@@ -371,6 +378,8 @@ def _write_caddy_block(domain: str, port: int) -> None:
         ["caddy", "validate", "--config", str(CADDYFILE)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if valid.returncode != 0:
@@ -389,6 +398,8 @@ def _write_caddy_block(domain: str, port: int) -> None:
         ["systemctl", "reload", "caddy"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if reload_res.returncode != 0:
@@ -420,6 +431,8 @@ def _port_holder(port: int) -> "str | None":
             ["ss", "-tlnpH"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
             check=False,
         )
@@ -529,6 +542,8 @@ def _docker_gateway_ip() -> str:
             ["ip", "-4", "-o", "addr", "show", "docker0"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
             check=False,
         )

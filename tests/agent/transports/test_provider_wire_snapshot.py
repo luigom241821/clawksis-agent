@@ -113,6 +113,8 @@ MODELS = {
     "router": "openai/gpt-5.5",
     "openrouter": "anthropic/claude-opus-5.5",
     "custom": "my-local-model",
+    # Fork-only provider (OAuth + Cloud Code Assist); upstream deleted it.
+    "google-gemini-cli": "gemini-2.5-pro",
 }
 # Providers with a user-configured endpoint, or outside the auth registry.
 BASE_URLS = {

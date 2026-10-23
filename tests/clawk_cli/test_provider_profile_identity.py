@@ -125,11 +125,14 @@ def test_runtime_endpoint_profile_is_a_known_provider_but_placeholders_are_not(
     )
     assert result.success, result.error_message
     assert (result.target_provider, result.api_key) == ("mintgw", KEY)
-    for placeholder in ("custom", "ollama", "custom:nope"):
+    # Fork: bare "ollama" is a first-class overlay provider (localhost daemon), not a placeholder.
+    for placeholder in ("custom", "vllm", "custom:nope"):
         assert (
             resolve_provider_full(placeholder, user_providers={}, custom_providers=[])
             is None
         )
+    ollama = resolve_provider_full("ollama", user_providers={}, custom_providers=[])
+    assert (ollama.id, ollama.base_url) == ("ollama", "http://localhost:11434/v1")
 
 
 def test_persisted_alias_config_applies_to_the_canonical_runtime_provider(

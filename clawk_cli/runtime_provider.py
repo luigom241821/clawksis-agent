@@ -1246,6 +1246,8 @@ class _OAuthRuntimeSpec:
     expiry_key: str
     failure_msg: str
     default_base_url: str = ""
+    # Extra credential keys copied verbatim onto the runtime dict.
+    extra_keys: tuple[str, ...] = ()
 
 
 # ``resolve`` entries are late-bound lambdas so tests can monkeypatch the module-level
@@ -1289,6 +1291,7 @@ _OAUTH_RUNTIME_PROVIDERS: dict[str, _OAuthRuntimeSpec] = {
         "expires_at_ms",
         "Google Gemini OAuth credentials failed",
         DEFAULT_GEMINI_CLOUDCODE_BASE_URL,
+        extra_keys=("email", "project_id"),
     ),
 }
 
@@ -1312,6 +1315,7 @@ def _resolve_oauth_runtime(
         creds.get("api_key", ""),
         source=creds.get("source", spec.default_source),
         **{spec.expiry_key: creds.get(spec.expiry_key)},
+        **{key: creds.get(key, "") for key in spec.extra_keys},
         requested_provider=requested_provider,
     )
 
@@ -1653,18 +1657,27 @@ def _resolve_ollama_runtime(
     Ollama needs no auth, but the OpenAI SDK requires a non-empty api_key, so a dummy ("ollama") is
     supplied when no real key is configured (matching cookbook.use_model). Base URL precedence:
     explicit override > config ``model.base_url`` (only when the configured provider is ollama, so
-    a stale URL from another provider cannot leak in) > the localhost default."""
+    a stale URL from another provider cannot leak in) > a ``providers.ollama`` block > the
+    localhost default."""
     model_cfg = _get_model_config()
     is_cfg_ollama = _cfg_provider(model_cfg) == "ollama"
+    provider_block = _get_named_custom_provider(requested_provider) or {}
     base_url = (
         (explicit_base_url or "").strip().rstrip("/")
         or _config_base_url_for_provider(model_cfg, "ollama")
+        or str(provider_block.get("base_url") or "").strip().rstrip("/")
         or DEFAULT_OLLAMA_LOCAL_BASE_URL
     )
+    from clawk_cli.runtime_provider_custom import _model_cfg_key_env_for
+
     # Ollama ignores the key; honour a real one if the user set it, else a non-empty placeholder.
+    # ``model.key_env`` backs the configured ``model.base_url`` only, as for ``provider: custom``
+    # (upstream resolves ``ollama`` through that rung).
     api_key = (
         (explicit_api_key or "").strip()
         or (str(model_cfg.get("api_key") or "").strip() if is_cfg_ollama else "")
+        or (_model_cfg_key_env_for(model_cfg, base_url) if is_cfg_ollama else "")
+        or str(provider_block.get("api_key") or "").strip()
         or get_secret_str("OLLAMA_API_KEY", "").strip()
         or "ollama"
     )

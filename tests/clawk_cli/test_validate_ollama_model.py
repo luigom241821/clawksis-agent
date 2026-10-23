@@ -9,7 +9,7 @@ left the dashboard "Switch Model" dialog unable to switch to a local model.
 
 from unittest.mock import patch
 
-from clawk_cli.models import validate_requested_model
+from clawk_cli.models_validate import validate_requested_model
 
 
 def test_ollama_accepts_even_when_endpoint_unreachable():
@@ -52,8 +52,9 @@ def test_ollama_recognizes_model_present_in_endpoint():
 
 def test_custom_unreachable_still_rejected():
     """Guard against over-broadening: a real custom endpoint that is unreachable
-    must still be rejected (chat_completions mode), proving we only special-cased
-    ollama."""
+    must still be rejected, proving we only special-cased ollama. Upstream (#12220)
+    now accepts unverified names in the chat modes, so the guard uses a Responses
+    endpoint, where the generic custom path still refuses to save."""
 
     with patch(
         "clawk_cli.models.probe_api_models",
@@ -64,7 +65,7 @@ def test_custom_unreachable_still_rejected():
             "custom",
             api_key="x",
             base_url="http://unreachable.local/v1",
-            api_mode="chat_completions",
+            api_mode="codex_responses",
         )
 
     assert result["accepted"] is False

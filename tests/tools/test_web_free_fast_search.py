@@ -101,9 +101,15 @@ def _write_home(home, monkeypatch, *, nous_state=None, config=None):
     as_local_desktop_backend(monkeypatch)
     monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
     monkeypatch.delenv("TOOL_GATEWAY_USER_TOKEN", raising=False)
-    atomic_config_write(
-        home / "config.yaml", {"web": {"keyless_rescue": False}, **(config or {})}
-    )
+    # Fork: the Nous free tier is opt-in (nous.guest defaults to False) and web_search is pinned to
+    # ddgs by default, so this route needs the opt-in and a never-configured search backend.
+    base = {
+        "web": {"keyless_rescue": False, "search_backend": ""},
+        "nous": {"guest": True},
+    }
+    for section, values in (config or {}).items():
+        base[section] = {**base.get(section, {}), **values}
+    atomic_config_write(home / "config.yaml", base)
     if nous_state is not None:
         (home / "auth.json").write_text(
             json.dumps({"version": 1, "providers": {"nous": nous_state}})

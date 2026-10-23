@@ -253,7 +253,10 @@ def _is_self_hosted_provider(provider: str) -> bool:
     from clawk_cli.providers import normalize_provider
 
     provider = normalize_provider(provider)
-    return provider in ("custom", "lmstudio", "local") or provider.startswith("custom:")
+    # Fork: bare ``ollama`` is its own provider (the local Ollama daemon), not an alias of ``custom``.
+    return provider in ("custom", "lmstudio", "local", "ollama") or provider.startswith(
+        "custom:"
+    )
 
 
 def _title_pin_may_share_endpoint(

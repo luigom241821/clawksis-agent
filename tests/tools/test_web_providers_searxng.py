@@ -285,7 +285,11 @@ class TestSearXNGOnlyExtractCrawlErrors:
         )
         monkeypatch.setenv("SEARXNG_URL", "http://localhost:8080")
         monkeypatch.setattr(web_tools, "_is_tool_gateway_ready", lambda: False)
-        monkeypatch.setattr(web_tools, "is_safe_url", lambda url: True)
+
+        async def _allow_ssrf(_url: str) -> bool:
+            return True
+
+        monkeypatch.setattr(web_tools, "async_is_safe_url", _allow_ssrf)
         monkeypatch.setattr(
             "tools.interrupt.is_interrupted", lambda: False, raising=False
         )

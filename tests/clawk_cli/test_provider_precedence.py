@@ -91,9 +91,11 @@ class TestProviderPrecedence:
 
 @pytest.fixture
 def portal(monkeypatch, tmp_path):
-    from tests.clawk_cli.anon_portal import install_portal
+    from tests.clawk_cli.anon_portal import install_portal, opt_in_free_tier
 
-    return install_portal(monkeypatch, tmp_path)
+    fake = install_portal(monkeypatch, tmp_path)
+    opt_in_free_tier()  # Clawksis is BYOK: the free tier is off until nous.guest: true
+    return fake
 
 
 def _never_mint(monkeypatch):

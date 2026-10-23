@@ -2972,6 +2972,8 @@ def _run_update_quiet(args, gateway_mode):
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     rv = subprocess.run(
@@ -2979,6 +2981,8 @@ def _run_update_quiet(args, gateway_mode):
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     try:
@@ -2998,6 +3002,8 @@ def _run_update_quiet(args, gateway_mode):
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     old_sha = (head.stdout or "").strip() if head.returncode == 0 else ""

@@ -48,6 +48,7 @@ from agent.agent_init_ollama import (
     _configure_ollama_num_ctx,
 )
 from agent.primary_runtime_snapshot import _snapshot_primary_runtime
+from agent.proxy_bypass import is_loopback_host
 from agent.process_bootstrap import _install_safe_stdio
 from agent.subdirectory_hints import SubdirectoryHintTracker
 from agent.think_scrubber import StreamingThinkScrubber
@@ -87,7 +88,16 @@ def _model_is_local_endpoint(provider: str, base_url: str) -> bool:
     """
     if (provider or "").strip().lower() in _LOCAL_MODEL_PROVIDERS:
         return True
-    return bool(base_url) and is_local_endpoint(base_url)
+    # Only a loopback host relaxes the guard; a LAN/remote "custom" endpoint stays subject to
+    # it (conservative — unlike is_local_endpoint, which also counts RFC-1918/Tailscale hosts).
+    url = (base_url or "").strip()
+    if not url:
+        return False
+    try:
+        host = urlparse(url if "//" in url else f"//{url}").hostname or ""
+    except ValueError:
+        return False
+    return is_loopback_host(host) or host in ("0.0.0.0", "::")
 
 
 # Deduped: the gateway builds a fresh AIAgent per message, so it would warn every turn.

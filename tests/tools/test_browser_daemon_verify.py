@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import psutil
 
-import tools.browser_tool as bt
+# Upstream split browser_tool; the reaper (and this gate) live in browser_tool_lifecycle.
+import tools.browser_tool_lifecycle as bt
 
 SOCKET_DIR = "/tmp/agent-browser-h_abc1234567"
 

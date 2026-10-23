@@ -762,6 +762,8 @@ def _npm_global_bin_dir(npm_bin: str) -> str:
             [npm_bin, "prefix", "-g"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=15,
             check=False,
         )
@@ -830,6 +832,8 @@ def _install_npm_cli(
             [npm_bin, "install", "-g", pkg],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=600,
             check=False,
         )

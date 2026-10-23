@@ -1,3 +1,6 @@
+import base64
+import json
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -1198,11 +1201,13 @@ def test_bare_custom_without_credentials_for_remote_endpoint_fails_fast(monkeypa
     assert error.value.provider == "custom"
     assert error.value.code == "missing_api_key"
 
+    # Fork: bare ``ollama`` is the first-class local daemon (localhost default), so the
+    # endpoint-less alias guard is exercised through ``vllm``.
     with pytest.raises(
-        rp.AuthError, match="provider 'ollama' has no endpoint"
+        rp.AuthError, match="provider 'vllm' has no endpoint"
     ) as alias_error:
-        rp.resolve_runtime_provider(requested="ollama")
-    assert alias_error.value.provider == "ollama"
+        rp.resolve_runtime_provider(requested="vllm")
+    assert alias_error.value.provider == "vllm"
     assert alias_error.value.code == "missing_base_url"
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-usable-key")
@@ -1211,7 +1216,8 @@ def test_bare_custom_without_credentials_for_remote_endpoint_fails_fast(monkeypa
     assert resolved["api_key"] == "sk-or-v1-usable-key"
 
 
-@pytest.mark.parametrize("alias", ("ollama", "vllm"))
+# Fork: ``ollama`` has its own rung with a localhost default (see the next test).
+@pytest.mark.parametrize("alias", ("vllm",))
 def test_local_alias_without_any_endpoint_never_reaches_openrouter(monkeypatch, alias):
     """#113703: a local alias with no endpoint configured anywhere must raise a typed AuthError
     naming the alias instead of walking the ladder to the OpenRouter fallback with a cloud key.
@@ -1244,6 +1250,30 @@ def test_local_alias_without_any_endpoint_never_reaches_openrouter(monkeypatch, 
         )
 
 
+def test_ollama_without_any_endpoint_uses_the_local_daemon_not_openrouter(monkeypatch):
+    """Fork (#113703 counterpart): bare ``ollama`` is the first-class local daemon, so with no
+    endpoint configured anywhere it resolves to the localhost default with the placeholder key —
+    never to the OpenRouter fallback with a cloud key, even when ``OPENROUTER_BASE_URL`` is set."""
+    for name in ("OPENAI_API_KEY", "CUSTOM_BASE_URL", "OLLAMA_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-cloud-key")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://mirror.example/api/v1")
+    monkeypatch.setattr(rp, "load_config", lambda: {"model": {"provider": "ollama"}})
+    monkeypatch.setattr(
+        rp,
+        "load_pool",
+        lambda _provider: SimpleNamespace(has_credentials=lambda: False),
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="ollama")
+
+    assert (resolved["provider"], resolved["base_url"], resolved["api_key"]) == (
+        "ollama",
+        rp.DEFAULT_OLLAMA_LOCAL_BASE_URL,
+        "ollama",
+    )
+
+
 @pytest.mark.parametrize("configured", ("providers", "model", "explicit"))
 def test_local_alias_with_an_endpoint_anywhere_still_resolves_to_it(
     monkeypatch, configured
@@ -1269,10 +1299,11 @@ def test_local_alias_with_an_endpoint_anywhere_still_resolves_to_it(
         requested="ollama", explicit_base_url=url if configured == "explicit" else None
     )
 
+    # Fork: ``ollama`` resolves to its own first-class provider with the "ollama" placeholder key.
     assert (resolved["provider"], resolved["base_url"], resolved["api_key"]) == (
-        "custom",
+        "ollama",
         url,
-        "no-key-required",
+        "ollama",
     )
 
 
@@ -1641,10 +1672,6 @@ def test_opencode_go_explicit_key_matches_env_key_route(monkeypatch, model):
         "opencode-go", model
     )
 
-    resolved = rp.resolve_runtime_provider(requested="custom")
-    assert resolved["provider"] == "custom"
-    assert resolved["api_key"] == "no-key-required"
-    assert resolved["base_url"] == "http://localhost:8080/v1"
 
 def test_auto_detected_codex_auth_failure_falls_through_to_openrouter(monkeypatch):
     """When auto-detect picks Codex but credentials are revoked, fall through to OpenRouter."""
@@ -1685,6 +1712,7 @@ def test_auto_detected_codex_auth_failure_falls_through_to_openrouter(monkeypatc
     assert resolved["provider"] == "openrouter"
     assert resolved["api_key"] == "test-or-key"
 
+
 def test_openrouter_provider_not_affected_by_custom_fix(monkeypatch):
     """Fixing custom must not change openrouter behavior."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -1696,9 +1724,11 @@ def test_openrouter_provider_not_affected_by_custom_fix(monkeypatch):
     resolved = rp.resolve_runtime_provider(requested="openrouter")
     assert resolved["provider"] == "openrouter"
 
+
 # ------------------------------------------------------------------
 # fix #7828 — custom_providers model field must propagate to runtime
 # ------------------------------------------------------------------
+
 
 def test_get_named_custom_provider_includes_model(monkeypatch):
     """_get_named_custom_provider should include the model field from config."""
@@ -1721,6 +1751,7 @@ def test_get_named_custom_provider_includes_model(monkeypatch):
     result = rp._get_named_custom_provider("my-dashscope")
     assert result is not None
     assert result["model"] == "qwen3.6-plus"
+
 
 def test_get_named_custom_provider_excludes_empty_model(monkeypatch):
     """Empty or whitespace-only model field should not appear in result."""
@@ -1747,6 +1778,7 @@ def test_get_named_custom_provider_excludes_empty_model(monkeypatch):
             f"model field {model_val!r} should not be included in result"
         )
 
+
 def test_named_custom_runtime_propagates_model_direct_path(monkeypatch):
     """Model should propagate through the direct (non-pool) resolution path."""
     monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "my-server")
@@ -1766,6 +1798,7 @@ def test_named_custom_runtime_propagates_model_direct_path(monkeypatch):
     resolved = rp.resolve_runtime_provider(requested="my-server")
     assert resolved["model"] == "qwen3.6-plus"
     assert resolved["provider"] == "custom"
+
 
 def test_named_custom_runtime_propagates_extra_body_direct_path(monkeypatch):
     """Custom provider extra_body should become runtime request_overrides."""
@@ -1793,6 +1826,7 @@ def test_named_custom_runtime_propagates_extra_body_direct_path(monkeypatch):
             "reasoning_effort": "high",
         }
     }
+
 
 def test_named_custom_runtime_propagates_model_pool_path(monkeypatch):
     """Model should propagate even when credential pool handles credentials."""
@@ -1826,6 +1860,7 @@ def test_named_custom_runtime_propagates_model_pool_path(monkeypatch):
     )
     assert resolved["api_key"] == "pool-key", "pool credentials should be used"
 
+
 def test_named_custom_runtime_propagates_extra_body_pool_path(monkeypatch):
     """Custom provider extra_body should survive credential-pool resolution."""
     monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "my-gemma")
@@ -1854,6 +1889,7 @@ def test_named_custom_runtime_propagates_extra_body_pool_path(monkeypatch):
 
     resolved = rp.resolve_runtime_provider(requested="my-gemma")
     assert resolved["request_overrides"] == {"extra_body": {"enable_thinking": True}}
+
 
 def test_named_custom_runtime_no_model_when_absent(monkeypatch):
     """When custom_providers entry has no model field, runtime should not either."""

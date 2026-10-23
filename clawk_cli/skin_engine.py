@@ -75,9 +75,18 @@ def _wings(*glyphs) -> list[list[str]]:
 
 
 # Branding shared by every Clawksis-named built-in (mono/daylight override help_header).
-_CLAWK_BRANDING: dict[str, str] = _branding(
-    "Clawksis", "∇", "Goodbye! ∇", prompt="❯", help_header="(^_^)? Available Commands"
-)
+_CLAWK_BRANDING: dict[str, str] = {
+    **_branding(
+        "Clawksis",
+        "∇",
+        "Goodbye! ∇",
+        prompt="❯",
+        help_header="(^_^)? Available Commands",
+    ),
+    # The product name stands alone: "Clawksis", never "Clawksis Agent".
+    "agent_name": "Clawksis",
+    "welcome": "Welcome to Clawksis! Type your message or /help for commands.",
+}
 
 _BUILTIN_SKINS: dict[str, dict[str, Any]] = {
     "default": {

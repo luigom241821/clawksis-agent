@@ -31,6 +31,13 @@ _CUSTOM_ALIASES = tuple(get_provider_profile("custom").aliases)
 
 @pytest.mark.parametrize("alias", _CUSTOM_ALIASES)
 def test_custom_profile_aliases_normalize_to_custom_in_every_table(alias):
+    if alias == "ollama":
+        # Fork: bare "ollama" is a first-class routing provider (localhost overlay + its own
+        # runtime rung); the credential and model tables still treat it as a custom endpoint.
+        assert providers_normalize(alias) == "ollama"
+        assert resolve_provider(alias) == "custom"
+        assert models_normalize(alias) == "custom"
+        return
     assert providers_normalize(alias) == "custom"
     assert resolve_provider(alias) == "custom"
     if alias in LLAMACPP_ALIASES:

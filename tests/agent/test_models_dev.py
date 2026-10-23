@@ -277,6 +277,8 @@ class TestFetchModelsDev:
         with (
             patch.object(md, "_disk_cache_age_seconds", return_value=None),
             patch.object(md, "_load_disk_cache", return_value={}),
+            # Fork: the vendored-snapshot offline floor would otherwise answer the failed fetch.
+            patch.object(md, "_load_bundled_snapshot", return_value={}),
             patch.object(md, "_save_disk_cache"),
             patch.object(md, "_load_etag", return_value=""),
             patch.object(md, "_save_etag"),

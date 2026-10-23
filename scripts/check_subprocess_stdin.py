@@ -67,6 +67,9 @@ _INHERITING_CALLS = {
 KNOWN_SAFE = {
     "agent/shell_hooks.py",  # uses input=stdin_json, creates a pipe
     "plugins/security-guidance/patterns.py",  # subprocess mentions are in reminder strings, not calls
+    # Fork-only upstream-sync dev tooling: run by hand from a checkout, never inside the TUI gateway.
+    "tools/upstream/sync.py",
+    "tools/upstream/merge3.py",
 }
 
 # Inline marker that exempts a single subprocess call from this check.

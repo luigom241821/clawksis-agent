@@ -415,6 +415,8 @@ class TestWebSearchTavily:
 
         with (
             patch("tools.web_tools._get_backend", return_value="tavily"),
+            # Fork: _get_search_backend() honours the ddgs default (see test above).
+            patch("tools.web_tools._get_search_backend", return_value="tavily"),
             patch(
                 "plugins.web.tavily.provider.httpx.post", return_value=mock_response
             ) as mock_post,

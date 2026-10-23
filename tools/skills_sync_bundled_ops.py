@@ -85,15 +85,15 @@ def reset_bundled_skill(name: str, restore: bool = False) -> dict:
 
 
 _OWN_REPO_PREFIXES = (
-    "nousresearch/clawksis-agent/skills/",
-    "skills-sh/nousresearch/clawksis-agent/",
+    "samuelgradientai-sys/clawksis-agent/skills/",
+    "skills-sh/samuelgradientai-sys/clawksis-agent/",
 )
 
 
 def bundled_skill_for_install(identifier: str) -> Optional[str]:
     """Bundled skill name an install identifier means, else None: a bare bundled name, or this
     repo's own copy of one (``samuelgradientai-sys/clawksis-agent/skills/<cat>/<name>``, which the Skills Hub
-    site hands out for built-ins, or its ``skills-sh/nousresearch/clawksis-agent/<name>`` mirror).
+    site hands out for built-ins, or its ``skills-sh/samuelgradientai-sys/clawksis-agent/<name>`` mirror).
     Fetched from GitHub, that copy is scanned as a community skill and refused — every time."""
     ident = identifier.strip().strip("/")
     lowered = ident.lower()

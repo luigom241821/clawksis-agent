@@ -5,6 +5,7 @@ Covers:
   run_agent.py — _ollama_num_ctx detection + extra_body injection
 """
 
+import logging
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -228,15 +229,19 @@ class TestFloorRefusalNamesTheLocalServerHonestly:
     sub-64K window must get server-agnostic guidance — raise the server's context or set
     model.ollama_num_ctx — while a hosted route keeps the model.context_length advice."""
 
-    def test_local_refusal_names_server_flag_and_num_ctx_key(self):
-        with pytest.raises(ValueError) as exc:
+    def test_local_refusal_names_server_flag_and_num_ctx_key(self, caplog):
+        # Fork: a LOCAL sub-64K window warns and runs instead of raising
+        # (agent_init._model_is_local_endpoint); the warning carries the same remedy.
+        with caplog.at_level(logging.WARNING, logger="run_agent"):
             _build_agent(
                 {"agent": {}, "model": {}},
                 probed_ctx=32768,
                 base_url="http://127.0.0.1:8422/v1",
             )
-        msg = str(exc.value)
+        msg = "\n".join(r.getMessage() for r in caplog.records)
+        assert "below the 64,000 minimum" in msg
         assert "model.ollama_num_ctx" in msg
+        assert "model.context_length" not in msg
 
     def test_hosted_refusal_keeps_context_length_advice(self):
         with pytest.raises(ValueError, match="model.context_length") as exc:

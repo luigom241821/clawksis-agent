@@ -597,7 +597,9 @@ OPENAI_MODEL_EXECUTION_GUIDANCE = (
 # without terminal/execute_code/etc. isn't told to use them (#106506). The
 # guidance names no web tool (#39797), so there is no entry for one.
 _EXECUTION_GUIDANCE_LINE_TOOLS = {
-    "- Arithmetic, math, calculations → use terminal or execute_code\n": {
+    # Fork wording of upstream's "- Arithmetic, math, calculations → use terminal or execute_code" line.
+    "- Non-trivial arithmetic, math, calculations, data processing, simulations, or results that must be "
+    "exact/reproducible → use terminal or execute_code\n": {
         "terminal",
         "execute_code",
     },

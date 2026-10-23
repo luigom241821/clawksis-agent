@@ -4,6 +4,7 @@ All tests use mocks -- no real MCP servers or subprocesses are started.
 """
 
 import asyncio
+import importlib.util
 import json
 import os
 import sys
@@ -14,6 +15,19 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# Optional-dependency gate
+# ---------------------------------------------------------------------------
+#
+# Fork: ``mcp`` (the Model Context Protocol Python SDK) is an OPTIONAL extra
+# (``pip install 'clawksis-agent[mcp]'``); SDK-backed tests are skipped rather
+# than failed on an install without it.
+requires_mcp_sdk = pytest.mark.skipif(
+    importlib.util.find_spec("mcp") is None,
+    reason="optional 'mcp' SDK not installed - MCP SDK-backed surface unavailable",
+)
 
 
 # ---------------------------------------------------------------------------

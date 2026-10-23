@@ -1185,7 +1185,7 @@ _SHELL_RC_BASENAMES = frozenset(
 # it are files, so ``grep .bashrc app.py`` must not gate on the pattern.
 _PATTERN_FIRST_COMMANDS = frozenset({"grep", "awk", "sed"})
 _CLAWK_HOME_PREFIXES = ("$CLAWK_HOME/", "${CLAWK_HOME}/")
-# ``$HOME/.clawksis/config.yaml`` keeps the ``.clawk`` segment, so stripping the prefix is
+# ``$HOME/.clawksis/config.yaml`` keeps the ``.clawksis`` segment, so stripping the prefix is
 # enough to gate it; ``~/`` already survives the ``$``-bearing-path bail-out.
 _HOME_PREFIXES = ("$HOME/", "${HOME}/")
 
@@ -1223,7 +1223,7 @@ def _command_segments(command: str) -> list[str]:
 def _is_under_clawk_home(path: str) -> bool:
     """True when an absolute ``config.yaml`` path sits under the active Clawksis home or root.
 
-    The default home's basename is an installation detail — ``.clawk`` on POSIX, ``clawk``
+    The default home's basename is an installation detail — ``.clawksis`` on POSIX, ``clawk``
     under ``AppData/Local`` on Windows — and a resolved path never spells ``$CLAWK_HOME``,
     so the literal-segment test in ``_is_secret_file_arg`` cannot see a native Windows path.
     Compare against the resolved homes instead. Only reached for a ``config.yaml`` basename,
@@ -1247,9 +1247,9 @@ def _is_under_clawk_home(path: str) -> bool:
 
 def _is_secret_file_arg(arg: str) -> bool:
     """``.env``-style or shell rc basename anywhere; ``config.yaml`` only under a
-    ``.clawk`` directory, ``$CLAWK_HOME``, or the resolved Clawksis home (never arbitrary
+    ``.clawksis`` directory, ``$CLAWK_HOME``, or the resolved Clawksis home (never arbitrary
     YAML). The resolved-home arm is what covers native Windows, where the home directory
-    is ``%LOCALAPPDATA%\\clawk`` and carries no ``.clawk`` segment."""
+    is ``%LOCALAPPDATA%\\clawk`` and carries no ``.clawksis`` segment."""
     path = arg.strip("\"'").replace("\\", "/")
     clawk_home = False
     for prefix in _CLAWK_HOME_PREFIXES:
@@ -1274,7 +1274,7 @@ def _is_secret_file_arg(arg: str) -> bool:
         ("config.yaml.good.", "config.yaml.corrupt.")
     ):
         return False
-    return clawk_home or ".clawk" in parts[:-1] or _is_under_clawk_home(path)
+    return clawk_home or ".clawksis" in parts[:-1] or _is_under_clawk_home(path)
 
 
 def _command_reads_secret_file(command: str | None) -> bool:

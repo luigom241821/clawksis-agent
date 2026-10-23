@@ -170,29 +170,50 @@ class TestQuickFlag:
 
 
 class TestFreshInstall:
-    """On a fresh install (no active provider), flags are no-ops."""
+    """On a fresh install, every flag falls through to first-time setup.
 
-    def test_reconfigure_on_fresh_install_falls_through(self, fresh_install):
-        args = _make_setup_args(reconfigure=True)
+    Fork: the Nous "Quick Setup" first-run row (``_run_first_time_quick_setup``) is not offered —
+    Clawksis is BYOK. The one first-run prompt is Full setup (index 0) vs Blank Slate (index 1).
+    """
 
+    def _run_fresh(self, args):
         with ExitStack() as stack:
             m = _enter_fresh_install_patches(
                 stack,
                 prompt=("clawk_cli.setup.prompt_choice", {"return_value": 0}),
+                blank="clawk_cli.setup_quick._run_blank_slate_setup",
                 first="clawk_cli.setup_quick._run_first_time_quick_setup",
+                model="clawk_cli.setup.setup_model_provider",
+                terminal="clawk_cli.setup.setup_terminal_backend",
+                gateway="clawk_cli.setup.setup_gateway",
+                tools="clawk_cli.setup.setup_tools",
+                agent="clawk_cli.setup._apply_default_agent_settings",
+                clis="clawk_cli.setup._install_coding_clis",
+                welcome="clawk_cli.setup._seed_welcome_checkin",
+                summary="clawk_cli.setup._print_setup_summary",
             )
             from clawk_cli.setup import run_setup_wizard
-            from clawk_cli import setup as setup_mod
 
-            section_indexes = []
-            m["first"].side_effect = lambda *_args: section_indexes.append(
-                setup_mod._SETUP_NAVIGATION.get().section_index
-            )
             run_setup_wizard(args)
+        return m
 
+    def _assert_full_setup(self, m):
+        # The Nous "Quick Setup" shortcut never runs; answering "Full setup" does not divert into
+        # Blank Slate; Full setup runs every section exactly once.
+        m["first"].assert_not_called()
         m["prompt"].assert_called_once()
-        m["first"].assert_called_once()
-        assert section_indexes == [0]
+        m["blank"].assert_not_called()
+        for section in ("model", "terminal", "gateway", "tools"):
+            m[section].assert_called_once()
+
+    def test_bare_setup_runs_full_byok_flow(self, fresh_install):
+        self._assert_full_setup(self._run_fresh(_make_setup_args()))
+
+    def test_reconfigure_on_fresh_install_falls_through(self, fresh_install):
+        self._assert_full_setup(self._run_fresh(_make_setup_args(reconfigure=True)))
+
+    def test_quick_on_fresh_install_falls_through(self, fresh_install):
+        self._assert_full_setup(self._run_fresh(_make_setup_args(quick=True)))
 
     def test_blank_slate_runs_inside_navigation_step(self, fresh_install):
         args = _make_setup_args()
@@ -200,7 +221,8 @@ class TestFreshInstall:
         with ExitStack() as stack:
             m = _enter_fresh_install_patches(
                 stack,
-                prompt=("clawk_cli.setup.prompt_choice", {"return_value": 2}),
+                # Fork: Blank Slate is index 1 (no Nous Quick Setup row ahead of it).
+                prompt=("clawk_cli.setup.prompt_choice", {"return_value": 1}),
                 blank="clawk_cli.setup_quick._run_blank_slate_setup",
             )
             from clawk_cli import setup as setup_mod

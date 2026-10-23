@@ -879,13 +879,16 @@ class TestCheckWebApiKey:
         from tools.registry import invalidate_check_fn_cache
         import model_tools
 
+        # Fork: the keyless scrape/scrapegraph tools also live in the web toolset and are
+        # not gated on a web key, so only the key-gated tools are compared.
+        fork_keyless = {"scrape", "scrapegraph"}
         with patch("tools.web_tools._load_web_config", return_value={}):
             invalidate_check_fn_cache()
             names = {
                 d["function"]["name"]
                 for d in model_tools.get_tool_definitions(enabled_toolsets=["web"])
             }
-            assert names == set()
+            assert names - fork_keyless == set()
 
             monkeypatch.setenv("TAVILY_API_KEY", "tavily-test-key")
             invalidate_check_fn_cache()
@@ -893,7 +896,7 @@ class TestCheckWebApiKey:
                 d["function"]["name"]
                 for d in model_tools.get_tool_definitions(enabled_toolsets=["web"])
             }
-            assert names == {"web_search", "web_extract"}
+            assert names - fork_keyless == {"web_search", "web_extract"}
 
     def test_configured_firecrawl_backend_accepts_managed_gateway(self):
         with patch(

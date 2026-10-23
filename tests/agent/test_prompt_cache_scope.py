@@ -500,7 +500,8 @@ class TestPerResponseRunNonceIsolation:
 
         assert chat_key(self.RESPONSE_1) != chat_key(self.RESPONSE_2)
 
-    @pytest.mark.parametrize("profile_name", ["openrouter", "nous"])
+    # Fork: no Nous provider profile (BYOK), so only OpenRouter is checked.
+    @pytest.mark.parametrize("profile_name", ["openrouter"])
     def test_distinct_ids_keep_distinct_provider_sticky_keys(self, profile_name):
         """OpenRouter/Nous route by this key, and it isolates distinct ids.
 

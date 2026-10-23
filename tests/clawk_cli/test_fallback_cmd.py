@@ -16,7 +16,7 @@ import clawk_yaml as yaml
 
 @pytest.fixture()
 def isolated_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return tmp_path

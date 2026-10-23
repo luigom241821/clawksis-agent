@@ -120,7 +120,8 @@ class TestSurfaceSwitch:
         assert note.startswith(f"{_SURFACE_SWITCH_NOTE_PREFIX}tui{_SURFACE_NAME_END}")
         # The correction carries the CURRENT surface's hint, so the model is not left
         # following the desktop guidance still sitting in the reused prompt.
-        assert "terminal UI (TUI)" in note
+        # Fork: the "tui" hint describes the Clawksis dashboard chat (PLATFORM_HINTS["tui"]).
+        assert "Clawksis dashboard chat" in note
 
     def test_same_surface_stages_nothing(self):
         assert self._restore(stored="cli", current="cli")._surface_switch_note == ""

@@ -19,8 +19,9 @@ class _RecordingProfile:
         return ["relay-only-model"]
 
 
+# Fork: no "nous" row — the Nous provider profile is not shipped (BYOK, no Nous product surfaces).
 @pytest.mark.parametrize(
-    "provider", ["openai-codex", "copilot", "nous", "opencode-zen", "openrouter"]
+    "provider", ["openai-codex", "copilot", "opencode-zen", "openrouter"]
 )
 def test_canonical_url_preserves_native_catalog_but_other_paths_stay_relays(
     monkeypatch, provider

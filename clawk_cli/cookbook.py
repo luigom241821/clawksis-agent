@@ -498,6 +498,8 @@ def _detect_gpu() -> dict[str, Any]:
                 [smi, "--query-gpu=memory.total,name", "--format=csv,noheader,nounits"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=6,
                 check=False,
             )
@@ -529,6 +531,8 @@ def _detect_gpu() -> dict[str, Any]:
                 ["sysctl", "-n", "hw.memsize"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=4,
                 check=False,
             )
@@ -901,6 +905,8 @@ def _do_install_ollama() -> None:
                 shell=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=1800,
                 check=False,
             )
@@ -911,6 +917,8 @@ def _do_install_ollama() -> None:
                 ["brew", "install", "ollama"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=1800,
                 check=False,
             )

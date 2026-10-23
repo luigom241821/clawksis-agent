@@ -1467,7 +1467,7 @@ class TestSecretFileAssignmentRedaction:
 
 class TestClawkHomePathClassification:
     """``_is_secret_file_arg`` must see the RESOLVED Clawksis home: a managed Windows home
-    (``%LOCALAPPDATA%\\clawk``) has no ``.clawk`` segment and a resolved path never spells
+    (``%LOCALAPPDATA%\\clawk``) has no ``.clawksis`` segment and a resolved path never spells
     ``$CLAWK_HOME``, so the literal test alone classified its ``config.yaml`` as ordinary YAML."""
 
     def test_resolved_home_config_is_secret_bearing_but_project_config_is_not(
@@ -1476,7 +1476,7 @@ class TestClawkHomePathClassification:
         from agent import file_safety
         from agent.redact import _is_secret_file_arg
 
-        home = tmp_path / "clawk"  # no ".clawk" segment
+        home = tmp_path / "clawk"  # no ".clawksis" segment
         monkeypatch.setattr(file_safety, "_clawk_home_path", lambda: home)
         monkeypatch.setattr(file_safety, "_clawk_root_path", lambda: home)
         assert _is_secret_file_arg(str(home / "config.yaml"))

@@ -1440,10 +1440,10 @@ class TestEnvWriteDenylist:
         ("key", "expected"),
         [
             ("Path", "PATH"),
-            ("Clawksis_Yolo_Mode", "CLAWK_YOLO_MODE"),
-            ("Clawksis_Optional_Mcps", "CLAWK_OPTIONAL_MCPS"),
-            ("Clawksis_Copilot_Acp_Command", "CLAWK_COPILOT_ACP_COMMAND"),
-            ("Clawksis_Copilot_Acp_Args", "CLAWK_COPILOT_ACP_ARGS"),
+            ("Clawk_Yolo_Mode", "CLAWK_YOLO_MODE"),
+            ("Clawk_Optional_Mcps", "CLAWK_OPTIONAL_MCPS"),
+            ("Clawk_Copilot_Acp_Command", "CLAWK_COPILOT_ACP_COMMAND"),
+            ("Clawk_Copilot_Acp_Args", "CLAWK_COPILOT_ACP_ARGS"),
         ],
     )
     def test_windows_policy_names_are_case_insensitive(self, key, expected):
@@ -1468,10 +1468,10 @@ class TestEnvWriteDenylist:
     @pytest.mark.parametrize(
         "protected_key",
         [
-            "Clawksis_Yolo_Mode",
-            "Clawksis_Optional_Mcps",
-            "Clawksis_Copilot_Acp_Command",
-            "Clawksis_Copilot_Acp_Args",
+            "Clawk_Yolo_Mode",
+            "Clawk_Optional_Mcps",
+            "Clawk_Copilot_Acp_Command",
+            "Clawk_Copilot_Acp_Args",
         ],
     )
     def test_windows_writer_rejects_mixed_case_protected_name(self, protected_key):

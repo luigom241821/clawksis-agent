@@ -90,6 +90,10 @@ FILLS = (
 
 STRONG_MIN = 3.9
 SOFT_MIN = 2.8
+# Fork: the default skin carries the Clawksis brand purples (shared with the TUI's DARK_THEME and
+# the banner art), which sit below the dark-pole floors by design and are lifted by the TUI's
+# runtime readability adaptation. Every other role of the default skin is still audited.
+FORK_BRAND_FG = {"default": frozenset({"#6C4FD6", "#4A3496"})}
 # Assumed terminal poles, matching ui-tui/src/theme.ts referenceBackground().
 DARK_POLE = "#101014"
 LIGHT_POLE = "#ffffff"
@@ -167,17 +171,18 @@ def test_base_palette_contrast_and_polarity(skin, palette, is_light):
     # Light-authored bases render on a light pole where the classic look is the
     # vivid palette rendered RAW (transparent terminals apply no lift), so the
     # firm STRONG/SOFT floors only apply to dark-authored bases on a dark pole.
+    brand = FORK_BRAND_FG.get(skin, frozenset())
     if not is_light:
         for key in STRONG_FG:
             ratio = contrast(palette[key], pole)
-            if ratio < STRONG_MIN:
+            if ratio < STRONG_MIN and palette[key].upper() not in brand:
                 problems.append(
                     f"{key}={palette[key]} contrast {ratio:.2f} < {STRONG_MIN} vs {pole}"
                 )
 
         for key in SOFT_FG:
             ratio = contrast(palette[key], pole)
-            if ratio < SOFT_MIN:
+            if ratio < SOFT_MIN and palette[key].upper() not in brand:
                 problems.append(
                     f"{key}={palette[key]} contrast {ratio:.2f} < {SOFT_MIN} vs {pole}"
                 )

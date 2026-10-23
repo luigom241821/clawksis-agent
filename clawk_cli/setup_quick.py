@@ -251,10 +251,11 @@ def _blank_slate_minimal_toolsets(config: dict):
         all_keys = {k for k, _, _ in CONFIGURABLE_TOOLSETS}
         all_keys.update(_get_plugin_toolset_keys())
         # Plain TOOLSETS entries catch recovered toolsets like ``kanban``. Skip "clawk-*" platform
-        # composites, "includes" groupings, and posture toolsets (session-level picks by
-        # agent/coding_context.py — disabling them would subtract terminal/read_file).
+        # composites (the webhook one is spelled ``clawksis-webhook``), "includes" groupings, and
+        # posture toolsets (session-level picks by agent/coding_context.py — disabling them would
+        # subtract terminal/read_file).
         for k, tdef in TOOLSETS.items():
-            if k.startswith("clawk-") or (
+            if k.startswith(("clawk-", "clawksis-")) or (
                 isinstance(tdef, dict) and (tdef.get("includes") or tdef.get("posture"))
             ):
                 continue
@@ -478,6 +479,7 @@ def _run_quick_setup(config: dict, clawk_home):
         _section_rule,
         prompt_checklist,
         save_config,
+        setup_model_provider,
     )
     from clawk_cli.config import (
         get_missing_env_vars,
@@ -493,11 +495,20 @@ def _run_quick_setup(config: dict, clawk_home):
     missing_optional = [v for v in missing_env if not v.get("is_required")]
     missing_config = get_missing_config_fields()
     current_ver, latest_ver = check_config_version()
+    # A default model is mandatory, but a blank ``model.default`` is not reported by
+    # get_missing_config_fields() (the key exists), so detect it explicitly; otherwise
+    # `clawk setup --quick` would leave the install with no model.
+    model_cfg = config.get("model")
+    model_default = (
+        model_cfg.get("default") if isinstance(model_cfg, dict) else model_cfg
+    ) or ""
+    model_missing = not str(model_default).strip()
     if not (
         missing_required
         or missing_optional
         or missing_config
         or current_ver < latest_ver
+        or model_missing
     ):
         print_success("Everything is configured! Nothing to do.")
         _info(
@@ -506,6 +517,10 @@ def _run_quick_setup(config: dict, clawk_home):
             "or pick a specific section from the menu.",
         )
         return
+    # Mandatory model first, through the same flow as `clawk setup` / `clawk model`;
+    # setup_model_provider() re-syncs ``config`` from disk in place.
+    if model_missing:
+        setup_model_provider(config, quick=True)
     if missing_required:
         _info(None, f"{len(missing_required)} required setting(s) missing:")
         for var in missing_required:

@@ -779,7 +779,7 @@ def _stub_search(monkeypatch, results):
     [
         "computer-use",
         "samuelgradientai-sys/clawksis-agent/skills/productivity/pdf",
-        "skills-sh/nousresearch/clawksis-agent/google-workspace",
+        "skills-sh/samuelgradientai-sys/clawksis-agent/google-workspace",
         "blender-bpy-enhanced",
     ],
 )
