@@ -122,7 +122,7 @@ Those options are shared between the 4 HTTP request commands:
 | -H, --headers                              |    TEXT    | HTTP headers in format "Key: Value" (can be used multiple times)                                                                               |
 | --cookies                                  |    TEXT    | Cookies string in format "name1=value1; name2=value2"                                                                                          |
 | --timeout                                  |  INTEGER   | Request timeout in seconds (default: 30)                                                                                                       |
-| --proxy                                    |    TEXT    | Proxy URL in format "http://username:password@host:port"                                                                                       |
+| --proxy                                    |    TEXT    | Proxy URL in format `http://username:password@host:port`                                                                                       |
 | -s, --css-selector                         |    TEXT    | CSS selector to extract specific content from the page. It returns all matches.                                                                |
 | -p, --params                               |    TEXT    | Query parameters in format "key=value" (can be used multiple times)                                                                            |
 | --follow-redirects / --no-follow-redirects |    None    | Whether to follow redirects (default: "safe", rejects redirects to internal/private IPs)                                                       |
@@ -175,7 +175,7 @@ Both (`fetch` / `stealthy-fetch`) share options:
 | --wait                                   |  INTEGER   | Additional wait time in milliseconds after page load (default: 0)                                                                                        |
 | -s, --css-selector                       |    TEXT    | CSS selector to extract specific content from the page. It returns all matches.                                                                          |
 | --wait-selector                          |    TEXT    | CSS selector to wait for before proceeding                                                                                                               |
-| --proxy                                  |    TEXT    | Proxy URL in format "http://username:password@host:port"                                                                                                 |
+| --proxy                                  |    TEXT    | Proxy URL in format `http://username:password@host:port`                                                                                                 |
 | -H, --extra-headers                      |    TEXT    | Extra headers in format "Key: Value" (can be used multiple times)                                                                                        |
 | --dns-over-https / --no-dns-over-https   |    None    | Route DNS through Cloudflare's DoH to prevent DNS leaks when using proxies (default: False)                                                              |
 | --block-ads / --no-block-ads             |    None    | Block requests to ~3,500 known ad and tracker domains (default: False)                                                                                   |
