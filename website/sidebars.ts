@@ -245,6 +245,15 @@ const sidebars: SidebarsConfig = {
                 },
                 {
                   type: 'category',
+                  label: 'finance',
+                  key: 'skills-bundled-finance',
+                  collapsed: true,
+                  items: [
+                    'user-guide/skills/bundled/finance/finance-kronos',
+                  ],
+                },
+                {
+                  type: 'category',
                   label: 'integrations',
                   key: 'skills-bundled-integrations',
                   collapsed: true,
