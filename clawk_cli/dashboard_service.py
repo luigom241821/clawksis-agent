@@ -95,8 +95,7 @@ def _build_unit(host: str, port: int, extra_env: "dict[str, str]") -> str:
     )
     return (
         "[Unit]\n"
-        "Description=Clawksis Dashboard (web UI :%d)\n"
-        % port
+        f"Description=Clawksis Dashboard (web UI :{port})\n"
         + "After=network-online.target\n"
         "Wants=network-online.target\n"
         "\n"

@@ -2128,7 +2128,7 @@ def create_job(
     use_soul: bool = True,
     use_user_md: bool = True,
     use_memory: bool = False,
-    fallback_models: Optional[Union[str, List[Any]]] = None,
+    fallback_models: Optional[str | list[Any]] = None,
     attach_to_session: Optional[bool] = None,
     monitor_script: Optional[str] = None,
     monitor_url: Optional[str] = None,

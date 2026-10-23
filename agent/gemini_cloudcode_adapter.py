@@ -1036,10 +1036,9 @@ class GeminiCloudCodeClient:
                     tool_call_counter: list[int] = [0]
 
                     for event in _iter_sse_events(response):
-                        for chunk in _translate_stream_event(
+                        yield from _translate_stream_event(
                             event, model, tool_call_counter
-                        ):
-                            yield chunk
+                        )
 
             except httpx.HTTPError as exc:
                 raise CodeAssistError(

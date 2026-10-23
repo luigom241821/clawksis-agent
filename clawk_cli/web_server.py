@@ -957,7 +957,7 @@ async def get_media_file(media_id: str, request: Request):
     if not row:
         raise HTTPException(status_code=404, detail="Media not found.")
 
-    file_path_str, media_type, status = row
+    file_path_str, _media_type, status = row
 
     if status == "expired":
         raise HTTPException(status_code=410, detail="Media URL expired before caching.")

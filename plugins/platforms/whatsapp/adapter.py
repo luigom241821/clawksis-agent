@@ -1027,7 +1027,8 @@ class WhatsAppAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 await asyncio.sleep(1)
             # Bridge output goes to a log file so QR codes, errors, and reconnection messages survive for troubleshooting.
             self._bridge_log = self._session_path.parent / "bridge.log"
-            self._bridge_log_fh = bridge_log_fh = open(
+            # Long-lived log handle handed to the bridge subprocess.
+            self._bridge_log_fh = bridge_log_fh = open(  # noqa: ASYNC230
                 self._bridge_log, "a", encoding="utf-8"
             )
             node = find_node_executable("node")

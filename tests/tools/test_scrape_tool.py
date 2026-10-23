@@ -1031,7 +1031,7 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        ran_ok, content, stderr, returncode = st._run_one(
+        ran_ok, content, _stderr, _returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1313,7 +1313,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.Path, "read_text", _read_fail)
 
-        ran_ok, content, stderr, returncode = st._run_one(
+        ran_ok, content, _stderr, _returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1341,7 +1341,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.subprocess, "run", _timeout_run)
 
-        ran_ok, content, stderr, returncode = st._run_one(
+        ran_ok, content, stderr, _returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1371,7 +1371,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.subprocess, "run", _boom_run)
 
-        ran_ok, content, stderr, returncode = st._run_one(
+        ran_ok, content, stderr, _returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1495,7 +1495,7 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "partial content")
 
-        ran_ok, content, stderr, returncode = st._run_one(
+        ran_ok, content, stderr, _returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1526,7 +1526,7 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "")
 
-        ran_ok, content, stderr, returncode = st._run_one(
+        ran_ok, content, stderr, _returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1594,7 +1594,7 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "")
 
-        ran_ok, content, stderr, returncode = st._run_one(
+        ran_ok, _content, stderr, returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1624,7 +1624,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.subprocess, "run", _boom_run)
 
-        ran_ok, content, stderr, returncode = st._run_one(
+        ran_ok, _content, stderr, _returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
