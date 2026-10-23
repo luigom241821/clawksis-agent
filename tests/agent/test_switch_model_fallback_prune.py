@@ -21,7 +21,10 @@ def _make_agent(chain):
     agent.api_key = "or-key"
     agent.api_mode = "chat_completions"
     agent.client = MagicMock()
-    agent._client_kwargs = {"api_key": "or-key", "base_url": "https://openrouter.ai/api/v1"}
+    agent._client_kwargs = {
+        "api_key": "or-key",
+        "base_url": "https://openrouter.ai/api/v1",
+    }
     agent.context_compressor = None
     agent._anthropic_api_key = ""
     agent._anthropic_base_url = None
@@ -39,8 +42,13 @@ def _make_agent(chain):
 
 def _switch_to_anthropic(agent):
     with (
-        patch("agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()),
-        patch("agent.anthropic_credentials.resolve_anthropic_token", return_value="sk-ant-xyz"),
+        patch(
+            "agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()
+        ),
+        patch(
+            "agent.anthropic_credentials.resolve_anthropic_token",
+            return_value="sk-ant-xyz",
+        ),
         patch("agent.anthropic_credentials._is_oauth_token", return_value=False),
         patch("clawk_cli.timeouts.get_provider_request_timeout", return_value=None),
     ):
@@ -54,10 +62,12 @@ def _switch_to_anthropic(agent):
 
 
 def test_switch_drops_old_primary_from_fallback_chain():
-    agent = _make_agent([
-        {"provider": "openrouter", "model": "x-ai/grok-4"},
-        {"provider": "nous", "model": "hermes-4"},
-    ])
+    agent = _make_agent(
+        [
+            {"provider": "openrouter", "model": "x-ai/grok-4"},
+            {"provider": "nous", "model": "clawk-4"},
+        ]
+    )
 
     _switch_to_anthropic(agent)
 
@@ -66,7 +76,8 @@ def test_switch_drops_old_primary_from_fallback_chain():
     assert "openrouter" not in providers, "old primary must be pruned"
     assert "anthropic" not in providers, "new primary is redundant in the chain"
     assert providers == ["nous"]
-    assert agent._fallback_model == {"provider": "nous", "model": "hermes-4"}
+
+    assert agent._fallback_model == {"provider": "nous", "model": "clawk-4"}
 
 
 def test_switch_with_empty_chain_stays_empty():
@@ -79,10 +90,12 @@ def test_switch_with_empty_chain_stays_empty():
 
 
 def test_manual_switch_clears_provider_fallback_provenance():
-    agent = _make_agent([
-        {"provider": "openrouter", "model": "x-ai/grok-4"},
-        {"provider": "nous", "model": "hermes-4"},
-    ])
+    agent = _make_agent(
+        [
+            {"provider": "openrouter", "model": "x-ai/grok-4"},
+            {"provider": "nous", "model": "hermes-4"},
+        ]
+    )
     agent._provider_fallback_active = True
     agent._provider_fallback_route = ("fallback-model", "fallback-provider")
 
@@ -90,8 +103,6 @@ def test_manual_switch_clears_provider_fallback_provenance():
 
     assert agent._provider_fallback_active is False
     assert agent._provider_fallback_route is None
-
-
 
 
 def test_switch_within_same_provider_preserves_chain():

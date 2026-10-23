@@ -21,12 +21,14 @@ import pytest
 
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     # Clear any cached clawk_home computation
     import clawk_constants
+
     if hasattr(clawk_constants, "_clawk_home_cache"):
         clawk_constants._clawk_home_cache = None
     return home
@@ -42,7 +44,9 @@ def _make_stub_cli(history):
     )
 
 
-def test_save_conversation_writes_under_clawk_home(clawk_home, tmp_path, monkeypatch, capsys):
+def test_save_conversation_writes_under_clawk_home(
+    clawk_home, tmp_path, monkeypatch, capsys
+):
     """Snapshot must land under ~/.clawksis/sessions/saved/, not CWD."""
     # Change CWD to a different directory to prove the file does NOT go there.
     work = tmp_path / "somewhere-else"
@@ -50,15 +54,19 @@ def test_save_conversation_writes_under_clawk_home(clawk_home, tmp_path, monkeyp
     monkeypatch.chdir(work)
 
     # Import fresh to pick up the CLAWK_HOME fixture
-    for mod in [m for m in sys.modules if m.startswith("cli") or m == "clawk_constants"]:
+    for mod in [
+        m for m in sys.modules if m.startswith("cli") or m == "clawk_constants"
+    ]:
         sys.modules.pop(mod, None)
 
     import cli
 
-    stub = _make_stub_cli([
-        {"role": "user", "content": "hi"},
-        {"role": "assistant", "content": "hello"},
-    ])
+    stub = _make_stub_cli(
+        [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello"},
+        ]
+    )
 
     # Call the unbound method against our stub.
     cli.ClawksisCLI.save_conversation(stub, "/save json")
@@ -90,7 +98,9 @@ def test_save_conversation_writes_under_clawk_home(clawk_home, tmp_path, monkeyp
 
 
 def test_save_conversation_empty_history_does_nothing(clawk_home, capsys):
-    for mod in [m for m in sys.modules if m.startswith("cli") or m == "clawk_constants"]:
+    for mod in [
+        m for m in sys.modules if m.startswith("cli") or m == "clawk_constants"
+    ]:
         sys.modules.pop(mod, None)
     import cli
 
@@ -103,10 +113,10 @@ def test_save_conversation_empty_history_does_nothing(clawk_home, capsys):
     assert "No conversation to save" in out
 
 
-
-
 def test_save_conversation_bad_format_shows_usage(clawk_home, capsys):
-    for mod in [m for m in sys.modules if m.startswith("cli") or m == "clawk_constants"]:
+    for mod in [
+        m for m in sys.modules if m.startswith("cli") or m == "clawk_constants"
+    ]:
         sys.modules.pop(mod, None)
     import cli
 

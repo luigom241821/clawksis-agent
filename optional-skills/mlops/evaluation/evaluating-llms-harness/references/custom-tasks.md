@@ -309,12 +309,16 @@ def medical_f1(predictions, references):
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
 
-    return 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+    return (
+        2 * (precision * recall) / (precision + recall)
+        if (precision + recall) > 0
+        else 0
+    )
 
 def extract_medical_terms(text):
     """Extract medical terminology."""
     # Custom logic
-    return re.findall(r'\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b', text)
+    return re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b", text)
 ```
 
 ### Example 2: Code Evaluation
@@ -380,10 +384,7 @@ def execute_with_timeout(code, input_data, timeout=5):
 
 def process_code_results(doc, results):
     """Process code execution results."""
-    return {
-        "passed": results[0] == 1.0,
-        "generated_code": results[1]
-    }
+    return {"passed": results[0] == 1.0, "generated_code": results[1]}
 ```
 
 ### Example 3: Instruction Following
@@ -423,7 +424,7 @@ process_docs: !function utils.add_constraint_checkers
 ```python
 from sentence_transformers import SentenceTransformer, util
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def check_constraints(predictions, references):
     """Check if response satisfies constraints."""

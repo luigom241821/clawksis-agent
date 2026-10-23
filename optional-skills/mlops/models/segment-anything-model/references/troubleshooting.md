@@ -174,7 +174,7 @@ masks, scores, _ = predictor.predict(
     point_coords=np.array([[center_x, center_y]]),
     point_labels=np.array([1]),
     box=np.array([x1, y1, x2, y2]),
-    multimask_output=True
+    multimask_output=True,
 )
 
 # Check scores and select best
@@ -216,11 +216,11 @@ mask_generator = SamAutomaticMaskGenerator(
 ```python
 mask_generator = SamAutomaticMaskGenerator(
     model=sam,
-    points_per_side=16,          # Reduce from 32
-    pred_iou_thresh=0.92,        # Increase from 0.88
+    points_per_side=16,  # Reduce from 32
+    pred_iou_thresh=0.92,  # Increase from 0.88
     stability_score_thresh=0.98,  # Increase from 0.95
-    box_nms_thresh=0.5,          # More aggressive NMS
-    min_mask_region_area=500,    # Remove small masks
+    box_nms_thresh=0.5,  # More aggressive NMS
+    min_mask_region_area=500,  # Remove small masks
 )
 ```
 
@@ -232,11 +232,11 @@ mask_generator = SamAutomaticMaskGenerator(
 ```python
 mask_generator = SamAutomaticMaskGenerator(
     model=sam,
-    points_per_side=64,          # Increase density
-    pred_iou_thresh=0.80,        # Lower threshold
+    points_per_side=64,  # Increase density
+    pred_iou_thresh=0.80,  # Lower threshold
     stability_score_thresh=0.85,  # Lower threshold
-    crop_n_layers=2,             # Add multi-scale
-    min_mask_region_area=0,      # Keep all masks
+    crop_n_layers=2,  # Add multi-scale
+    min_mask_region_area=0,  # Keep all masks
 )
 ```
 
@@ -261,13 +261,13 @@ def segment_with_patches(image, patch_size=512, overlap=64):
 
     for y in range(0, h, patch_size - overlap):
         for x in range(0, w, patch_size - overlap):
-            patch = image[y:y+patch_size, x:x+patch_size]
+            patch = image[y : y + patch_size, x : x + patch_size]
             masks = mask_generator.generate(patch)
 
             # Offset masks to original coordinates
             for m in masks:
-                m['bbox'][0] += x
-                m['bbox'][1] += y
+                m["bbox"][0] += x
+                m["bbox"][1] += y
                 # Offset segmentation mask too
 
             all_masks.extend(masks)
@@ -300,7 +300,7 @@ max_size = 1024
 h, w = image.shape[:2]
 if max(h, w) > max_size:
     scale = max_size / max(h, w)
-    image = cv2.resize(image, (int(w*scale), int(h*scale)))
+    image = cv2.resize(image, (int(w * scale), int(h * scale)))
 
 # Use CPU for large batch processing
 sam.to("cpu")
@@ -359,10 +359,7 @@ import onnxruntime
 print(onnxruntime.get_available_providers())
 
 # Use CPU provider if GPU fails
-session = onnxruntime.InferenceSession(
-    "sam.onnx",
-    providers=['CPUExecutionProvider']
-)
+session = onnxruntime.InferenceSession("sam.onnx", providers=["CPUExecutionProvider"])
 
 # Verify input shapes
 for input in session.get_inputs():
@@ -391,7 +388,7 @@ inputs = processor(image, input_points=input_points, return_tensors="pt")
 masks = processor.image_processor.post_process_masks(
     outputs.pred_masks.cpu(),
     inputs["original_sizes"].cpu(),
-    inputs["reshaped_input_sizes"].cpu()
+    inputs["reshaped_input_sizes"].cpu(),
 )
 ```
 
@@ -434,15 +431,12 @@ input_points = np.array([
     [obj_left_x, obj_center_y],
     [obj_right_x, obj_center_y],
     [obj_center_x, obj_top_y],
-    [obj_center_x, obj_bottom_y]
+    [obj_center_x, obj_bottom_y],
 ])
 input_labels = np.array([1, 1, 1, 1, 1])
 
 # Use bounding box
-masks, _, _ = predictor.predict(
-    box=np.array([x1, y1, x2, y2]),
-    multimask_output=False
-)
+masks, _, _ = predictor.predict(box=np.array([x1, y1, x2, y2]), multimask_output=False)
 
 # Iterative refinement
 mask_input = None
@@ -451,7 +445,7 @@ for point in points:
         point_coords=point.reshape(1, 2),
         point_labels=np.array([1]),
         mask_input=mask_input,
-        multimask_output=False
+        multimask_output=False,
     )
     mask_input = logits
 ```

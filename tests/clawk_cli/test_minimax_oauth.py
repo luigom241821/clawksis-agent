@@ -8,6 +8,7 @@ Covers:
   re-login required on invalid_grant
 - resolve_minimax_oauth_runtime_credentials: error when not logged in
 """
+
 from __future__ import annotations
 
 import base64
@@ -40,6 +41,7 @@ from clawk_cli.auth import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_httpx_response(status_code: int, body: dict | None = None, text: str = ""):
     """Return a minimal mock that quacks like httpx.Response.
 
@@ -59,29 +61,37 @@ def _make_httpx_response(status_code: int, body: dict | None = None, text: str =
     resp.reason_phrase = "OK" if status_code == 200 else "Error"
     resp.is_stream_consumed = False
     resp.encoding = "utf-8"
-    resp.iter_bytes.return_value = iter([resp.text.encode("utf-8")] if resp.text else [])
+    resp.iter_bytes.return_value = iter(
+        [resp.text.encode("utf-8")] if resp.text else []
+    )
     return resp
+
 
 def _future_iso(seconds_from_now: int = 3600) -> str:
     ts = time.time() + seconds_from_now
     return datetime.fromtimestamp(ts, tz=UTC).isoformat()
 
+
 def _past_iso(seconds_ago: int = 3600) -> str:
     ts = time.time() - seconds_ago
     return datetime.fromtimestamp(ts, tz=UTC).isoformat()
 
+
 # ---------------------------------------------------------------------------
 # 0. test_resolve_token_expiry_unix_ttl_vs_absolute_ms
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_token_expiry_unix_ttl_seconds():
     now = datetime(2025, 6, 1, 12, 0, 0, tzinfo=UTC)
     got = _minimax_resolve_token_expiry_unix(3600, now=now)
     assert abs(got - (now.timestamp() + 3600)) < 0.01
 
+
 # ---------------------------------------------------------------------------
 # 1. test_pkce_pair_produces_valid_s256
 # ---------------------------------------------------------------------------
+
 
 def test_pkce_pair_produces_valid_s256():
     verifier, challenge, state = _minimax_pkce_pair()
@@ -95,9 +105,11 @@ def test_pkce_pair_produces_valid_s256():
     assert "=" not in challenge
 
     # Re-compute challenge from verifier and verify it matches
-    expected = base64.urlsafe_b64encode(
-        hashlib.sha256(verifier.encode()).digest()
-    ).decode().rstrip("=")
+    expected = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+        .decode()
+        .rstrip("=")
+    )
     assert challenge == expected
 
     # State must be non-empty
@@ -109,6 +121,7 @@ def test_pkce_pair_produces_valid_s256():
     assert verifier != v2
     assert state != s2
 
+
 # ---------------------------------------------------------------------------
 # 2. test_request_user_code_happy_path
 # ---------------------------------------------------------------------------
@@ -117,13 +130,17 @@ def test_pkce_pair_produces_valid_s256():
 # 3. test_request_user_code_state_mismatch_raises
 # ---------------------------------------------------------------------------
 
+
 def test_request_user_code_state_mismatch_raises():
-    mock_response = _make_httpx_response(200, {
-        "user_code": "XYZ",
-        "verification_uri": "https://minimax.io/verify",
-        "expired_in": 300,
-        "state": "wrong-state",  # Mismatched!
-    })
+    mock_response = _make_httpx_response(
+        200,
+        {
+            "user_code": "XYZ",
+            "verification_uri": "https://minimax.io/verify",
+            "expired_in": 300,
+            "state": "wrong-state",  # Mismatched!
+        },
+    )
 
     client = MagicMock()
     client.post.return_value = mock_response
@@ -140,6 +157,7 @@ def test_request_user_code_state_mismatch_raises():
 
     assert exc_info.value.code == "state_mismatch"
     assert "CSRF" in str(exc_info.value) or "mismatch" in str(exc_info.value).lower()
+
 
 # ---------------------------------------------------------------------------
 # 4. test_request_user_code_non_200_raises
@@ -161,6 +179,7 @@ def test_request_user_code_state_mismatch_raises():
 # 8. test_refresh_skip_when_not_expired
 # ---------------------------------------------------------------------------
 
+
 def test_refresh_skip_when_not_expired():
     """When token is far from expiry, refresh should return the same state."""
     state = {
@@ -175,6 +194,7 @@ def test_refresh_skip_when_not_expired():
     result = _refresh_minimax_oauth_state(state)
     assert result["access_token"] == "old-access"
     assert result is state  # Same object returned (no refresh)
+
 
 # ---------------------------------------------------------------------------
 # 9. test_refresh_updates_access_token
@@ -191,6 +211,7 @@ def test_refresh_skip_when_not_expired():
 # ---------------------------------------------------------------------------
 # 11b. Terminal refresh failure quarantines dead tokens (#28003)
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_credentials_quarantines_dead_tokens_on_terminal_refresh_failure():
     """Terminal refresh failure (relogin_required + refresh_token present) must
@@ -223,9 +244,13 @@ def test_resolve_credentials_quarantines_dead_tokens_on_terminal_refresh_failure
             relogin_required=True,
         )
 
-    with patch("clawk_cli.auth.get_provider_auth_state", return_value=stale_state), \
-         patch("clawk_cli.auth._refresh_minimax_oauth_state", side_effect=_terminal_refresh), \
-         patch("clawk_cli.auth._minimax_save_auth_state", side_effect=_capture_save):
+    with (
+        patch("clawk_cli.auth.get_provider_auth_state", return_value=stale_state),
+        patch(
+            "clawk_cli.auth._refresh_minimax_oauth_state", side_effect=_terminal_refresh
+        ),
+        patch("clawk_cli.auth._minimax_save_auth_state", side_effect=_capture_save),
+    ):
         with pytest.raises(AuthError) as exc_info:
             resolve_minimax_oauth_runtime_credentials()
 
@@ -259,6 +284,7 @@ def test_resolve_credentials_quarantines_dead_tokens_on_terminal_refresh_failure
     assert err["relogin_required"] is True
     assert "at" in err
 
+
 # ---------------------------------------------------------------------------
 # 12. test_provider_registry_contains_minimax_oauth
 # ---------------------------------------------------------------------------
@@ -271,6 +297,7 @@ def test_resolve_credentials_quarantines_dead_tokens_on_terminal_refresh_failure
 # 14. test_get_minimax_oauth_auth_status_not_logged_in
 # ---------------------------------------------------------------------------
 
+
 def test_get_minimax_oauth_auth_status_not_logged_in():
     with patch("clawk_cli.auth.get_provider_auth_state", return_value=None):
         status = get_minimax_oauth_auth_status()
@@ -278,9 +305,11 @@ def test_get_minimax_oauth_auth_status_not_logged_in():
     assert status["logged_in"] is False
     assert status["provider"] == "minimax-oauth"
 
+
 # ---------------------------------------------------------------------------
 # 15. test_get_minimax_oauth_auth_status_logged_in
 # ---------------------------------------------------------------------------
+
 
 def test_generic_auth_status_dispatches_minimax_oauth():
     state = {
@@ -296,12 +325,14 @@ def test_generic_auth_status_dispatches_minimax_oauth():
     assert status["provider"] == "minimax-oauth"
     assert status["region"] == "global"
 
+
 # ---------------------------------------------------------------------------
 # build_minimax_oauth_token_provider — per-request callable bearer
 # ---------------------------------------------------------------------------
 # These tests verify the fix for short-lived (~15-min) MiniMax access tokens
 # expiring mid-session. The callable is invoked by the Anthropic SDK on every
 # outbound request via the existing Entra-style bearer hook.
+
 
 def test_token_provider_returns_current_access_token_when_fresh():
     """When token is far from expiry, callable just returns the cached token."""
@@ -318,13 +349,16 @@ def test_token_provider_returns_current_access_token_when_fresh():
 
     provider = build_minimax_oauth_token_provider()
 
-    with patch("clawk_cli.auth.get_provider_auth_state", return_value=state), \
-         patch("httpx.Client") as mock_client_class:
+    with (
+        patch("clawk_cli.auth.get_provider_auth_state", return_value=state),
+        patch("httpx.Client") as mock_client_class,
+    ):
         token = provider()
         # No network call should happen — token is fresh.
         mock_client_class.assert_not_called()
 
     assert token == "still-fresh"
+
 
 def test_token_provider_refreshes_when_near_expiry():
     """When token is within the skew window, callable mints a fresh one."""
@@ -349,9 +383,11 @@ def test_token_provider_refreshes_when_near_expiry():
 
     provider = build_minimax_oauth_token_provider()
 
-    with patch("clawk_cli.auth.get_provider_auth_state", return_value=state), \
-         patch("httpx.Client") as mock_client_class, \
-         patch("clawk_cli.auth._minimax_save_auth_state"):
+    with (
+        patch("clawk_cli.auth.get_provider_auth_state", return_value=state),
+        patch("httpx.Client") as mock_client_class,
+        patch("clawk_cli.auth._minimax_save_auth_state"),
+    ):
         mock_instance = MagicMock()
         mock_instance.__enter__ = MagicMock(return_value=mock_instance)
         mock_instance.__exit__ = MagicMock(return_value=False)
@@ -362,6 +398,7 @@ def test_token_provider_refreshes_when_near_expiry():
         token = provider()
 
     assert token == "fresh-bearer"
+
 
 def test_token_provider_raises_not_logged_in_when_state_missing():
     """No state in auth.json → AuthError(not_logged_in, relogin_required=True)."""
@@ -374,6 +411,7 @@ def test_token_provider_raises_not_logged_in_when_state_missing():
 
     assert exc_info.value.code == "not_logged_in"
     assert exc_info.value.relogin_required is True
+
 
 def test_token_provider_quarantines_state_on_terminal_refresh():
     """When refresh returns invalid_grant, callable raises AuthError AND
@@ -397,12 +435,14 @@ def test_token_provider_quarantines_state_on_terminal_refresh():
     saved_states: list[dict] = []
 
     provider = build_minimax_oauth_token_provider()
-    with patch("clawk_cli.auth.get_provider_auth_state", return_value=state), \
-         patch("httpx.Client") as mock_client_class, \
-         patch(
-             "clawk_cli.auth._minimax_save_auth_state",
-             side_effect=lambda s, **_k: saved_states.append(dict(s)),
-         ):
+    with (
+        patch("clawk_cli.auth.get_provider_auth_state", return_value=state),
+        patch("httpx.Client") as mock_client_class,
+        patch(
+            "clawk_cli.auth._minimax_save_auth_state",
+            side_effect=lambda s, **_k: saved_states.append(dict(s)),
+        ),
+    ):
         mock_instance = MagicMock()
         mock_instance.__enter__ = MagicMock(return_value=mock_instance)
         mock_instance.__exit__ = MagicMock(return_value=False)
@@ -420,6 +460,7 @@ def test_token_provider_quarantines_state_on_terminal_refresh():
     assert "access_token" not in quarantined
     assert "refresh_token" not in quarantined
     assert quarantined["last_auth_error"]["relogin_required"] is True
+
 
 def test_resolve_returns_callable_when_as_token_provider_true():
     """Explicit opt-in path: resolve_minimax_oauth_runtime_credentials(as_token_provider=True)
@@ -440,9 +481,11 @@ def test_resolve_returns_callable_when_as_token_provider_true():
     assert not isinstance(creds["api_key"], str)
     assert creds["base_url"] == MINIMAX_OAUTH_GLOBAL_INFERENCE.rstrip("/")
 
+
 # ---------------------------------------------------------------------------
 # Bounded error-body reads (#56548 / PR #56549)
 # ---------------------------------------------------------------------------
+
 
 def test_refresh_error_body_bounded_and_readable_with_real_client():
     """Refresh non-200 path over a REAL socket transport.
@@ -502,8 +545,14 @@ def test_refresh_error_body_bounded_and_readable_with_real_client():
 # Concurrent refresh + active-provider invariants (teknium1 review of #133534)
 # ---------------------------------------------------------------------------
 
-def _minimax_state(tmp_path, *, expires_in: int = 30, refresh_token: str = "r1",
-                   access_token: str = "tok1") -> dict:
+
+def _minimax_state(
+    tmp_path,
+    *,
+    expires_in: int = 30,
+    refresh_token: str = "r1",
+    access_token: str = "tok1",
+) -> dict:
     from clawk_cli.auth import MINIMAX_OAUTH_CLIENT_ID
 
     state = {
@@ -517,10 +566,16 @@ def _minimax_state(tmp_path, *, expires_in: int = 30, refresh_token: str = "r1",
         "refresh_token": refresh_token,
         **_minimax_expiry_fields_for_test(expires_in),
     }
-    (tmp_path / "auth.json").write_text(json.dumps({
-        "version": 1, "active_provider": "nous",
-        "providers": {"minimax-oauth": state},
-    }), encoding="utf-8")
+    (tmp_path / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "active_provider": "nous",
+                "providers": {"minimax-oauth": state},
+            }
+        ),
+        encoding="utf-8",
+    )
     return state
 
 
@@ -554,15 +609,23 @@ class _RotatingPortal:
                     portal.refresh_calls.append(used)
                     if used != portal._current_refresh:
                         portal.reuse_rejections += 1
-                        status, payload = 400, {"base_resp": {"status_msg": "refresh_token_reused"}}
+                        status, payload = (
+                            400,
+                            {"base_resp": {"status_msg": "refresh_token_reused"}},
+                        )
                     else:
-                        portal._current_refresh = "r" + str(int(portal._current_refresh[1:]) + 1)
-                        status, payload = 200, {
-                            "status": "success",
-                            "access_token": f"tok-{portal._current_refresh}",
-                            "refresh_token": portal._current_refresh,
-                            "expired_in": 900,
-                        }
+                        portal._current_refresh = "r" + str(
+                            int(portal._current_refresh[1:]) + 1
+                        )
+                        status, payload = (
+                            200,
+                            {
+                                "status": "success",
+                                "access_token": f"tok-{portal._current_refresh}",
+                                "refresh_token": portal._current_refresh,
+                                "expired_in": 900,
+                            },
+                        )
                 raw = json.dumps(payload).encode("utf-8")
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
@@ -622,7 +685,9 @@ def test_concurrent_refresh_rotates_token_once_and_keeps_login(tmp_path, monkeyp
             except Exception as exc:
                 results[name] = ("error", repr(exc))
 
-        threads = [threading.Thread(target=_provider_call, args=(f"t{i}",)) for i in range(2)]
+        threads = [
+            threading.Thread(target=_provider_call, args=(f"t{i}",)) for i in range(2)
+        ]
         for t in threads:
             t.start()
         barrier.wait()
@@ -675,7 +740,9 @@ def test_aux_refresh_preserves_active_provider(tmp_path, monkeypatch):
 
         assert get_active_provider() == "nous"
         token = build_minimax_oauth_token_provider()()
-        assert token == "tok-r2", "the refresh must actually run over the loopback portal"
+        assert token == "tok-r2", (
+            "the refresh must actually run over the loopback portal"
+        )
 
         final = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))
         assert final["active_provider"] == "nous", (
@@ -696,12 +763,20 @@ def test_minimax_oauth_login_sets_active_provider(tmp_path, monkeypatch):
     (tmp_path / "auth.json").write_text(json.dumps(store), encoding="utf-8")
 
     token_data = {"access_token": "tok", "refresh_token": "r1", "expired_in": 900}
-    with patch("clawk_cli.auth._minimax_pkce_pair", return_value=("v", "c", "s")), \
-         patch("clawk_cli.auth._minimax_request_user_code", return_value={
-             "verification_uri": "https://portal.minimax.io/device", "user_code": "ABCD",
-             "expired_in": 600, "interval": 1000}), \
-         patch("clawk_cli.auth._print_device_code_instructions"), \
-         patch.object(auth_minimax, "_minimax_poll_token", return_value=token_data):
+    with (
+        patch("clawk_cli.auth._minimax_pkce_pair", return_value=("v", "c", "s")),
+        patch(
+            "clawk_cli.auth._minimax_request_user_code",
+            return_value={
+                "verification_uri": "https://portal.minimax.io/device",
+                "user_code": "ABCD",
+                "expired_in": 600,
+                "interval": 1000,
+            },
+        ),
+        patch("clawk_cli.auth._print_device_code_instructions"),
+        patch.object(auth_minimax, "_minimax_poll_token", return_value=token_data),
+    ):
         auth_minimax._minimax_oauth_login(region="global", open_browser=False)
 
     final = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))

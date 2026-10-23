@@ -35,14 +35,10 @@ llm = Llama(
     model_path="model-q4_k_m.gguf",
     n_ctx=4096,
     n_gpu_layers=35,
-    n_batch=512  # Larger batch for parallel processing
+    n_batch=512,  # Larger batch for parallel processing
 )
 
-prompts = [
-    "What is Python?",
-    "Explain machine learning.",
-    "Describe neural networks."
-]
+prompts = ["What is Python?", "Explain machine learning.", "Describe neural networks."]
 
 # Process in batch (each prompt gets separate context)
 for prompt in prompts:
@@ -71,7 +67,8 @@ for prompt in prompts:
 ```python
 # custom_convert.py
 import sys
-sys.path.insert(0, './llama.cpp')
+
+sys.path.insert(0, "./llama.cpp")
 
 from convert_hf_to_gguf import main
 from gguf import GGUFWriter
@@ -149,9 +146,9 @@ from llama_cpp import Llama
 # Use memory mapping for large models
 llm = Llama(
     model_path="model-q4_k_m.gguf",
-    use_mmap=True,       # Memory map the model
-    use_mlock=False,     # Don't lock in RAM
-    n_gpu_layers=35
+    use_mmap=True,  # Memory map the model
+    use_mlock=False,  # Don't lock in RAM
+    n_gpu_layers=35,
 )
 ```
 
@@ -163,8 +160,9 @@ import subprocess
 
 def get_free_vram_gb():
     result = subprocess.run(
-        ['nvidia-smi', '--query-gpu=memory.free', '--format=csv,nounits,noheader'],
-        capture_output=True, text=True
+        ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,nounits,noheader"],
+        capture_output=True,
+        text=True,
     )
     return int(result.stdout.strip()) / 1024
 
@@ -174,7 +172,7 @@ layers_to_offload = int(free_vram / 0.5)
 
 llm = Llama(
     model_path="model-q4_k_m.gguf",
-    n_gpu_layers=min(layers_to_offload, 35)  # Cap at total layers
+    n_gpu_layers=min(layers_to_offload, 35),  # Cap at total layers
 )
 ```
 
@@ -186,10 +184,10 @@ from llama_cpp import Llama
 # Optimize KV cache for long contexts
 llm = Llama(
     model_path="model-q4_k_m.gguf",
-    n_ctx=8192,          # Large context
+    n_ctx=8192,  # Large context
     n_gpu_layers=35,
-    type_k=1,            # Q8_0 for K cache (1)
-    type_v=1,            # Q8_0 for V cache (1)
+    type_k=1,  # Q8_0 for K cache (1)
+    type_v=1,  # Q8_0 for V cache (1)
     # Or use Q4_0 (2) for more compression
 )
 ```
@@ -201,11 +199,7 @@ llm = Llama(
 ```python
 from llama_cpp import Llama
 
-llm = Llama(
-    model_path="model-q4_k_m.gguf",
-    n_ctx=4096,
-    n_gpu_layers=35
-)
+llm = Llama(model_path="model-q4_k_m.gguf", n_ctx=4096, n_gpu_layers=35)
 
 # Handle long conversations with context shifting
 conversation = []
@@ -216,12 +210,9 @@ def chat(user_message):
 
     # Keep only recent history
     if len(conversation) > max_history * 2:
-        conversation = conversation[-max_history * 2:]
+        conversation = conversation[-max_history * 2 :]
 
-    response = llm.create_chat_completion(
-        messages=conversation,
-        max_tokens=256
-    )
+    response = llm.create_chat_completion(messages=conversation, max_tokens=256)
 
     assistant_message = response["choices"][0]["message"]["content"]
     conversation.append({"role": "assistant", "content": assistant_message})
@@ -252,7 +243,7 @@ def chat(user_message):
 from llama_cpp import Llama, LlamaGrammar
 
 # Define JSON grammar
-json_grammar = LlamaGrammar.from_string('''
+json_grammar = LlamaGrammar.from_string("""
 root ::= object
 object ::= "{" ws pair ("," ws pair)* "}" ws
 pair ::= string ":" ws value
@@ -261,14 +252,12 @@ array ::= "[" ws value ("," ws value)* "]" ws
 string ::= "\\"" [^"\\\\]* "\\""
 number ::= [0-9]+
 ws ::= [ \\t\\n]*
-''')
+""")
 
 llm = Llama(model_path="model-q4_k_m.gguf", n_gpu_layers=35)
 
 output = llm(
-    "Output a JSON object with name and age:",
-    grammar=json_grammar,
-    max_tokens=100
+    "Output a JSON object with name and age:", grammar=json_grammar, max_tokens=100
 )
 print(output["choices"][0]["text"])
 ```
@@ -277,16 +266,14 @@ print(output["choices"][0]["text"])
 
 ```python
 # Grammar for specific format
-answer_grammar = LlamaGrammar.from_string('''
+answer_grammar = LlamaGrammar.from_string("""
 root ::= "Answer: " letter "\\n" "Explanation: " explanation
 letter ::= [A-D]
 explanation ::= [a-zA-Z0-9 .,!?]+
-''')
+""")
 
 output = llm(
-    "Q: What is 2+2? A) 3 B) 4 C) 5 D) 6",
-    grammar=answer_grammar,
-    max_tokens=100
+    "Q: What is 2+2? A) 3 B) 4 C) 5 D) 6", grammar=answer_grammar, max_tokens=100
 )
 ```
 
@@ -321,7 +308,7 @@ llm = Llama(
     model_path="base-model-q4_k_m.gguf",
     lora_path="lora-adapter.gguf",
     lora_scale=1.0,
-    n_gpu_layers=35
+    n_gpu_layers=35,
 )
 ```
 
@@ -334,8 +321,8 @@ from llama_cpp import Llama
 
 llm = Llama(
     model_path="model-q4_k_m.gguf",
-    embedding=True,      # Enable embedding mode
-    n_gpu_layers=35
+    embedding=True,  # Enable embedding mode
+    n_gpu_layers=35,
 )
 
 # Get embeddings
@@ -349,7 +336,7 @@ print(f"Embedding dimension: {len(embeddings)}")
 texts = [
     "Machine learning is fascinating.",
     "Deep learning uses neural networks.",
-    "Python is a programming language."
+    "Python is a programming language.",
 ]
 
 embeddings = [llm.embed(text) for text in texts]
@@ -373,12 +360,7 @@ import time
 from llama_cpp import Llama
 
 def benchmark(model_path, prompt, n_tokens=100, n_runs=5):
-    llm = Llama(
-        model_path=model_path,
-        n_gpu_layers=35,
-        n_ctx=2048,
-        verbose=False
-    )
+    llm = Llama(model_path=model_path, n_gpu_layers=35, n_ctx=2048, verbose=False)
 
     # Warmup
     llm(prompt, max_tokens=10)
@@ -425,7 +407,7 @@ def find_optimal_config(model_path, target_vram_gb=8):
                     n_gpu_layers=n_gpu_layers,
                     n_batch=n_batch,
                     n_ctx=2048,
-                    verbose=False
+                    verbose=False,
                 )
 
                 # Quick benchmark
@@ -438,7 +420,7 @@ def find_optimal_config(model_path, target_vram_gb=8):
                     best_config = {
                         "n_gpu_layers": n_gpu_layers,
                         "n_batch": n_batch,
-                        "speed": speed
+                        "speed": speed,
                     }
 
                 del llm
@@ -474,7 +456,7 @@ from llama_cpp import Llama
 llm = Llama(
     model_path="large-model-q4_k_m.gguf",
     n_gpu_layers=60,
-    tensor_split=[0.5, 0.5]  # Split evenly across 2 GPUs
+    tensor_split=[0.5, 0.5],  # Split evenly across 2 GPUs
 )
 ```
 

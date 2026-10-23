@@ -81,19 +81,18 @@ from audiocraft.models import MusicGen
 **Solutions**:
 ```python
 # Use smaller model
-model = MusicGen.get_pretrained('facebook/musicgen-small')
+model = MusicGen.get_pretrained("facebook/musicgen-small")
 
 # Force CPU loading first
 import torch
 device = "cpu"
-model = MusicGen.get_pretrained('facebook/musicgen-small', device=device)
+model = MusicGen.get_pretrained("facebook/musicgen-small", device=device)
 model = model.to("cuda")
 
 # Use HuggingFace with device_map
 from transformers import MusicgenForConditionalGeneration
 model = MusicgenForConditionalGeneration.from_pretrained(
-    "facebook/musicgen-small",
-    device_map="auto"
+    "facebook/musicgen-small", device_map="auto"
 )
 ```
 
@@ -115,7 +114,7 @@ from huggingface_hub import snapshot_download
 snapshot_download("facebook/musicgen-small", resume_download=True)
 
 # Use local files
-model = MusicGen.get_pretrained('/local/path/to/model')
+model = MusicGen.get_pretrained("/local/path/to/model")
 ```
 
 ### Wrong model type
@@ -126,17 +125,19 @@ model = MusicGen.get_pretrained('/local/path/to/model')
 ```python
 # For text-to-music: use MusicGen
 from audiocraft.models import MusicGen
-model = MusicGen.get_pretrained('facebook/musicgen-medium')
+
+model = MusicGen.get_pretrained("facebook/musicgen-medium")
 
 # For text-to-sound: use AudioGen
 from audiocraft.models import AudioGen
-model = AudioGen.get_pretrained('facebook/audiogen-medium')
+
+model = AudioGen.get_pretrained("facebook/audiogen-medium")
 
 # For melody conditioning: use melody variant
-model = MusicGen.get_pretrained('facebook/musicgen-melody')
+model = MusicGen.get_pretrained("facebook/musicgen-melody")
 
 # For stereo: use stereo variant
-model = MusicGen.get_pretrained('facebook/musicgen-stereo-medium')
+model = MusicGen.get_pretrained("facebook/musicgen-stereo-medium")
 ```
 
 ## Generation Issues
@@ -157,7 +158,7 @@ print(f"Mean amplitude: {wav.abs().mean().item()}")
 
 # If too quiet, normalize
 def normalize_audio(audio, target_db=-14.0):
-    rms = torch.sqrt(torch.mean(audio ** 2))
+    rms = torch.sqrt(torch.mean(audio**2))
     target_rms = 10 ** (target_db / 20)
     gain = target_rms / (rms + 1e-8)
     return audio * gain
@@ -172,14 +173,14 @@ wav_normalized = normalize_audio(wav)
 **Solutions**:
 ```python
 # Use larger model
-model = MusicGen.get_pretrained('facebook/musicgen-large')
+model = MusicGen.get_pretrained("facebook/musicgen-large")
 
 # Adjust generation parameters
 model.set_generation_params(
     duration=15,
-    top_k=250,          # Increase for more diversity
-    temperature=0.8,    # Lower for more focused output
-    cfg_coef=4.0        # Increase for better text adherence
+    top_k=250,  # Increase for more diversity
+    temperature=0.8,  # Lower for more focused output
+    cfg_coef=4.0,  # Increase for better text adherence
 )
 
 # Use better prompts
@@ -223,7 +224,7 @@ import torchaudio
 from audiocraft.models import MusicGen
 
 # Load melody model (not base model)
-model = MusicGen.get_pretrained('facebook/musicgen-melody')
+model = MusicGen.get_pretrained("facebook/musicgen-melody")
 
 # Load and prepare melody
 melody, sr = torchaudio.load("melody.wav")
@@ -262,7 +263,7 @@ import torch
 torch.cuda.empty_cache()
 
 # Use smaller model
-model = MusicGen.get_pretrained('facebook/musicgen-small')
+model = MusicGen.get_pretrained("facebook/musicgen-small")
 
 # Reduce duration
 model.set_generation_params(duration=10)  # Instead of 30
@@ -274,7 +275,7 @@ for prompt in prompts:
     torch.cuda.empty_cache()
 
 # Use CPU for very large generations
-model = MusicGen.get_pretrained('facebook/musicgen-small', device="cpu")
+model = MusicGen.get_pretrained("facebook/musicgen-small", device="cpu")
 ```
 
 ### Memory leak during batch processing
@@ -350,7 +351,7 @@ if wav.shape[1] == 2:
     wav_mono = wav.mean(dim=1, keepdim=True)
 
 # Use stereo model for stereo output
-model = MusicGen.get_pretrained('facebook/musicgen-stereo-medium')
+model = MusicGen.get_pretrained("facebook/musicgen-stereo-medium")
 ```
 
 ### Clipping and distortion
@@ -394,11 +395,7 @@ processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
 model = MusicgenForConditionalGeneration.from_pretrained("facebook/musicgen-small")
 
 # Ensure inputs are on same device
-inputs = processor(
-    text=["prompt"],
-    padding=True,
-    return_tensors="pt"
-).to("cuda")
+inputs = processor(text=["prompt"], padding=True, return_tensors="pt").to("cuda")
 
 # Check processor configuration
 print(processor.tokenizer)
@@ -414,10 +411,10 @@ print(processor.feature_extractor)
 # HuggingFace uses different parameter names
 audio_values = model.generate(
     **inputs,
-    do_sample=True,           # Enable sampling
-    guidance_scale=3.0,       # CFG (not cfg_coef)
-    max_new_tokens=256,       # Token limit (not duration)
-    temperature=1.0
+    do_sample=True,  # Enable sampling
+    guidance_scale=3.0,  # CFG (not cfg_coef)
+    max_new_tokens=256,  # Token limit (not duration)
+    temperature=1.0,
 )
 
 # Calculate tokens from duration
@@ -436,7 +433,7 @@ audio_values = model.generate(**inputs, max_new_tokens=max_tokens)
 **Solutions**:
 ```python
 # Use smaller model
-model = MusicGen.get_pretrained('facebook/musicgen-small')
+model = MusicGen.get_pretrained("facebook/musicgen-small")
 
 # Reduce duration
 model.set_generation_params(duration=10)
@@ -468,7 +465,7 @@ print(f"CUDA available: {torch.cuda.is_available()}")
 print(f"CUDA device: {torch.cuda.get_device_name(0)}")
 
 # Explicitly move to GPU
-model = MusicGen.get_pretrained('facebook/musicgen-small')
+model = MusicGen.get_pretrained("facebook/musicgen-small")
 model.to("cuda")
 
 # Verify model device

@@ -29,11 +29,13 @@ from unittest.mock import MagicMock
 # parse_available_output_tokens_from_error — unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestParseAvailableOutputTokens:
     """Pure-function tests; no I/O required."""
 
     def _parse(self, msg):
         from agent.model_metadata import parse_available_output_tokens_from_error
+
         return parse_available_output_tokens_from_error(msg)
 
     # ── Should detect and extract ────────────────────────────────────────
@@ -63,9 +65,11 @@ class TestParseAvailableOutputTokens:
         msg = "invalid_api_key: the API key is invalid"
         assert self._parse(msg) is None
 
+
 # ---------------------------------------------------------------------------
 # Context-overflow recovery — only trust provider-reported limits
 # ---------------------------------------------------------------------------
+
 
 class TestContextOverflowLimitSelection:
     """Context-overflow recovery must not invent a lower window size.
@@ -103,9 +107,11 @@ class TestContextOverflowLimitSelection:
 
         assert get_context_length_from_provider_error(error_msg, 272_000) is None
 
+
 # ---------------------------------------------------------------------------
 # build_anthropic_kwargs — output cap clamping
 # ---------------------------------------------------------------------------
+
 
 class TestBuildAnthropicKwargsClamping:
     """The context_length clamp only fires when output ceiling > window.
@@ -114,6 +120,7 @@ class TestBuildAnthropicKwargsClamping:
 
     def _build(self, model, max_tokens=None, context_length=None):
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         return build_anthropic_kwargs(
             model=model,
             messages=[{"role": "user", "content": "hi"}],
@@ -126,17 +133,26 @@ class TestBuildAnthropicKwargsClamping:
     def test_no_clamping_when_output_ceiling_fits_in_window(self):
         """Opus 4.6 native output (128K) < context window (200K) — no clamping."""
         from agent.anthropic_adapter import _get_anthropic_max_output
+
         kwargs = self._build("claude-opus-4-6", context_length=200_000)
-        assert kwargs["max_tokens"] == _get_anthropic_max_output("claude-opus-4-6") < 200_000
+        assert (
+            kwargs["max_tokens"]
+            == _get_anthropic_max_output("claude-opus-4-6")
+            < 200_000
+        )
 
     def test_explicit_max_tokens_clamped_when_exceeds_window(self):
         """Explicit max_tokens larger than a small window is clamped."""
-        kwargs = self._build("claude-opus-4-6", max_tokens=32_768, context_length=16_000)
+        kwargs = self._build(
+            "claude-opus-4-6", max_tokens=32_768, context_length=16_000
+        )
         assert kwargs["max_tokens"] == 15_999
+
 
 # ---------------------------------------------------------------------------
 # Ephemeral max_tokens mechanism — _build_api_kwargs
 # ---------------------------------------------------------------------------
+
 
 class TestEphemeralMaxOutputTokens:
     """_build_api_kwargs consumes _ephemeral_max_output_tokens exactly once
@@ -147,6 +163,7 @@ class TestEphemeralMaxOutputTokens:
         """Return a minimal AIAgent with api_mode='anthropic_messages' and
         a stubbed context_compressor, bypassing full __init__ cost."""
         from run_agent import AIAgent
+
         agent = object.__new__(AIAgent)
         # Minimal attributes used by _build_api_kwargs
         agent.api_mode = "anthropic_messages"
@@ -185,6 +202,7 @@ class TestEphemeralMaxOutputTokens:
         agent._build_api_kwargs([{"role": "user", "content": "hi"}])
         kwargs = agent._build_api_kwargs([{"role": "user", "content": "hi"}])
         assert kwargs["max_tokens"] != 5_000
+
 
 # ---------------------------------------------------------------------------
 # Integration: error handler does NOT halve context_length for output-cap errors

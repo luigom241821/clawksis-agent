@@ -12,7 +12,8 @@ from agent.model_metadata import MINIMUM_CONTEXT_LENGTH
 @pytest.fixture
 def _isolate(tmp_path, monkeypatch):
     """Isolate CLAWK_HOME so tests don't touch real config."""
-    home = tmp_path / ".clawk"
+
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
@@ -20,12 +21,19 @@ def _isolate(tmp_path, monkeypatch):
 @pytest.fixture
 def cli_obj(_isolate):
     """Create a minimal ClawksisCLI instance for banner testing."""
-    with patch("cli.load_cli_config", return_value={
-        "display": {"tool_progress": "new"},
-        "terminal": {},
-    }), patch("cli.get_tool_definitions", return_value=[]), \
-         patch("clawk_cli.banner.build_welcome_banner"):
+    with (
+        patch(
+            "cli.load_cli_config",
+            return_value={
+                "display": {"tool_progress": "new"},
+                "terminal": {},
+            },
+        ),
+        patch("cli.get_tool_definitions", return_value=[]),
+        patch("clawk_cli.banner.build_welcome_banner"),
+    ):
         from cli import ClawksisCLI
+
         obj = ClawksisCLI.__new__(ClawksisCLI)
         obj.model = "test-model"
         obj.enabled_toolsets = ["clawk-core"]
@@ -49,8 +57,10 @@ class TestLowContextWarning:
     def test_warning_for_below_minimum_context(self, cli_obj):
         """Warning shown when context is below Clawksis' minimum."""
         cli_obj.agent.context_compressor.context_length = 32768
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("clawk_cli.banner.build_welcome_banner"):
+        with (
+            patch("cli.get_tool_definitions", return_value=[]),
+            patch("clawk_cli.banner.build_welcome_banner"),
+        ):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -59,26 +69,27 @@ class TestLowContextWarning:
         minimum_calls = [c for c in calls if f"{MINIMUM_CONTEXT_LENGTH:,}" in c]
         assert minimum_calls
 
-
-
     def test_no_warning_at_boundary(self, cli_obj):
         """No warning at exactly Clawksis' minimum context length."""
         cli_obj.agent.context_compressor.context_length = MINIMUM_CONTEXT_LENGTH
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("clawk_cli.banner.build_welcome_banner"):
+        with (
+            patch("cli.get_tool_definitions", return_value=[]),
+            patch("clawk_cli.banner.build_welcome_banner"),
+        ):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
         warning_calls = [c for c in calls if "too low" in c]
         assert len(warning_calls) == 0
 
-
     def test_ollama_specific_hint(self, cli_obj):
         """Ollama-specific fix shown when port 11434 detected."""
         cli_obj.agent.context_compressor.context_length = 4096
         cli_obj.base_url = "http://localhost:11434/v1"
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("clawk_cli.banner.build_welcome_banner"):
+        with (
+            patch("cli.get_tool_definitions", return_value=[]),
+            patch("clawk_cli.banner.build_welcome_banner"),
+        ):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -86,26 +97,28 @@ class TestLowContextWarning:
         assert len(ollama_hints) == 1
         assert str(MINIMUM_CONTEXT_LENGTH) in ollama_hints[0]
 
-
     def test_generic_hint_for_other_servers(self, cli_obj):
         """Generic fix shown for unknown servers."""
         cli_obj.agent.context_compressor.context_length = 4096
         cli_obj.base_url = "http://localhost:8080/v1"
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("clawk_cli.banner.build_welcome_banner"):
+        with (
+            patch("cli.get_tool_definitions", return_value=[]),
+            patch("clawk_cli.banner.build_welcome_banner"),
+        ):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
         generic_hints = [c for c in calls if "config.yaml" in c]
         assert len(generic_hints) == 1
 
-
     def test_compact_banner_does_not_crash_on_narrow_terminal(self, cli_obj):
         """Compact mode should still have ctx_len defined for warning logic."""
         cli_obj.agent.context_compressor.context_length = 4096
 
-        with patch("shutil.get_terminal_size", return_value=os.terminal_size((70, 40))), \
-             patch("cli._build_compact_banner", return_value="compact banner"):
+        with (
+            patch("shutil.get_terminal_size", return_value=os.terminal_size((70, 40))),
+            patch("cli._build_compact_banner", return_value="compact banner"),
+        ):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]

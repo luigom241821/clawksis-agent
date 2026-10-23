@@ -93,7 +93,7 @@ input_label = np.array([1])  # 1 = foreground, 0 = background
 masks, scores, logits = predictor.predict(
     point_coords=input_point,
     point_labels=input_label,
-    multimask_output=True  # Returns 3 mask options
+    multimask_output=True,  # Returns 3 mask options
 )
 
 # Select best mask
@@ -127,7 +127,7 @@ with torch.no_grad():
 masks = processor.image_processor.post_process_masks(
     outputs.pred_masks.cpu(),
     inputs["original_sizes"].cpu(),
-    inputs["reshaped_input_sizes"].cpu()
+    inputs["reshaped_input_sizes"].cpu(),
 )
 ```
 
@@ -175,9 +175,7 @@ input_point = np.array([[500, 375]])
 input_label = np.array([1])
 
 masks, scores, logits = predictor.predict(
-    point_coords=input_point,
-    point_labels=input_label,
-    multimask_output=True
+    point_coords=input_point, point_labels=input_label, multimask_output=True
 )
 
 # Multiple points (foreground + background)
@@ -187,7 +185,7 @@ input_labels = np.array([1, 1, 0])  # 2 foreground, 1 background
 masks, scores, logits = predictor.predict(
     point_coords=input_points,
     point_labels=input_labels,
-    multimask_output=False  # Single mask when prompts are clear
+    multimask_output=False,  # Single mask when prompts are clear
 )
 ```
 
@@ -197,10 +195,8 @@ masks, scores, logits = predictor.predict(
 # Bounding box [x1, y1, x2, y2]
 input_box = np.array([425, 600, 700, 875])
 
-masks, scores, logits = predictor.predict(
-    box=input_box,
-    multimask_output=False
-)
+
+masks, scores, logits = predictor.predict(box=input_box, multimask_output=False)
 ```
 
 ### Combined prompts
@@ -211,7 +207,7 @@ masks, scores, logits = predictor.predict(
     point_coords=np.array([[500, 375]]),
     point_labels=np.array([1]),
     box=np.array([400, 300, 700, 600]),
-    multimask_output=False
+    multimask_output=False,
 )
 ```
 
@@ -222,7 +218,7 @@ masks, scores, logits = predictor.predict(
 masks, scores, logits = predictor.predict(
     point_coords=np.array([[500, 375]]),
     point_labels=np.array([1]),
-    multimask_output=True
+    multimask_output=True,
 )
 
 # Refine with additional point using previous mask
@@ -230,7 +226,7 @@ masks, scores, logits = predictor.predict(
     point_coords=np.array([[500, 375], [550, 400]]),
     point_labels=np.array([1, 0]),  # Add background point
     mask_input=logits[np.argmax(scores)][None, :, :],  # Use best mask
-    multimask_output=False
+    multimask_output=False,
 )
 ```
 
@@ -261,12 +257,12 @@ masks = mask_generator.generate(image)
 ```python
 mask_generator = SamAutomaticMaskGenerator(
     model=sam,
-    points_per_side=32,          # Grid density (more = more masks)
-    pred_iou_thresh=0.88,        # Quality threshold
+    points_per_side=32,  # Grid density (more = more masks)
+    pred_iou_thresh=0.88,  # Quality threshold
     stability_score_thresh=0.95,  # Stability threshold
-    crop_n_layers=1,             # Multi-scale crops
+    crop_n_layers=1,  # Multi-scale crops
     crop_n_points_downscale_factor=2,
-    min_mask_region_area=100,    # Remove tiny masks
+    min_mask_region_area=100,  # Remove tiny masks
 )
 
 masks = mask_generator.generate(image)
@@ -276,13 +272,16 @@ masks = mask_generator.generate(image)
 
 ```python
 # Sort by area (largest first)
-masks = sorted(masks, key=lambda x: x['area'], reverse=True)
+
+masks = sorted(masks, key=lambda x: x["area"], reverse=True)
 
 # Filter by predicted IoU
-high_quality = [m for m in masks if m['predicted_iou'] > 0.9]
+
+high_quality = [m for m in masks if m["predicted_iou"] > 0.9]
 
 # Filter by stability score
-stable_masks = [m for m in masks if m['stability_score'] > 0.95]
+
+stable_masks = [m for m in masks if m["stability_score"] > 0.95]
 ```
 
 ## Batched inference
@@ -299,7 +298,7 @@ for image in images:
     masks, _, _ = predictor.predict(
         point_coords=np.array([[500, 375]]),
         point_labels=np.array([1]),
-        multimask_output=True
+        multimask_output=True,
     )
     all_masks.append(masks)
 ```
@@ -311,18 +310,13 @@ for image in images:
 predictor.set_image(image)
 
 # Batch of point prompts
-points = [
-    np.array([[100, 100]]),
-    np.array([[200, 200]]),
-    np.array([[300, 300]])
-]
+
+points = [np.array([[100, 100]]), np.array([[200, 200]]), np.array([[300, 300]])]
 
 all_masks = []
 for point in points:
     masks, scores, _ = predictor.predict(
-        point_coords=point,
-        point_labels=np.array([1]),
-        multimask_output=True
+        point_coords=point, point_labels=np.array([1]), multimask_output=True
     )
     all_masks.append(masks[np.argmax(scores)])
 ```
@@ -356,8 +350,8 @@ masks = ort_session.run(
         "point_labels": point_labels,
         "mask_input": np.zeros((1, 1, 256, 256), dtype=np.float32),
         "has_mask_input": np.array([0], dtype=np.float32),
-        "orig_im_size": np.array([h, w], dtype=np.float32)
-    }
+        "orig_im_size": np.array([h, w], dtype=np.float32),
+    },
 )
 ```
 
@@ -378,7 +372,7 @@ def on_click(event, x, y, flags, param):
         masks, scores, _ = predictor.predict(
             point_coords=np.array([[x, y]]),
             point_labels=np.array([1]),
-            multimask_output=True
+            multimask_output=True,
         )
         # Display best mask
         display_mask(masks[np.argmax(scores)])
@@ -394,7 +388,7 @@ def extract_object(image, point):
     masks, scores, _ = predictor.predict(
         point_coords=np.array([point]),
         point_labels=np.array([1]),
-        multimask_output=True
+        multimask_output=True,
     )
 
     best_mask = masks[np.argmax(scores)]
@@ -419,7 +413,7 @@ predictor.set_image(rgb_image)
 # Segment region of interest
 masks, scores, _ = predictor.predict(
     box=np.array([x1, y1, x2, y2]),  # ROI bounding box
-    multimask_output=True
+    multimask_output=True,
 )
 ```
 
@@ -431,12 +425,12 @@ masks, scores, _ = predictor.predict(
 # SamAutomaticMaskGenerator output
 {
     "segmentation": np.ndarray,  # H×W binary mask
-    "bbox": [x, y, w, h],        # Bounding box
-    "area": int,                 # Pixel count
-    "predicted_iou": float,      # 0-1 quality score
-    "stability_score": float,    # 0-1 robustness score
-    "crop_box": [x, y, w, h],    # Generation crop region
-    "point_coords": [[x, y]],    # Input point
+    "bbox": [x, y, w, h],  # Bounding box
+    "area": int,  # Pixel count
+    "predicted_iou": float,  # 0-1 quality score
+    "stability_score": float,  # 0-1 robustness score
+    "crop_box": [x, y, w, h],  # Generation crop region
+    "point_coords": [[x, y]],  # Input point
 }
 ```
 

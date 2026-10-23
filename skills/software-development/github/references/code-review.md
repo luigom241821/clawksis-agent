@@ -15,8 +15,10 @@ if command -v gh &>/dev/null && gh auth status &>/dev/null; then
 else
   AUTH="git"
   if [ -z "$GITHUB_TOKEN" ]; then
-    if _clawk_env="${CLAWK_HOME:-$HOME/.clawk}/.env"; [ -f "$_clawk_env" ] && grep -q "^GITHUB_TOKEN=" "$_clawk_env"; then
-      GITHUB_TOKEN=$(grep "^GITHUB_TOKEN=" "$_clawk_env" | head -1 | cut -d= -f2 | tr -d '\n\r')
+
+    if [ -f ~/.clawksis/.env ] && grep -q "^GITHUB_TOKEN=" ~/.clawksis/.env; then
+
+      GITHUB_TOKEN=$(grep "^GITHUB_TOKEN=" ~/.clawksis/.env | head -1 | cut -d= -f2 | tr -d '\n\r')
     elif grep -q "github.com" ~/.git-credentials 2>/dev/null; then
       GITHUB_TOKEN=$(uv run python "${CLAWK_HOME:-$HOME/.clawk}/skills/github/github-auth/scripts/git-credential-token.py")
     fi
@@ -322,7 +324,8 @@ When the user asks you to "review PR #N", "look at this PR", or gives you a PR U
 ### Step 1: Set up environment
 
 ```bash
-source "${CLAWK_HOME:-$HOME/.clawk}/skills/github/github-auth/scripts/gh-env.sh"
+
+source "${CLAWK_HOME:-$HOME/.clawksis}/skills/github/github-auth/scripts/gh-env.sh"
 # Or run the inline setup block from the top of this skill
 ```
 

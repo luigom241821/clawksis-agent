@@ -25,6 +25,7 @@ from our own Codex call paths, so the specific iteration crash inside
 test class additionally pins the SDK's ``_make_tools(None)`` contract so
 we notice if upstream ever changes it.
 """
+
 from __future__ import annotations
 
 import sys
@@ -43,6 +44,7 @@ sys.modules.setdefault("fal_client", types.SimpleNamespace())
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def transport():
     """Fresh ``ResponsesApiTransport`` per test (it is stateless but
@@ -50,6 +52,7 @@ def transport():
     from agent.transports.codex import ResponsesApiTransport
 
     return ResponsesApiTransport()
+
 
 @pytest.fixture
 def codex_messages() -> list[dict[str, Any]]:
@@ -60,6 +63,7 @@ def codex_messages() -> list[dict[str, Any]]:
         {"role": "user", "content": "Hey! What can I help you with?"},
     ]
 
+
 def _build_kwargs_no_tools(transport, messages) -> dict[str, Any]:
     """Exercise the real ``build_kwargs`` for the codex backend with no tools."""
     return transport.build_kwargs(
@@ -69,9 +73,11 @@ def _build_kwargs_no_tools(transport, messages) -> dict[str, Any]:
         is_codex_backend=True,
     )
 
+
 # ---------------------------------------------------------------------------
 # build_kwargs: the "tools=None" key must never appear
 # ---------------------------------------------------------------------------
+
 
 def test_build_kwargs_omits_tools_key_when_no_tools(transport, codex_messages):
     """``build_kwargs`` must not place ``tools=None`` in the outgoing dict.
@@ -87,7 +93,10 @@ def test_build_kwargs_omits_tools_key_when_no_tools(transport, codex_messages):
         f"got kwargs={sorted(kwargs)}"
     )
 
-def test_build_kwargs_keeps_required_codex_fields_without_tools(transport, codex_messages):
+
+def test_build_kwargs_keeps_required_codex_fields_without_tools(
+    transport, codex_messages
+):
     """The toolless build must still emit the non-negotiable Codex fields
     (model / instructions / input / store) — otherwise we'd just be moving
     the bug from the SDK to preflight."""
@@ -98,6 +107,7 @@ def test_build_kwargs_keeps_required_codex_fields_without_tools(transport, codex
     assert kwargs["store"] is False
     assert isinstance(kwargs["input"], list)
     assert kwargs["input"] and kwargs["input"][0]["role"] == "user"
+
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------

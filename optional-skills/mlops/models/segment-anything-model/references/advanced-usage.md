@@ -21,12 +21,7 @@ predictor = build_sam2_video_predictor("sam2_hiera_l.yaml", "sam2_hiera_large.pt
 predictor.init_state(video_path="video.mp4")
 
 # Add prompt on first frame
-predictor.add_new_points(
-    frame_idx=0,
-    obj_id=1,
-    points=[[100, 200]],
-    labels=[1]
-)
+predictor.add_new_points(frame_idx=0, obj_id=1, points=[[100, 200]], labels=[1])
 
 # Propagate through video
 for frame_idx, masks in predictor.propagate_in_video():
@@ -61,7 +56,9 @@ from segment_anything import sam_model_registry, SamPredictor
 import cv2
 
 # Load Grounding DINO
-grounding_model = load_model("groundingdino_swint_ogc.pth", "GroundingDINO_SwinT_OGC.py")
+grounding_model = load_model(
+    "groundingdino_swint_ogc.pth", "GroundingDINO_SwinT_OGC.py"
+)
 
 # Load SAM
 sam = sam_model_registry["vit_h"](checkpoint="sam_vit_h_4b8939.pth")
@@ -75,7 +72,7 @@ def text_to_mask(image, text_prompt, box_threshold=0.3, text_threshold=0.25):
         image=image,
         caption=text_prompt,
         box_threshold=box_threshold,
-        text_threshold=text_threshold
+        text_threshold=text_threshold,
     )
 
     # Generate masks with SAM
@@ -87,10 +84,7 @@ def text_to_mask(image, text_prompt, box_threshold=0.3, text_threshold=0.25):
         h, w = image.shape[:2]
         box_pixels = box * np.array([w, h, w, h])
 
-        mask, score, _ = predictor.predict(
-            box=box_pixels,
-            multimask_output=False
-        )
+        mask, score, _ = predictor.predict(box=box_pixels, multimask_output=False)
         masks.append(mask[0])
 
     return masks, boxes, phrases
@@ -128,18 +122,17 @@ class BatchedSAM:
                 masks, scores, _ = self.predictor.predict(
                     point_coords=prompt["point"],
                     point_labels=prompt["label"],
-                    multimask_output=True
+                    multimask_output=True,
                 )
             elif "box" in prompt:
                 masks, scores, _ = self.predictor.predict(
-                    box=prompt["box"],
-                    multimask_output=False
+                    box=prompt["box"], multimask_output=False
                 )
 
             results.append({
                 "masks": masks,
                 "scores": scores,
-                "best_mask": masks[np.argmax(scores)]
+                "best_mask": masks[np.argmax(scores)],
             })
 
         return results
@@ -204,8 +197,7 @@ class PointPrompt(BaseModel):
 
 @app.post("/segment/point")
 async def segment_with_point(
-    file: UploadFile = File(...),
-    points: list[PointPrompt] = []
+    file: UploadFile = File(...), points: list[PointPrompt] = []
 ):
     # Read image
     contents = await file.read()
@@ -222,9 +214,7 @@ async def segment_with_point(
 
     # Generate masks
     masks, scores, _ = predictor.predict(
-        point_coords=point_coords,
-        point_labels=point_labels,
-        multimask_output=True
+        point_coords=point_coords, point_labels=point_labels, multimask_output=True
     )
 
     best_idx = np.argmax(scores)
@@ -232,7 +222,7 @@ async def segment_with_point(
     return {
         "mask": masks[best_idx].tolist(),
         "score": float(scores[best_idx]),
-        "all_scores": scores.tolist()
+        "all_scores": scores.tolist(),
     }
 
 @app.post("/segment/auto")
@@ -252,10 +242,10 @@ async def segment_automatic(file: UploadFile = File(...)):
                 "bbox": m["bbox"],
                 "area": m["area"],
                 "predicted_iou": m["predicted_iou"],
-                "stability_score": m["stability_score"]
+                "stability_score": m["stability_score"],
             }
             for m in masks
-        ]
+        ],
     }
 ```
 
@@ -277,9 +267,7 @@ def segment_image(image, evt: gr.SelectData):
     label = np.array([1])
 
     masks, scores, _ = predictor.predict(
-        point_coords=point,
-        point_labels=label,
-        multimask_output=True
+        point_coords=point, point_labels=label, multimask_output=True
     )
 
     best_mask = masks[np.argmax(scores)]
@@ -333,7 +321,7 @@ for batch in dataloader:
     outputs = model(
         pixel_values=batch["pixel_values"],
         input_points=batch["input_points"],
-        input_labels=batch["input_labels"]
+        input_labels=batch["input_labels"],
     )
 
     # Custom loss (e.g., IoU loss with ground truth)
@@ -367,8 +355,7 @@ predictor.set_image(rgb_image)
 
 # Segment with box prompt (common for medical imaging)
 masks, scores, _ = predictor.predict(
-    box=np.array([x1, y1, x2, y2]),
-    multimask_output=False
+    box=np.array([x1, y1, x2, y2]), multimask_output=False
 )
 ```
 
@@ -385,7 +372,9 @@ def refine_mask(mask, kernel_size=5, iterations=2):
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
 
     # Close small holes
-    closed = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel, iterations=iterations)
+    closed = cv2.morphologyEx(
+        mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel, iterations=iterations
+    )
 
     # Remove small noise
     opened = cv2.morphologyEx(closed, cv2.MORPH_OPEN, kernel, iterations=iterations)
@@ -419,9 +408,7 @@ import cv2
 def mask_to_polygons(mask, epsilon_factor=0.01):
     """Convert binary mask to polygon coordinates."""
     contours, _ = cv2.findContours(
-        mask.astype(np.uint8),
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
+        mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
     polygons = []
@@ -462,7 +449,7 @@ def multiscale_segment(image, predictor, point, scales=[0.5, 1.0, 2.0]):
         masks, scores, _ = predictor.predict(
             point_coords=scaled_point.reshape(1, 2),
             point_labels=np.array([1]),
-            multimask_output=True
+            multimask_output=True,
         )
 
         # Resize mask back
@@ -491,10 +478,12 @@ def export_to_tensorrt(onnx_path, engine_path, fp16=True):
     """Convert ONNX model to TensorRT engine."""
     logger = trt.Logger(trt.Logger.WARNING)
     builder = trt.Builder(logger)
-    network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+    network = builder.create_network(
+        1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    )
     parser = trt.OnnxParser(network, logger)
 
-    with open(onnx_path, 'rb') as f:
+    with open(onnx_path, "rb") as f:
         if not parser.parse(f.read()):
             for error in range(parser.num_errors):
                 print(parser.get_error(error))
@@ -508,7 +497,7 @@ def export_to_tensorrt(onnx_path, engine_path, fp16=True):
 
     engine = builder.build_engine(network, config)
 
-    with open(engine_path, 'wb') as f:
+    with open(engine_path, "wb") as f:
         f.write(engine.serialize())
 
     return engine
@@ -535,9 +524,7 @@ class MemoryEfficientSAM:
     def segment(self, image, points, labels):
         self.predictor.set_image(image)
         masks, scores, _ = self.predictor.predict(
-            point_coords=points,
-            point_labels=labels,
-            multimask_output=True
+            point_coords=points, point_labels=labels, multimask_output=True
         )
         return masks, scores
 
@@ -577,7 +564,7 @@ def generate_dataset(images_dir, output_dir, mask_generator):
                 "area": mask_data["area"],
                 "segmentation": mask_to_rle(mask_data["segmentation"]),
                 "predicted_iou": mask_data["predicted_iou"],
-                "stability_score": mask_data["stability_score"]
+                "stability_score": mask_data["stability_score"],
             }
             annotations.append(annotation)
 

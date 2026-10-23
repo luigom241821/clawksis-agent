@@ -27,6 +27,7 @@ def _reset_clawk_time_cache():
 # clawk_time.now() — core helper
 # =========================================================================
 
+
 class TestClawksisTimeNow:
     """Test the timezone-aware now() helper."""
 
@@ -55,23 +56,37 @@ class TestSafeStrftime:
     def test_valid_locale_text_is_byte_identical_to_strftime(self):
         """The system prompt embeds this output, so healthy locales must not change a byte."""
         from zoneinfo import ZoneInfo
+
         fmt = "%a %A %b %B %d %Y %H:%M:%S %Z %z %%Z"
         for value in (
             datetime(2026, 7, 14, 13, 5),
             datetime(2026, 7, 14, 13, 5, tzinfo=ZoneInfo("Europe/Paris")),
-            datetime(2026, 7, 14, 13, 5, tzinfo=timezone(timedelta(hours=-3), "Hora estándar de Argentina")),
+            datetime(
+                2026,
+                7,
+                14,
+                13,
+                5,
+                tzinfo=timezone(timedelta(hours=-3), "Hora estándar de Argentina"),
+            ),
         ):
             assert clawk_time.safe_strftime(value, fmt) == value.strftime(fmt)
 
     def test_surrogate_zone_name_renders_json_safe(self):
         import json
-        value = datetime(2026, 7, 14, 13, 5, tzinfo=timezone(timedelta(hours=2), _ESCAPED_ZONE))
+
+        value = datetime(
+            2026, 7, 14, 13, 5, tzinfo=timezone(timedelta(hours=2), _ESCAPED_ZONE)
+        )
         rendered = clawk_time.safe_strftime(value, "%a %Y-%m-%d %H:%M %Z %z %%Z")
         json.dumps(rendered, ensure_ascii=False).encode("utf-8")
         assert rendered.startswith("Tue 2026-07-14 13:05 Paris, Madrid (heure d'")
         assert rendered.endswith(") +0200 %Z")
         # The escaped bytes decode back through the Windows ANSI code page.
-        assert clawk_time._repair_surrogates(_ESCAPED_ZONE, "cp1252") == "Paris, Madrid (heure d'été)"
+        assert (
+            clawk_time._repair_surrogates(_ESCAPED_ZONE, "cp1252")
+            == "Paris, Madrid (heure d'été)"
+        )
 
 
 class TestGetTimezone:
@@ -84,14 +99,15 @@ class TestGetTimezone:
         _reset_clawk_time_cache()
         os.environ.pop("CLAWK_TIMEZONE", None)
 
-
     def test_cache_isolated_by_active_profile_config(self, tmp_path, monkeypatch):
         """Switching CLAWK_HOME must not reuse another profile's timezone."""
         first_home = tmp_path / "first"
         second_home = tmp_path / "second"
         first_home.mkdir()
         second_home.mkdir()
-        (first_home / "config.yaml").write_text("timezone: Asia/Tokyo\n", encoding="utf-8")
+        (first_home / "config.yaml").write_text(
+            "timezone: Asia/Tokyo\n", encoding="utf-8"
+        )
         (second_home / "config.yaml").write_text(
             "timezone: America/New_York\n", encoding="utf-8"
         )
@@ -109,7 +125,9 @@ class TestGetTimezone:
         monkeypatch.setenv("CLAWK_HOME", str(first_home))
         assert str(clawk_time.get_timezone()) == "Asia/Tokyo"
 
-    def test_multiplex_prefers_routed_profile_config_over_env(self, tmp_path, monkeypatch):
+    def test_multiplex_prefers_routed_profile_config_over_env(
+        self, tmp_path, monkeypatch
+    ):
         """Under the multiplexed gateway CLAWK_TIMEZONE holds only the DEFAULT profile's value
         (bridged at startup), so a routed profile must resolve from its own config.yaml."""
         from agent.secret_scope import set_multiplex_active
@@ -118,8 +136,12 @@ class TestGetTimezone:
         default_home, routed_home = tmp_path / "default", tmp_path / "routed"
         default_home.mkdir()
         routed_home.mkdir()
-        (default_home / "config.yaml").write_text("timezone: America/New_York\n", encoding="utf-8")
-        (routed_home / "config.yaml").write_text("timezone: Asia/Tokyo\n", encoding="utf-8")
+        (default_home / "config.yaml").write_text(
+            "timezone: America/New_York\n", encoding="utf-8"
+        )
+        (routed_home / "config.yaml").write_text(
+            "timezone: Asia/Tokyo\n", encoding="utf-8"
+        )
         monkeypatch.setenv("CLAWK_HOME", str(default_home))
         monkeypatch.setenv("CLAWK_TIMEZONE", "America/New_York")
 
@@ -128,7 +150,9 @@ class TestGetTimezone:
 
         set_multiplex_active(True)
         try:
-            assert clawk_time.get_timezone_name() == "America/New_York"  # default profile turn
+            assert (
+                clawk_time.get_timezone_name() == "America/New_York"
+            )  # default profile turn
             token = set_clawk_home_override(str(routed_home))
             try:
                 assert clawk_time.get_timezone_name() == "Asia/Tokyo"
@@ -161,9 +185,7 @@ class TestGetTimezone:
         for key, zone in zones.items():
             home = tmp_path / key
             home.mkdir()
-            (home / "config.yaml").write_text(
-                f"timezone: {zone}\n", encoding="utf-8"
-            )
+            (home / "config.yaml").write_text(f"timezone: {zone}\n", encoding="utf-8")
             homes[key] = home
         monkeypatch.delenv("CLAWK_TIMEZONE", raising=False)
 
@@ -182,9 +204,7 @@ class TestGetTimezone:
                 finally:
                     reset_clawk_home_override(token)
 
-        threads = [
-            threading.Thread(target=worker, args=(key,)) for key in zones
-        ]
+        threads = [threading.Thread(target=worker, args=(key,)) for key in zones]
         for t in threads:
             t.start()
         for t in threads:
@@ -196,6 +216,7 @@ class TestGetTimezone:
 
 # execute_code child env — TZ injection
 # =========================================================================
+
 
 @pytest.mark.platforms("posix")  # UDS not available on Windows
 class TestCodeExecutionTZ:
@@ -209,6 +230,7 @@ class TestCodeExecutionTZ:
         monkeypatch.setenv("TERMINAL_ENV", "local")
         try:
             from tools.code_execution_tool import execute_code
+
             self._execute_code = execute_code
         except ImportError:
             pytest.skip("tools.code_execution_tool not importable (missing deps)")
@@ -218,6 +240,7 @@ class TestCodeExecutionTZ:
 
     def _mock_handle(self, function_name, function_args, task_id=None, user_task=None):
         import json as _json
+
         return _json.dumps({"error": f"unexpected tool call: {function_name}"})
 
     def test_tz_injected_when_configured(self):
@@ -228,22 +251,25 @@ class TestCodeExecutionTZ:
         (each execute_code spawns a real Python subprocess ~3s).
         """
         import json as _json
+
         os.environ["CLAWK_TIMEZONE"] = "Asia/Kolkata"
 
         # One subprocess, three things checked:
         #   1) TZ is injected as "Asia/Kolkata"
         #   2) CLAWK_TIMEZONE itself does NOT leak into the child env
         probe = (
-            'import os; '
+            "import os; "
             'print("TZ=" + os.environ.get("TZ", "NOT_SET")); '
             'print("CLAWK_TIMEZONE=" + os.environ.get("CLAWK_TIMEZONE", "NOT_SET"))'
         )
         with patch("model_tools.handle_function_call", side_effect=self._mock_handle):
-            result = _json.loads(self._execute_code(
-                code=probe,
-                task_id="tz-combined-test",
-                enabled_tools=[],
-            ))
+            result = _json.loads(
+                self._execute_code(
+                    code=probe,
+                    task_id="tz-combined-test",
+                    enabled_tools=[],
+                )
+            )
         assert result["status"] == "success"
         assert "TZ=Asia/Kolkata" in result["output"]
         assert "CLAWK_TIMEZONE=NOT_SET" in result["output"], (
@@ -251,10 +277,10 @@ class TestCodeExecutionTZ:
         )
 
 
-
 # =========================================================================
 # Cron timezone-aware scheduling
 # =========================================================================
+
 
 class TestCronTimezone:
     """Verify cron paths use timezone-aware now()."""
@@ -270,12 +296,11 @@ class TestCronTimezone:
         """parse_schedule('in 30m') should produce a tz-aware run_at."""
         os.environ["CLAWK_TIMEZONE"] = "Asia/Kolkata"
         from cron.jobs import parse_schedule
+
         result = parse_schedule("in 30m")
         run_at = datetime.fromisoformat(result["run_at"])
         # The stored timestamp should be tz-aware
         assert run_at.tzinfo is not None
-
-
 
     def test_ensure_aware_naive_preserves_absolute_time(self):
         """_ensure_aware must preserve the absolute instant for naive datetimes.
@@ -306,12 +331,11 @@ class TestCronTimezone:
             f"Absolute time shifted: expected {expected_utc}, got {actual_utc}"
         )
 
-
-
     def test_get_due_jobs_naive_cross_timezone(self, tmp_path, monkeypatch):
         """Naive past timestamps must be detected as due even when Clawksis tz
         is behind system local tz — the scenario that triggered #806."""
         import cron.jobs as jobs_module
+
         monkeypatch.setattr(jobs_module, "CRON_DIR", tmp_path / "cron")
         monkeypatch.setattr(jobs_module, "JOBS_FILE", tmp_path / "cron" / "jobs.json")
         monkeypatch.setattr(jobs_module, "OUTPUT_DIR", tmp_path / "cron" / "output")
@@ -323,6 +347,7 @@ class TestCronTimezone:
         _reset_clawk_time_cache()
 
         from cron.jobs import create_job, load_jobs, save_jobs, get_due_jobs
+
         create_job(prompt="Cross-tz job", schedule="every 1h")
         jobs = load_jobs()
 
@@ -339,6 +364,7 @@ class TestCronTimezone:
     def test_create_job_stores_tz_aware_timestamps(self, tmp_path, monkeypatch):
         """New jobs store timezone-aware created_at and next_run_at."""
         import cron.jobs as jobs_module
+
         monkeypatch.setattr(jobs_module, "CRON_DIR", tmp_path / "cron")
         monkeypatch.setattr(jobs_module, "JOBS_FILE", tmp_path / "cron" / "jobs.json")
         monkeypatch.setattr(jobs_module, "OUTPUT_DIR", tmp_path / "cron" / "output")
@@ -347,6 +373,7 @@ class TestCronTimezone:
         _reset_clawk_time_cache()
 
         from cron.jobs import create_job
+
         job = create_job(prompt="TZ test", schedule="every 2h")
 
         created = datetime.fromisoformat(job["created_at"])

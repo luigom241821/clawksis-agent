@@ -15,6 +15,7 @@ import pytest
 
 # ── Namespace helpers ─────────────────────────────────────────────────────
 
+
 class TestParseQualifiedName:
     def test_with_colon(self):
         from agent.skill_utils import parse_qualified_name
@@ -29,6 +30,7 @@ class TestParseQualifiedName:
         ns, bare = parse_qualified_name("my-skill")
         assert ns is None
         assert bare == "my-skill"
+
 
 class TestIsValidNamespace:
     def test_valid(self):
@@ -48,7 +50,9 @@ class TestIsValidNamespace:
         assert not is_valid_namespace("bad/name")
         assert not is_valid_namespace("bad name")
 
+
 # ── Plugin skill registry (PluginManager + PluginContext) ─────────────────
+
 
 class TestPluginSkillRegistry:
     @pytest.fixture
@@ -66,7 +70,10 @@ class TestPluginSkillRegistry:
             md.parent.mkdir()
             md.write_text(f"---\nname: {name}\n---\n")
             pm._plugin_skills[f"myplugin:{name}"] = {
-                "path": md, "plugin": "myplugin", "bare_name": name, "description": "",
+                "path": md,
+                "plugin": "myplugin",
+                "bare_name": name,
+                "description": "",
             }
 
         assert pm.list_plugin_skills("myplugin") == ["bar", "baz", "foo"]
@@ -75,13 +82,19 @@ class TestPluginSkillRegistry:
     def test_remove_plugin_skill(self, pm, tmp_path):
         md = tmp_path / "SKILL.md"
         md.write_text("---\nname: x\n---\n")
-        pm._plugin_skills["p:x"] = {"path": md, "plugin": "p", "bare_name": "x", "description": ""}
+        pm._plugin_skills["p:x"] = {
+            "path": md,
+            "plugin": "p",
+            "bare_name": "x",
+            "description": "",
+        }
 
         pm.remove_plugin_skill("p:x")
         assert pm.find_plugin_skill("p:x") is None
 
         # Removing non-existent key is a no-op
         pm.remove_plugin_skill("p:x")
+
 
 class TestPluginContextRegisterSkill:
     @pytest.fixture
@@ -158,7 +171,9 @@ class TestPluginContextRegisterSkill:
 
         assert ctx._manager.find_plugin_skill("testplugin:foo") == second
 
+
 # ── skill_view qualified name dispatch ────────────────────────────────────
+
 
 class TestSkillViewQualifiedName:
     @pytest.fixture(autouse=True)
@@ -173,15 +188,24 @@ class TestSkillViewQualifiedName:
         empty = tmp_path / "empty-skills"
         empty.mkdir()
         monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", empty)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
 
-    def _register_skill(self, tmp_path, plugin="superpowers", name="writing-plans", content=None):
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+
+    def _register_skill(
+        self, tmp_path, plugin="superpowers", name="writing-plans", content=None
+    ):
         skill_dir = tmp_path / "plugins" / plugin / "skills" / name
         skill_dir.mkdir(parents=True, exist_ok=True)
         md = skill_dir / "SKILL.md"
-        md.write_text(content or f"---\nname: {name}\ndescription: {name} desc\n---\n\n{name} body.\n")
+        md.write_text(
+            content
+            or f"---\nname: {name}\ndescription: {name} desc\n---\n\n{name} body.\n"
+        )
         self.pm._plugin_skills[f"{plugin}:{name}"] = {
-            "path": md, "plugin": plugin, "bare_name": name, "description": "",
+            "path": md,
+            "plugin": plugin,
+            "bare_name": name,
+            "description": "",
         }
         return md
 
@@ -204,7 +228,9 @@ class TestSkillViewQualifiedName:
         reference.write_text("API details.")
 
         main = json.loads(skill_view("superpowers:writing-plans"))
-        assert main["linked_files"] == {"references": [os.path.join("references", "api.md")]}
+        assert main["linked_files"] == {
+            "references": [os.path.join("references", "api.md")]
+        }
         result = json.loads(
             skill_view("superpowers:writing-plans", file_path="references/api.md")
         )
@@ -295,7 +321,9 @@ class TestSkillViewQualifiedName:
         def fail_if_loaded(name):
             raise AssertionError(f"unexpected provider load: {name}")
 
-        monkeypatch.setattr("plugins.memory._get_active_memory_provider", lambda: "active")
+        monkeypatch.setattr(
+            "plugins.memory._get_active_memory_provider", lambda: "active"
+        )
         monkeypatch.setattr("plugins.memory.load_memory_provider", fail_if_loaded)
 
         result = json.loads(skill_view("inactive:maintenance"))
@@ -303,7 +331,9 @@ class TestSkillViewQualifiedName:
         assert result["success"] is False
         assert "not found" in result["error"].lower()
 
-    def _make_memory_provider_with_skill(self, tmp_path, name, body="Provider skill body."):
+    def _make_memory_provider_with_skill(
+        self, tmp_path, name, body="Provider skill body."
+    ):
         plugin_dir = tmp_path / ".clawk" / "plugins" / name
         skill_dir = plugin_dir / "skills" / "maintenance"
         skill_dir.mkdir(parents=True)
@@ -385,6 +415,7 @@ class TestSkillViewQualifiedName:
         assert "no longer exists" in result["error"]
         assert self.pm.find_plugin_skill("superpowers:writing-plans") is None
 
+
 class TestSkillViewPluginGuards:
     @pytest.fixture(autouse=True)
     def _isolate(self, tmp_path, monkeypatch):
@@ -398,7 +429,8 @@ class TestSkillViewPluginGuards:
         empty = tmp_path / "empty"
         empty.mkdir()
         monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", empty)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         self._platform = sys.platform
 
     def _reg(self, tmp_path, content, plugin="myplugin", name="foo"):
@@ -407,14 +439,19 @@ class TestSkillViewPluginGuards:
         md = d / "SKILL.md"
         md.write_text(content)
         self.pm._plugin_skills[f"{plugin}:{name}"] = {
-            "path": md, "plugin": plugin, "bare_name": name, "description": "",
+            "path": md,
+            "plugin": plugin,
+            "bare_name": name,
+            "description": "",
         }
 
     def test_disabled_plugin(self, tmp_path, monkeypatch):
         from tools.skills_tool import skill_view
 
         self._reg(tmp_path, "---\nname: foo\n---\nBody.\n")
-        monkeypatch.setattr("clawk_cli.plugins._get_disabled_plugins", lambda: {"myplugin"})
+        monkeypatch.setattr(
+            "clawk_cli.plugins._get_disabled_plugins", lambda: {"myplugin"}
+        )
 
         result = json.loads(skill_view("myplugin:foo"))
         assert result["success"] is False
@@ -442,6 +479,7 @@ class TestSkillViewPluginGuards:
         assert "Ignore previous instructions" in result["content"]
         assert any("injection" in r.message.lower() for r in caplog.records)
 
+
 class TestBundleContextBanner:
     @pytest.fixture(autouse=True)
     def _isolate(self, tmp_path, monkeypatch):
@@ -453,16 +491,22 @@ class TestBundleContextBanner:
         empty = tmp_path / "empty"
         empty.mkdir()
         monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", empty)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
     def _setup_bundle(self, tmp_path, skills=("foo", "bar", "baz")):
         for name in skills:
             d = tmp_path / "plugins" / "myplugin" / "skills" / name
             d.mkdir(parents=True, exist_ok=True)
             md = d / "SKILL.md"
-            md.write_text(f"---\nname: {name}\ndescription: {name} desc\n---\n\n{name} body.\n")
+            md.write_text(
+                f"---\nname: {name}\ndescription: {name} desc\n---\n\n{name} body.\n"
+            )
             self.pm._plugin_skills[f"myplugin:{name}"] = {
-                "path": md, "plugin": "myplugin", "bare_name": name, "description": "",
+                "path": md,
+                "plugin": "myplugin",
+                "bare_name": name,
+                "description": "",
             }
 
     def test_banner_lists_siblings_not_self(self, tmp_path):

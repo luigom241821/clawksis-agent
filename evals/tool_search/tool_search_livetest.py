@@ -37,7 +37,8 @@ FIXTURE_NOTES = Path(tempfile.gettempdir()) / "livetest" / "notes.txt"
 
 # Force-isolate the test environment BEFORE any clawk imports.
 ORIGINAL_HOME = os.environ.get("CLAWK_HOME")
-ORIGINAL_AUTH = Path.home() / ".clawk" / "auth.json"
+
+ORIGINAL_AUTH = Path.home() / ".clawksis" / "auth.json"
 
 _THIS_DIR = Path(__file__).resolve().parent
 _WORKTREE_ROOT = _THIS_DIR.parents[1]
@@ -52,18 +53,29 @@ FAKE_MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "github_create_issue",
         "description": "Open a new issue in a GitHub repository. Use when the user wants to report a bug or request a feature in a repo.",
-        "params": {"repo": ("string", "Repository in owner/name form"),
-                   "title": ("string", "Issue title"),
-                   "body": ("string", "Issue body in Markdown")},
-        "returns": lambda args: {"ok": True, "issue_url": f"https://github.com/{args.get('repo','x/y')}/issues/42"},
+        "params": {
+            "repo": ("string", "Repository in owner/name form"),
+            "title": ("string", "Issue title"),
+            "body": ("string", "Issue body in Markdown"),
+        },
+        "returns": lambda args: {
+            "ok": True,
+            "issue_url": f"https://github.com/{args.get('repo', 'x/y')}/issues/42",
+        },
     },
     {
         "name": "github_search_repos",
         "description": "Search GitHub repositories by free-text query. Returns a ranked list of repo names with star counts.",
-        "params": {"query": ("string", "Search terms"),
-                   "limit": ("integer", "Max results")},
-        "returns": lambda args: {"results": [{"name": "fake/repo-1", "stars": 1200},
-                                             {"name": "fake/repo-2", "stars": 540}]},
+        "params": {
+            "query": ("string", "Search terms"),
+            "limit": ("integer", "Max results"),
+        },
+        "returns": lambda args: {
+            "results": [
+                {"name": "fake/repo-1", "stars": 1200},
+                {"name": "fake/repo-2", "stars": 540},
+            ]
+        },
     },
     {
         "name": "github_close_pr",
@@ -75,15 +87,18 @@ FAKE_MCP_TOOLS: list[dict[str, Any]] = [
         "name": "github_list_pulls",
         "description": "List open pull requests for a repository.",
         "params": {"repo": ("string", "")},
-        "returns": lambda args: {"pulls": [{"number": 31163, "title": "feat(tools): tool search"}]},
+        "returns": lambda args: {
+            "pulls": [{"number": 31163, "title": "feat(tools): tool search"}]
+        },
     },
-
     # Slack cluster
     {
         "name": "slack_send_message",
         "description": "Post a message into a Slack channel as the connected workspace's app.",
-        "params": {"channel": ("string", "Channel name with leading #"),
-                   "text": ("string", "Message body")},
+        "params": {
+            "channel": ("string", "Channel name with leading #"),
+            "text": ("string", "Message body"),
+        },
         "returns": lambda args: {"ok": True, "ts": "1716528000.000100"},
     },
     {
@@ -98,29 +113,35 @@ FAKE_MCP_TOOLS: list[dict[str, Any]] = [
         "params": {"emoji": ("string", ""), "text": ("string", "")},
         "returns": lambda args: {"ok": True},
     },
-
     # Calendar cluster (intentionally vague names to stress retrieval)
     {
         "name": "evt_create",
         "description": "Add an event to the connected calendar. Used for scheduling meetings.",
-        "params": {"title": ("string", ""),
-                   "start": ("string", "ISO 8601 datetime"),
-                   "duration_min": ("integer", "")},
+        "params": {
+            "title": ("string", ""),
+            "start": ("string", "ISO 8601 datetime"),
+            "duration_min": ("integer", ""),
+        },
         "returns": lambda args: {"ok": True, "event_id": "evt_abc"},
     },
     {
         "name": "evt_list",
         "description": "List upcoming calendar events.",
         "params": {"max_results": ("integer", "")},
-        "returns": lambda args: {"events": [{"id": "evt_1", "title": "Standup", "start": "2026-05-25T09:00:00Z"}]},
+        "returns": lambda args: {
+            "events": [
+                {"id": "evt_1", "title": "Standup", "start": "2026-05-25T09:00:00Z"}
+            ]
+        },
     },
-
     # Knowledge / docs (paraphrased name to stress retrieval)
     {
         "name": "docsearch_query",
         "description": "Search the user's internal documentation index for matching pages.",
         "params": {"q": ("string", "Search query"), "limit": ("integer", "")},
-        "returns": lambda args: {"hits": [{"title": "Onboarding", "url": "https://docs/x"}]},
+        "returns": lambda args: {
+            "hits": [{"title": "Onboarding", "url": "https://docs/x"}]
+        },
     },
     {
         "name": "docsearch_fetch",
@@ -128,7 +149,6 @@ FAKE_MCP_TOOLS: list[dict[str, Any]] = [
         "params": {"id": ("string", "")},
         "returns": lambda args: {"content": "# Onboarding\n..."},
     },
-
     # Database
     {
         "name": "db_query",
@@ -140,14 +160,19 @@ FAKE_MCP_TOOLS: list[dict[str, Any]] = [
         "name": "db_describe_table",
         "description": "Show the schema of a database table.",
         "params": {"table": ("string", "")},
-        "returns": lambda args: {"columns": [{"name": "id", "type": "int"}, {"name": "name", "type": "text"}]},
+        "returns": lambda args: {
+            "columns": [{"name": "id", "type": "int"}, {"name": "name", "type": "text"}]
+        },
     },
-
     # Linear
     {
         "name": "linear_create_ticket",
         "description": "Create a new Linear issue (ticket) in the connected workspace.",
-        "params": {"title": ("string", ""), "body": ("string", ""), "priority": ("integer", "1-4")},
+        "params": {
+            "title": ("string", ""),
+            "body": ("string", ""),
+            "priority": ("integer", "1-4"),
+        },
         "returns": lambda args: {"ok": True, "id": "ENG-101"},
     },
     {
@@ -156,27 +181,38 @@ FAKE_MCP_TOOLS: list[dict[str, Any]] = [
         "params": {"ticket_id": ("string", ""), "user": ("string", "")},
         "returns": lambda args: {"ok": True},
     },
-
     # Notion
     {
         "name": "notion_create_page",
         "description": "Create a new page in the connected Notion workspace.",
-        "params": {"title": ("string", ""), "body": ("string", ""), "parent": ("string", "")},
+        "params": {
+            "title": ("string", ""),
+            "body": ("string", ""),
+            "parent": ("string", ""),
+        },
         "returns": lambda args: {"ok": True, "page_id": "abc123"},
     },
-
     # Random others (filler / distractors)
     {
         "name": "weather_get",
         "description": "Look up the current weather for a city.",
         "params": {"city": ("string", "")},
-        "returns": lambda args: {"city": args.get("city", ""), "temp_c": 19, "summary": "Cloudy"},
+        "returns": lambda args: {
+            "city": args.get("city", ""),
+            "temp_c": 19,
+            "summary": "Cloudy",
+        },
     },
     {
         "name": "translate_text",
         "description": "Translate a short text from one language to another.",
         "params": {"text": ("string", ""), "to": ("string", "Target language code")},
-        "returns": lambda args: {"translated": args.get("text", "") + " [translated to " + args.get("to", "??") + "]"},
+        "returns": lambda args: {
+            "translated": args.get("text", "")
+            + " [translated to "
+            + args.get("to", "??")
+            + "]"
+        },
     },
     {
         "name": "pdf_extract",
@@ -251,9 +287,12 @@ SCENARIOS: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 
 
-def setup_isolated_home(enabled: bool, listing: str = "off",
-                        listing_max_tokens: int = 4000,
-                        model: str = "anthropic/claude-haiku-4.5") -> Path:
+def setup_isolated_home(
+    enabled: bool,
+    listing: str = "off",
+    listing_max_tokens: int = 4000,
+    model: str = "anthropic/claude-haiku-4.5",
+) -> Path:
     """Create a fresh ~/.clawksis/ for one test, copying minimal credentials.
 
     Also reads OPENROUTER_API_KEY from the user's real ``~/.clawksis/.env`` so
@@ -268,7 +307,8 @@ def setup_isolated_home(enabled: bool, listing: str = "off",
 
     # Copy .env so OPENROUTER_API_KEY (or others) are visible to the agent
     # running inside the isolated home.
-    real_env_file = Path.home() / ".clawk" / ".env"
+
+    real_env_file = Path.home() / ".clawksis" / ".env"
     if real_env_file.exists():
         shutil.copy(real_env_file, clawk_home / ".env")
         # Also load the real user env into this process so the provider
@@ -278,7 +318,8 @@ def setup_isolated_home(enabled: bool, listing: str = "off",
         # this module, which both avoids a hand-rolled parser bug and keeps
         # static analysis from tainting the transcript records with the key.
         from clawk_cli.env_loader import load_clawk_dotenv
-        load_clawk_dotenv(clawk_home=str(Path.home() / ".clawk"))
+
+        load_clawk_dotenv(clawk_home=str(Path.home() / ".clawksis"))
 
     cfg = {
         "model": {
@@ -304,6 +345,7 @@ def setup_isolated_home(enabled: bool, listing: str = "off",
 def _yaml_dump(obj: Any) -> str:
     try:
         import clawk_yaml as yaml
+
         return yaml.safe_dump(obj, sort_keys=False)
     except ImportError:
         return json.dumps(obj, indent=2)
@@ -319,6 +361,7 @@ def register_fake_tools() -> int:
                 return json.dumps(tool_def["returns"](kwargs), ensure_ascii=False)
             except Exception as e:
                 return json.dumps({"error": f"fake tool handler error: {e}"})
+
         return _handler
 
     count = 0
@@ -349,14 +392,27 @@ def register_fake_tools() -> int:
 
 def reset_module_state():
     """Drop cached modules so the new CLAWK_HOME takes effect."""
-    keys = [k for k in sys.modules.keys()
-            if k.startswith(("tools.", "model_tools", "toolsets",
-                             "clawk_cli", "agent.", "run_agent"))]
+    keys = [
+        k
+        for k in sys.modules.keys()
+        if k.startswith(
+            (
+                "tools.",
+                "model_tools",
+                "toolsets",
+                "clawk_cli",
+                "agent.",
+                "run_agent",
+            )
+        )
+    ]
     for k in keys:
         del sys.modules[k]
 
 
-def run_one_scenario(scenario: dict[str, Any], enabled: bool, out_dir: Path) -> dict[str, Any]:
+def run_one_scenario(
+    scenario: dict[str, Any], enabled: bool, out_dir: Path
+) -> dict[str, Any]:
     """Run one (scenario, enabled) combination. Returns the recorded transcript."""
     reset_module_state()
     home = setup_isolated_home(enabled=enabled)
@@ -376,11 +432,13 @@ def run_one_scenario(scenario: dict[str, Any], enabled: bool, out_dir: Path) -> 
     tool_call_log: list[dict[str, Any]] = []
 
     from tools.registry import registry
+
     original_dispatch = registry.dispatch
 
     def logging_dispatch(name, args, **kw):
         tool_call_log.append({"name": name, "args": _trim_args(args)})
         return original_dispatch(name, args, **kw)
+
     registry.dispatch = logging_dispatch
 
     # Build agent and run
@@ -390,6 +448,7 @@ def run_one_scenario(scenario: dict[str, Any], enabled: bool, out_dir: Path) -> 
     messages_out = []
     try:
         from run_agent import AIAgent
+
         agent = AIAgent(
             provider="openrouter",
             model="anthropic/claude-haiku-4.5",
@@ -479,14 +538,16 @@ def _trim_args(args: Any, max_chars: int = 300) -> Any:
     out = {}
     for k, v in args.items():
         if isinstance(v, str) and len(v) > max_chars:
-            out[k] = v[:max_chars] + f"...[{len(v)-max_chars} chars trimmed]"
+            out[k] = v[:max_chars] + f"...[{len(v) - max_chars} chars trimmed]"
         else:
             out[k] = v
     return out
 
 
 def _count_assistant_turns(messages: list[dict[str, Any]]) -> int:
-    return sum(1 for m in messages if isinstance(m, dict) and m.get("role") == "assistant")
+    return sum(
+        1 for m in messages if isinstance(m, dict) and m.get("role") == "assistant"
+    )
 
 
 def _extract_bridge_calls(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -505,7 +566,9 @@ def _extract_bridge_calls(messages: list[dict[str, Any]]) -> list[dict[str, Any]
             if name in bridges:
                 raw_args = fn.get("arguments") or "{}"
                 try:
-                    args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    args = (
+                        json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    )
                 except json.JSONDecodeError:
                     args = {"_raw": raw_args}
                 out.append({"name": name, "args": _trim_args(args)})
@@ -521,25 +584,33 @@ def main():
     for scenario in SCENARIOS:
         for enabled in (True, False):
             label = "enabled" if enabled else "disabled"
-            print(f"\n{'='*72}\nScenario {scenario['id']} (tool_search={label})\n{'='*72}")
+            print(
+                f"\n{'=' * 72}\nScenario {scenario['id']} (tool_search={label})\n{'=' * 72}"
+            )
             record = run_one_scenario(scenario, enabled, out_dir)
             n_bridge = len(record["bridge_calls"])
             n_under = len(record["underlying_tool_calls"])
             err = record["error"]
-            print(f"  bridge calls: {n_bridge}, underlying tool calls: {n_under}, "
-                  f"elapsed: {record['elapsed_seconds']}s, error: {bool(err)}")
+            print(
+                f"  bridge calls: {n_bridge}, underlying tool calls: {n_under}, "
+                f"elapsed: {record['elapsed_seconds']}s, error: {bool(err)}"
+            )
             if err:
                 print(f"  ERROR: {err[:300]}")
-            summary.append({
-                "scenario": scenario["id"],
-                "enabled": enabled,
-                "n_bridge": n_bridge,
-                "n_underlying": n_under,
-                "elapsed": record["elapsed_seconds"],
-                "error": bool(err),
-                "underlying_tools_called": [c["name"] for c in record["underlying_tool_calls"]],
-                "expected": scenario.get("expected_underlying_tools", []),
-            })
+            summary.append(
+                {
+                    "scenario": scenario["id"],
+                    "enabled": enabled,
+                    "n_bridge": n_bridge,
+                    "n_underlying": n_under,
+                    "elapsed": record["elapsed_seconds"],
+                    "error": bool(err),
+                    "underlying_tools_called": [
+                        c["name"] for c in record["underlying_tool_calls"]
+                    ],
+                    "expected": scenario.get("expected_underlying_tools", []),
+                }
+            )
 
     summary_path = out_dir / "_summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
