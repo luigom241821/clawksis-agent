@@ -61,17 +61,27 @@ jobs:
       # Entorno de tests aislado de PM (como upstream): interprete del lock + groups dev/test
       # + la matriz de extras de proveedores. Varios tests dependen de correr bajo el
       # interprete del store de PM (filtros de PATH, perfiles), no bajo un venv del checkout.
+      # El store de PM y el entorno de tests viven FUERA del HOME real (como el setup-pm de
+      # upstream, --home "$RUNNER_TEMP/setup-pm"): el guard de tests rechaza cualquier I/O
+      # contra ~/.clawksis, y los tests que usan el uv del PATH lo copian/leen.
       - name: Set up the PM test environment
-        run: bash setup-clawk.sh --runtime-only --test-environment=all,anthropic,bedrock,mistral,fal,modal,daytona,parallel-web
-      - name: Locate the test interpreter
         run: |
           set -euo pipefail
-          boot="$(ls "$HOME"/.clawksis/tools/python-*/bin/python3 | head -n1)"
+          echo "CLAWK_CI_HOME=$RUNNER_TEMP/clawk-ci" >> "$GITHUB_ENV"
+          CLAWK_HOME="$RUNNER_TEMP/clawk-ci" CLAWK_RUNTIME_DIR="$RUNNER_TEMP/clawk-ci/tools" \
+            bash setup-clawk.sh --runtime-only --test-environment=all,anthropic,bedrock,mistral,fal,modal,daytona,parallel-web
+      - name: Locate the test interpreter
+        env:
+          CLAWK_HOME: ${{ env.CLAWK_CI_HOME }}
+          CLAWK_RUNTIME_DIR: ${{ env.CLAWK_CI_HOME }}/tools
+        run: |
+          set -euo pipefail
+          boot="$(ls "$CLAWK_RUNTIME_DIR"/python-*/bin/python3 | head -n1)"
           py="$("$boot" -c "import sys; sys.path.insert(0, '.'); from pathlib import Path; from pm.testenv import testenv_python; print(testenv_python(Path('.').resolve()) or '')")"
           test -x "$py"
           "$py" -c "import pytest, anthropic, mistralai" && echo "CLAWK_PYTHON=$py" >> "$GITHUB_ENV"
           # Los tests de pm/ y de empaquetado usan el uv real del lock (como el setup-pm de upstream).
-          uvdir="$(ls -d "$HOME"/.clawksis/tools/uv-*/ | head -n1)"
+          uvdir="$(ls -d "$CLAWK_RUNTIME_DIR"/uv-*/ | head -n1)"
           test -x "${uvdir}uv"
           echo "${uvdir%/}" >> "$GITHUB_PATH"
       # scripts/run_tests.sh corre cada archivo en su propio subproceso de pytest con un
