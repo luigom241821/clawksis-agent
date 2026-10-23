@@ -1,8 +1,4 @@
-"""``clawk debug`` subcommand parser.
-
-Extracted verbatim from ``clawk_cli/main.py:main()`` (god-file Phase 2).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk debug`` subcommand parser."""
 
 from __future__ import annotations
 
@@ -12,9 +8,6 @@ from typing import Callable
 
 def build_debug_parser(subparsers, *, cmd_debug: Callable) -> None:
     """Attach the ``debug`` subcommand to ``subparsers``."""
-    # =========================================================================
-    # debug command
-    # =========================================================================
     debug_parser = subparsers.add_parser(
         "debug",
         help="Debug tools — upload logs and system info for support",
@@ -27,7 +20,7 @@ Examples:
     clawk debug share              Upload debug report (asks for confirmation)
     clawk debug share --yes        Skip confirmation (for scripts/CI)
     clawk debug share --lines 500  Include more log lines
-    clawk debug share --expire 30  Keep paste for 30 days
+    clawk debug share --expire 30  Keep dpaste.com fallback pastes for 30 days
     clawk debug share --local      Print report locally (no upload)
     clawk debug share --no-redact  Disable upload-time secret redaction
     clawk debug delete <url>       Delete a previously uploaded paste
@@ -35,8 +28,7 @@ Examples:
     )
     debug_sub = debug_parser.add_subparsers(dest="debug_command")
     share_parser = debug_sub.add_parser(
-        "share",
-        help="Upload debug report to a paste service and print a shareable URL",
+        "share", help="Upload debug report to a paste service and print a shareable URL"
     )
     share_parser.add_argument(
         "--lines",
@@ -47,8 +39,11 @@ Examples:
     share_parser.add_argument(
         "--expire",
         type=int,
-        default=7,
-        help="Paste expiry in days (default: 7)",
+        default=1,
+        help="dpaste.com fallback retention in days (minimum 1; default: 1). "
+        "paste.rs pastes are always deleted after 6 hours, but if the "
+        "upload falls back to dpaste.com the pastes live for this many "
+        "days and cannot be deleted.",
     )
     share_parser.add_argument(
         "--local",
@@ -59,25 +54,20 @@ Examples:
         "-y",
         "--yes",
         action="store_true",
-        help=(
-            "Skip the confirmation prompt and upload immediately. Required "
-            "in non-interactive contexts (scripts/CI); without it, and with "
-            "no TTY on stdin, the command refuses rather than upload silently."
-        ),
+        help="Skip the confirmation prompt and upload immediately. Required "
+        "in non-interactive contexts (scripts/CI); without it, and with "
+        "no TTY on stdin, the command refuses rather than upload silently.",
     )
     share_parser.add_argument(
         "--no-redact",
         action="store_true",
-        help=(
-            "Disable upload-time secret redaction (default: redact). Logs "
-            "are normally run through agent.redact.redact_sensitive_text "
-            "with force=True before upload so credentials are not leaked "
-            "into the public paste service."
-        ),
+        help="Disable upload-time secret redaction (default: redact). Logs "
+        "are normally run through agent.redact.redact_sensitive_text "
+        "with force=True before upload so credentials are not leaked "
+        "into the public paste service.",
     )
     delete_parser = debug_sub.add_parser(
-        "delete",
-        help="Delete a paste uploaded by 'clawk debug share'",
+        "delete", help="Delete a paste uploaded by 'clawk debug share'"
     )
     delete_parser.add_argument(
         "urls",
