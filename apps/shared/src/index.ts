@@ -196,11 +196,11 @@ export { type UpdateDebt, updateDebt, type UpdateDebtReceipt, type UpdateDebtSte
 export { mergeUsage, usageFromTick, type UsageTickPayload } from './usage-tick'
 export {
   buildClawksisWebSocketUrl,
+  type ClawksisWebSocketUrlOptions,
   type GatewayAuthMode,
   GatewayReauthRequiredError,
   type GatewayWsConnection,
   type GatewayWsUrlResult,
-  type ClawksisWebSocketUrlOptions,
   isGatewayReauthRequired,
   resolveGatewayWsUrl,
   type ResolveGatewayWsUrlDeps,

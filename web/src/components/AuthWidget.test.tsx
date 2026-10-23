@@ -70,6 +70,8 @@ describe("AuthWidget integration (real getAuthMe)", () => {
     vi.stubGlobal("window", {
       __CLAWK_SESSION_TOKEN__: undefined,
       __CLAWK_BASE_PATH__: "",
+      // Clawksis only probes /api/auth/me when the OAuth gate is engaged.
+      __CLAWK_AUTH_REQUIRED__: true,
       location: { assign: vi.fn(), pathname: "/", search: "" },
       ...overrides,
     });

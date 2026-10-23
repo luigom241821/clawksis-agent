@@ -184,10 +184,14 @@ export function parseScheduleString(
 
   // ISO timestamp (one-shot).
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(trimmed)) {
+    // Fill both pickers so the calendar (default) and the manual field show
+    // the same timestamp and the state round-trips through buildScheduleString.
     return {
       ...DEFAULT_SCHEDULE_STATE,
       mode: "once",
       onceAt: trimmed.slice(0, 16),
+      onceDate: trimmed.slice(0, 10),
+      onceTime: trimmed.slice(11, 16),
     };
   }
 
