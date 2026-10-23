@@ -1,17 +1,18 @@
-"""Tests for per-profile subprocess HOME isolation (#4426).
+"""Tests for subprocess HOME handling in profile mode.
 
+Clawksis state stays profile-scoped through CLAWK_HOME. Host subprocesses should
+keep the user's real HOME by default so external CLIs find existing credentials.
+Containers still use the profile home for persistence, and users can explicitly
+opt into profile HOME isolation on the host.
 
-Verifies that subprocesses (terminal, execute_code, background processes)
-
-receive a per-profile HOME directory while the Python process's own HOME
-
-and Path.home() remain unchanged.
-
-
-See: https://github.com/samuelgradientai-sys/clawksis-agent/issues/4426
+See: https://github.com/samuelgradientai-sys/clawksis-agent/issues/25114
+See: https://github.com/samuelgradientai-sys/clawksis-agent/issues/36144
+See: https://github.com/samuelgradientai-sys/clawksis-agent/issues/29015
 """
 
 from pathlib import Path
+
+import clawk_constants
 
 
 # ---------------------------------------------------------------------------
@@ -93,12 +94,13 @@ class TestGetSubprocessHome:
         assert get_subprocess_home() == str(profile_home)
 
     def test_returns_profile_specific_path(self, tmp_path, monkeypatch):
-        """Named profiles get their own isolated HOME."""
-
-        profile_dir = tmp_path / ".clawksis" / "profiles" / "coder"
+        """Explicit profile mode keeps the old per-profile HOME behavior."""
+        self._host_mode(monkeypatch)
+        profile_dir = tmp_path / ".clawk" / "profiles" / "coder"
         profile_dir.mkdir(parents=True)
         profile_home = profile_dir / "home"
         profile_home.mkdir()
+        monkeypatch.setenv("TERMINAL_HOME_MODE", "profile")
         monkeypatch.setenv("CLAWK_HOME", str(profile_dir))
         from clawk_constants import get_subprocess_home
 
@@ -124,8 +126,8 @@ class TestGetSubprocessHome:
         assert get_subprocess_home() == str(real_home)
 
     def test_two_profiles_get_different_homes(self, tmp_path, monkeypatch):
-
-        base = tmp_path / ".clawksis" / "profiles"
+        self._container_mode(monkeypatch)
+        base = tmp_path / ".clawk" / "profiles"
         for name in ("alpha", "beta"):
             p = base / name
             p.mkdir(parents=True)
@@ -152,15 +154,40 @@ class TestGetSubprocessHome:
 
 
 class TestMakeRunEnvHomeInjection:
-    """Verify _make_run_env() injects HOME into subprocess envs."""
+    """Verify _make_run_env() applies the subprocess HOME policy."""
 
-    def test_injects_home_when_profile_home_exists(self, tmp_path, monkeypatch):
+    def test_host_auto_preserves_real_home_when_profile_home_exists(
+        self, tmp_path, monkeypatch
+    ):
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
         (clawk_home / "home").mkdir()
+        real_home = tmp_path / "real-home"
+        real_home.mkdir()
+        monkeypatch.setattr(clawk_constants, "is_container", lambda: False)
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
+        monkeypatch.setenv("HOME", str(real_home))
+        monkeypatch.setenv("PATH", "/usr/bin:/bin")
 
-        monkeypatch.setenv("HOME", "/root")
+        from tools.environments.local import _make_run_env
+
+        result = _make_run_env({})
+
+        assert result["HOME"] == str(real_home)
+        assert result["CLAWK_REAL_HOME"] == str(real_home)
+
+    def test_profile_mode_injects_profile_home_when_profile_home_exists(
+        self, tmp_path, monkeypatch
+    ):
+        clawk_home = tmp_path / "clawk"
+        clawk_home.mkdir()
+        (clawk_home / "home").mkdir()
+        real_home = tmp_path / "real-home"
+        real_home.mkdir()
+        monkeypatch.setattr(clawk_constants, "is_container", lambda: False)
+        monkeypatch.setenv("TERMINAL_HOME_MODE", "profile")
+        monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
+        monkeypatch.setenv("HOME", str(real_home))
         monkeypatch.setenv("PATH", "/usr/bin:/bin")
 
         from tools.environments.local import _make_run_env
@@ -168,6 +195,7 @@ class TestMakeRunEnvHomeInjection:
         result = _make_run_env({})
 
         assert result["HOME"] == str(clawk_home / "home")
+        assert result["CLAWK_REAL_HOME"] == str(real_home)
 
     def test_no_injection_when_home_dir_missing(self, tmp_path, monkeypatch):
         clawk_home = tmp_path / "clawk"
@@ -201,20 +229,46 @@ class TestMakeRunEnvHomeInjection:
 
 
 class TestSanitizeSubprocessEnvHomeInjection:
-    """Verify _sanitize_subprocess_env() injects HOME for background procs."""
+    """Verify _sanitize_subprocess_env() applies the subprocess HOME policy."""
 
-    def test_injects_home_when_profile_home_exists(self, tmp_path, monkeypatch):
+    def test_host_auto_preserves_real_home_when_profile_home_exists(
+        self, tmp_path, monkeypatch
+    ):
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
         (clawk_home / "home").mkdir()
+        real_home = tmp_path / "real-home"
+        real_home.mkdir()
+        monkeypatch.setattr(clawk_constants, "is_container", lambda: False)
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
-        base_env = {"HOME": "/root", "PATH": "/usr/bin", "USER": "root"}
+        base_env = {"HOME": str(real_home), "PATH": "/usr/bin", "USER": "root"}
+        from tools.environments.local import _sanitize_subprocess_env
+
+        result = _sanitize_subprocess_env(base_env)
+
+        assert result["HOME"] == str(real_home)
+        assert result["CLAWK_REAL_HOME"] == str(real_home)
+
+    def test_profile_mode_injects_profile_home_when_profile_home_exists(
+        self, tmp_path, monkeypatch
+    ):
+        clawk_home = tmp_path / "clawk"
+        clawk_home.mkdir()
+        (clawk_home / "home").mkdir()
+        real_home = tmp_path / "real-home"
+        real_home.mkdir()
+        monkeypatch.setattr(clawk_constants, "is_container", lambda: False)
+        monkeypatch.setenv("TERMINAL_HOME_MODE", "profile")
+        monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
+
+        base_env = {"HOME": str(real_home), "PATH": "/usr/bin", "USER": "root"}
         from tools.environments.local import _sanitize_subprocess_env
 
         result = _sanitize_subprocess_env(base_env)
 
         assert result["HOME"] == str(clawk_home / "home")
+        assert result["CLAWK_REAL_HOME"] == str(real_home)
 
     def test_no_injection_when_home_dir_missing(self, tmp_path, monkeypatch):
         clawk_home = tmp_path / "clawk"

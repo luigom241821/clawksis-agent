@@ -32,38 +32,31 @@ class TestPromptTextInputThreadSafety:
         """
         cli = _make_cli()
 
-        captured = {}
-
-        def fake_input(prompt):
-
-            captured["prompt"] = prompt
-
-            return "1"
-
         result_holder = {}
 
         def run_on_daemon():
             with (
                 patch("prompt_toolkit.application.run_in_terminal") as mock_rit,
-                patch("builtins.input", side_effect=fake_input),
+                patch(
+                    "builtins.input",
+                    side_effect=AssertionError(
+                        "input() must not be called off-main-thread"
+                    ),
+                ) as mock_input,
             ):
                 result_holder["value"] = cli._prompt_text_input("Choice [1/2/3]: ")
                 result_holder["rit_called"] = mock_rit.called
+                result_holder["input_called"] = mock_input.called
 
         t = threading.Thread(target=run_on_daemon, daemon=True)
         t.start()
         t.join(timeout=2.0)
+        assert not t.is_alive(), "daemon thread hung — guard did not cancel cleanly"
 
-        assert not t.is_alive(), "daemon thread hung — input() was not driven"
-
-        # run_in_terminal was bypassed entirely on the background thread.
+        # Cancelled cleanly: None returned, neither run_in_terminal nor input() called.
+        assert result_holder["value"] is None
         assert result_holder["rit_called"] is False
-
-        # input() was invoked with the prompt and its return value was captured.
-
-        assert captured.get("prompt") == "Choice [1/2/3]: "
-
-        assert result_holder["value"] == "1"
+        assert result_holder["input_called"] is False
 
     def test_no_app_uses_direct_input(self):
         """Without an active prompt_toolkit app, always call input() directly."""
