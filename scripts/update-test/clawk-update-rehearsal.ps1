@@ -61,7 +61,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
-$OfficialHttps = 'https://github.com/NousResearch/hermes-agent.git'
+$OfficialHttps = 'https://github.com/samuelgradientai-sys/clawksis-agent.git'
 $OfficialSsh = 'git@github.com:samuelgradientai-sys/clawksis-agent.git'
 # Diff-area cap pre sets while the snapshot is alive (post restores the original).
 $ShadowStorageMax = [UInt64]128GB

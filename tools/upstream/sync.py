@@ -234,7 +234,7 @@ _WAKE_WORD_RE = re.compile(r"(?<=@\?)hermes(?=\\[sb])")
 _THIRD_PARTY_URL_RE = re.compile(
     r"(?:https?://)?(?:www\.)?"
     r"(?:github\.com|raw\.githubusercontent\.com|codeload\.github\.com|api\.github\.com/repos)"
-    r"/(?![Nn]ous[Rr]esearch/hermes-agent(?![\w.-]))[^\s\"'`)\]>]*[Hh][Ee][Rr][Mm][Ee][Ss][^\s\"'`)\]>]*"
+    r"/(?![Nn]ous[Rr]esearch/hermes-agent(?:\.git)?(?![\w.-]))[^\s\"'`)\]>]*[Hh][Ee][Rr][Mm][Ee][Ss][^\s\"'`)\]>]*"
 )
 
 # Datos que DEBEN quedar verbatim en un archivo puntual (el rebrand los

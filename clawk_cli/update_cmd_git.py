@@ -41,7 +41,7 @@ _GIT_TEXT_KW = dict(
 )
 _BAR = "=" * 68
 _UPSTREAM_ADD_CMD = (
-    "git remote add upstream https://github.com/NousResearch/hermes-agent.git"
+    "git remote add upstream https://github.com/samuelgradientai-sys/clawksis-agent.git"
 )
 
 
@@ -354,12 +354,12 @@ def _print_parked_branch_kept_notice(
 
 
 OFFICIAL_REPO_URLS = {
-    "https://github.com/NousResearch/hermes-agent.git",
+    "https://github.com/samuelgradientai-sys/clawksis-agent.git",
     "git@github.com:samuelgradientai-sys/clawksis-agent.git",
     "https://github.com/samuelgradientai-sys/clawksis-agent",
     "git@github.com:samuelgradientai-sys/clawksis-agent",
 }
-OFFICIAL_REPO_URL = "https://github.com/NousResearch/hermes-agent.git"
+OFFICIAL_REPO_URL = "https://github.com/samuelgradientai-sys/clawksis-agent.git"
 SKIP_UPSTREAM_PROMPT_FILE = ".skip_upstream_prompt"
 
 
@@ -463,7 +463,7 @@ def _offer_upstream_remote(
         print("  ✗ Failed to add upstream remote. Skipping upstream sync.")
         return False
     print(
-        "  ✓ Added upstream: https://github.com/NousResearch/hermes-agent.git"
+        "  ✓ Added upstream: https://github.com/samuelgradientai-sys/clawksis-agent.git"
     )
     return True
 
@@ -754,7 +754,7 @@ _FETCH_FAILURE_RULES = (
             "Permission denied (publickey)" in s or "Host key verification failed" in s
         ),
         "✗ SSH authentication failed — check your SSH key is added to GitHub, or switch"
-        " `origin` to HTTPS: `git remote set-url origin https://github.com/NousResearch/hermes-agent.git`.",
+        " `origin` to HTTPS: `git remote set-url origin https://github.com/samuelgradientai-sys/clawksis-agent.git`.",
     ),
 )
 

@@ -238,7 +238,7 @@ interpreter such as Nix Python. No `CC` default is needed for the current pin.
 Clone the repository and select your branch before preparing dependencies:
 
 ```bash
-git clone https://github.com/NousResearch/hermes-agent.git
+git clone https://github.com/samuelgradientai-sys/clawksis-agent.git
 cd clawksis-agent
 ```
 

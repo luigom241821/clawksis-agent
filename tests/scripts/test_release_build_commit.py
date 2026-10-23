@@ -198,14 +198,14 @@ def test_commit_build_dispatch_is_repository_independent(fixture_repo):
         "remote",
         "set-url",
         "origin",
-        "https://github.com/NousResearch/hermes-agent.git",
+        "https://github.com/samuelgradientai-sys/clawksis-agent.git",
     )
     result, calls = invoke(
         "--build-commit",
         tip,
         "--publish",
         extra={
-            "PROBE_UPSTREAM_URL": "https://github.com/NousResearch/hermes-agent.git"
+            "PROBE_UPSTREAM_URL": "https://github.com/samuelgradientai-sys/clawksis-agent.git"
         },
     )
     assert result.returncode == 0, result.stderr

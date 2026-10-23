@@ -45,7 +45,7 @@ def _stamp_probe(tmp_path, shell):
     )
     (tmp_path / "gitconfig").write_text(
         '[url "file:///staged/serve.git"]\n'
-        "\tinsteadOf = https://github.com/NousResearch/hermes-agent.git\n",
+        "\tinsteadOf = https://github.com/samuelgradientai-sys/clawksis-agent.git\n",
         encoding="utf-8",
     )
 
@@ -255,7 +255,7 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
                 "git",
                 "ls-remote",
                 "--get-url",
-                "https://github.com/NousResearch/hermes-agent.git",
+                "https://github.com/samuelgradientai-sys/clawksis-agent.git",
             ],
             env=child,
             cwd=tmp_path,
