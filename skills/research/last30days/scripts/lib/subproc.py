@@ -67,7 +67,7 @@ def run_with_timeout(
         text=True,
         encoding="utf-8",
         errors="replace",
-        preexec_fn=preexec,
+        preexec_fn=preexec,  # noqa: PLW1509
         env=env,
     )
 

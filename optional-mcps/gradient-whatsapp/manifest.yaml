@@ -19,7 +19,8 @@ source: https://github.com/samuelgradientai-sys/clawksis-agent
 install:
   type: git
   url: https://github.com/samuelgradientai-sys/clawksis-agent
-  ref: main
+  # Full commit SHA (supply-chain policy: branches can move). Bump it when the server changes.
+  ref: b7e23b5f70079188669c6602feca90bd905f0845
 
 transport:
   type: stdio

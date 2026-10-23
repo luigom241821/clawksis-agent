@@ -11,7 +11,8 @@ Capabilities:
 - Make outbound AI voice calls via Bland.ai or Vapi
 
 This file intentionally uses Python stdlib HTTP clients so the skill can run in a
-minimal environment with no extra pip installs.
+minimal environment with no extra pip installs. Reading Clawksis config.yaml is
+optional and requires ruamel.yaml (standalone install: ruamel.yaml==0.18.17).
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from email.utils import parsedate_to_datetime
 from html import escape as xml_escape
 from pathlib import Path
@@ -89,12 +90,14 @@ def _load_root_config() -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        import yaml  # optional dependency; Clawksis already ships PyYAML
+        from ruamel.yaml import YAML  # optional dependency; Clawksis ships ruamel.yaml
     except Exception:
         return {}
     try:
+        reader = YAML(typ="safe")
+        reader.version = (1, 1)
         with path.open("r", encoding="utf-8") as handle:
-            data = yaml.safe_load(handle) or {}
+            data = reader.load(handle) or {}
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
@@ -233,11 +236,7 @@ def _parse_twilio_date(value: str | None) -> datetime | None:
         return None
     try:
         dt = parsedate_to_datetime(value)
-        return (
-            dt.astimezone(timezone.utc)
-            if dt.tzinfo
-            else dt.replace(tzinfo=timezone.utc)
-        )
+        return dt.astimezone(UTC) if dt.tzinfo else dt.replace(tzinfo=UTC)
     except Exception:
         return None
 
@@ -305,7 +304,7 @@ def _twilio_creds() -> tuple[str, str]:
 
 def _twilio_basic_headers() -> dict[str, str]:
     sid, token = _twilio_creds()
-    auth = base64.b64encode(f"{sid}:{token}".encode("utf-8")).decode("ascii")
+    auth = base64.b64encode(f"{sid}:{token}".encode()).decode("ascii")
     return {"Authorization": f"Basic {auth}"}
 
 
@@ -1153,11 +1152,13 @@ def save_twilio(
 
 
 def save_bland(api_key: str, voice: str = BLAND_DEFAULT_VOICE) -> dict[str, Any]:
-    env_file = _upsert_env_file({
-        "BLAND_API_KEY": api_key.strip(),
-        "BLAND_DEFAULT_VOICE": voice.strip() or BLAND_DEFAULT_VOICE,
-        "PHONE_PROVIDER": "bland",
-    })
+    env_file = _upsert_env_file(
+        {
+            "BLAND_API_KEY": api_key.strip(),
+            "BLAND_DEFAULT_VOICE": voice.strip() or BLAND_DEFAULT_VOICE,
+            "PHONE_PROVIDER": "bland",
+        }
+    )
     return {
         "success": True,
         "provider": "bland",

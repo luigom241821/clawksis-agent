@@ -34,6 +34,9 @@ jobs:
     needs: workspaces
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # tsc sobre apps/desktop supera el heap por defecto de node (~4 GB).
+      NODE_OPTIONS: --max-old-space-size=7168
     strategy:
       matrix:
         package: ${{ fromJson(needs.workspaces.outputs.packages) }}

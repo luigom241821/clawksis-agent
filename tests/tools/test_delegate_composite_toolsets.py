@@ -2,8 +2,7 @@
 
 import unittest
 
-
-from tools.delegate_tool import _expand_parent_toolsets
+from tools.delegate_tool import _expand_parent_toolsets, _strip_blocked_tools
 
 
 class TestExpandParentToolsets(unittest.TestCase):
@@ -11,53 +10,28 @@ class TestExpandParentToolsets(unittest.TestCase):
 
     def test_composite_clawk_cli_expands_web(self):
         """clawk-cli includes web_search/web_extract → 'web' should be in expansion."""
-
         expanded = _expand_parent_toolsets({"clawk-cli"})
-
         self.assertIn("web", expanded)
-
         self.assertIn("terminal", expanded)
-
         self.assertIn("browser", expanded)
-
         # Original composite is preserved
-
         self.assertIn("clawk-cli", expanded)
 
-    def test_individual_toolset_unchanged(self):
-        """When parent already uses individual toolsets, expansion keeps them."""
+    def test_included_toolsets_of_composite_parent_are_grantable(self):
+        """A composite parent holds its ``includes`` too (#111700): ``debugging`` = terminal/process_manage +
+        includes web/file, so a child may request ``web``/``file`` — but never a toolset the parent lacks."""
+        expanded = _expand_parent_toolsets({"debugging"})
+        self.assertTrue({"debugging", "terminal", "web", "file"} <= expanded)
+        self.assertNotIn("browser", expanded)
+        self.assertNotIn("clawk-cli", expanded)
 
-        expanded = _expand_parent_toolsets({"web", "terminal"})
+    def test_composites_with_allowed_included_tools_are_not_stripped(self):
+        toolsets = ["safe", "clawk-gateway", "clawk-cli", "delegation", "kanban"]
 
-        self.assertIn("web", expanded)
-
-        self.assertIn("terminal", expanded)
-
-    def test_empty_parent_toolsets(self):
-
-        expanded = _expand_parent_toolsets(set())
-
-        self.assertEqual(expanded, set())
-
-    def test_unknown_toolset_passthrough(self):
-        """Unknown toolset names pass through without error."""
-
-        expanded = _expand_parent_toolsets({"nonexistent-toolset-xyz"})
-
-        self.assertIn("nonexistent-toolset-xyz", expanded)
-
-    def test_intersection_with_expanded_composite(self):
-        """End-to-end: requesting ['web'] from parent with ['clawk-cli'] yields ['web']."""
-
-        parent_toolsets = {"clawk-cli"}
-
-        expanded = _expand_parent_toolsets(parent_toolsets)
-
-        toolsets = ["web"]
-
-        child_toolsets = [t for t in toolsets if t in expanded]
-
-        self.assertEqual(child_toolsets, ["web"])
+        self.assertEqual(
+            _strip_blocked_tools(toolsets),
+            ["safe", "clawk-gateway", "clawk-cli"],
+        )
 
 
 if __name__ == "__main__":

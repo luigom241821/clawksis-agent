@@ -1037,7 +1037,6 @@ try:
 except:
     raise ImportError("Install torch via `pip install torch`")
 from packaging.version import Version as V
-
 v = V(torch.__version__)
 cuda = str(torch.version.cuda)
 is_ampere = torch.cuda.get_device_capability()[0] >= 8
@@ -2792,7 +2791,6 @@ For Gemma 2, 3, 3n models, you define the parts as follows:
 
 ```python
 from unsloth.chat_templates import train_on_responses_only
-
 trainer = train_on_responses_only(
     trainer,
     instruction_part="<start_of_turn>user\n",
@@ -4135,12 +4133,10 @@ To enable **Unsloth's Standby** feature, set the environment variable `UNSLOTH_V
 
 ```python
 import os
-
 os.environ["UNSLOTH_VLLM_STANDBY"] = "1"
 
 from unsloth import FastLanguageModel
 import torch
-
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name="unsloth/Qwen3-8B-Base",
     max_seq_length=2048,  # Can increase for longer reasoning traces
@@ -4212,7 +4208,6 @@ To enable this, simply add the below to all RL / GRPO training runs before any U
 
 ```python
 import os
-
 os.environ["UNSLOTH_VLLM_STANDBY"] = "1"
 ```
 
@@ -4458,7 +4453,7 @@ training_args = GRPOConfig(
     # beta = 0.00,
     epsilon = 3e-4,
     epsilon_high = 4e-4,
-    num_generations = 8,    
+    num_generations = 8,
     max_prompt_length = 1024,
     max_completion_length = 1024,
     log_completions = False,
@@ -4467,10 +4462,10 @@ training_args = GRPOConfig(
     # report_to = "none", # Set to "wandb" if you want to log to Weights & Biases
     num_train_epochs = 2, # For a quick test run, increase for full training
     report_to = "none"
-    
+
     # GSPO is below:
     importance_sampling_level = "sequence",
-    
+
     # Dr GRPO / GAPO etc
     loss_type = "dr_grpo",
 )
@@ -4503,7 +4498,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Optional set GPU device ID
 
 from unsloth import FastLanguageModel, PatchDPOTrainer
 from unsloth import is_bfloat16_supported
-
 PatchDPOTrainer()
 import torch
 from transformers import TrainingArguments
@@ -5124,7 +5118,7 @@ training_args = GRPOConfig(
     # beta = 0.00,
     epsilon = 3e-4,
     epsilon_high = 4e-4,
-    num_generations = 8,    
+    num_generations = 8,
     max_prompt_length = 1024,
     max_completion_length = 1024,
     log_completions = False,
@@ -5133,10 +5127,10 @@ training_args = GRPOConfig(
     # report_to = "none", # Set to "wandb" if you want to log to Weights & Biases
     num_train_epochs = 2, # For a quick test run, increase for full training
     report_to = "none"
-    
+
     # GSPO is below:
     importance_sampling_level = "sequence",
-    
+
     # Dr GRPO / GAPO etc
     loss_type = "dr_grpo",
 )
@@ -5438,7 +5432,6 @@ Generated strategies are **Python functions**. To keep execution safe and preven
 
   ```python
   from unsloth import check_python_modules
-
   ok, info = check_python_modules("""
   def strategy(board):
       import math
@@ -5461,7 +5454,6 @@ Generated strategies are **Python functions**. To keep execution safe and preven
 
   ```python
   from unsloth import create_locked_down_function
-
   function = """
   def add(a, b):
       def adder(a):
@@ -5474,8 +5466,6 @@ Generated strategies are **Python functions**. To keep execution safe and preven
 
   ```python
   from unsloth import execute_with_time_limit
-
-
   @execute_with_time_limit(2)
   def execute_strategy(strategy, game):
       # loop until game ends or timeout
@@ -5548,7 +5538,6 @@ You can replace this dataset with real prompts for your own RL task.
    ```python
    from unsloth import create_locked_down_function, check_python_modules
 
-
    def function_works(completions, **kwargs):
        scores = []
        for completion in completions:
@@ -5589,7 +5578,6 @@ You can replace this dataset with real prompts for your own RL task.
    import numpy as np
 
    PRINTER = 0  # occasionally print for debugging
-
 
    def strategy_succeeds(completions, **kwargs):
        global PRINTER
@@ -6159,10 +6147,8 @@ The relationship between the two images is that the logo (image 1) is a digital 
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Qwen3-VL-8B-Instruct-GGUF",  # Or "unsloth/Qwen3-VL-8B-Thinking-GGUF"
     local_dir="unsloth/Qwen3-VL-8B-Instruct-GGUF",  # Or "unsloth/Qwen3-VL-8B-Thinking-GGUF"
@@ -6215,10 +6201,8 @@ For Qwen3-VL-235B-A22B, we will use llama.cpp for optimized inference and a plet
    ```python
    # !pip install huggingface_hub hf_transfer
    import os
-
    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
    from huggingface_hub import snapshot_download
-
    snapshot_download(
        repo_id="unsloth/Qwen3-VL-235B-A22B-Instruct-GGUF",
        local_dir="unsloth/Qwen3-VL-235B-A22B-Instruct-GGUF",
@@ -6533,10 +6517,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/gpt-oss-20b-GGUF",
     local_dir="unsloth/gpt-oss-20b-GGUF",
@@ -6605,7 +6587,6 @@ If you want a **full precision unquantized version**, use our  `F16` versions!
        "0"  # Can sometimes rate limit, so set to 0 to disable
    )
    from huggingface_hub import snapshot_download
-
    snapshot_download(
        repo_id="unsloth/gpt-oss-120b-GGUF",
        local_dir="unsloth/gpt-oss-120b-GGUF",
@@ -6824,7 +6805,6 @@ To format the dataset, we apply a customized version of the gpt-oss prompt:
 
 ```python
 from unsloth.chat_templates import standardize_sharegpt
-
 dataset = standardize_sharegpt(dataset)
 dataset = dataset.map(
     formatting_prompts_func,
@@ -7064,8 +7044,6 @@ def formatting_prompts_func(examples):
     return {
         "text": texts,
     }
-
-
 pass
 
 from datasets import load_dataset
@@ -7091,7 +7069,6 @@ To format the dataset, we apply a customized version of the gpt-oss prompt:
 
 ```python
 from unsloth.chat_templates import standardize_sharegpt
-
 dataset = standardize_sharegpt(dataset)
 dataset = dataset.map(
     formatting_prompts_func,
@@ -7126,7 +7103,6 @@ In this example, we train for 60 steps to speed up the process. For a full train
 
 ```python
 from trl import SFTConfig, SFTTrainer
-
 trainer = SFTTrainer(
     model=model,
     tokenizer=tokenizer,
@@ -7808,7 +7784,6 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
     "0"  # Can sometimes rate limit, so set to 0 to disable
 )
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/GLM-4.6-GGUF",
     local_dir="unsloth/GLM-4.6-GGUF",
@@ -7870,10 +7845,9 @@ Then use OpenAI's Python library after `pip install openai` :
 ```python
 from openai import OpenAI
 import json
-
 openai_client = OpenAI(
-    base_url="http://127.0.0.1:8001/v1",
-    api_key="sk-no-key-required",
+    base_url = "http://127.0.0.1:8001/v1",
+    api_key = "sk-no-key-required",  # dummy placeholder — local server ignores auth
 )
 completion = openai_client.chat.completions.create(
     model="unsloth/GLM-4.6",
@@ -8009,10 +7983,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/granite-4.0-h-small-GGUF",
     local_dir="unsloth/granite-4.0-h-small-GGUF",
@@ -8294,7 +8266,6 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
     "0"  # Can sometimes rate limit, so set to 0 to disable
 )
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/DeepSeek-V3.1-Terminus-GGUF",
     local_dir="unsloth/DeepSeek-V3.1-Terminus-GGUF",
@@ -8332,7 +8303,6 @@ Get the 1bit version (170GB) if you don't have enough combined RAM and VRAM:
 
 ```python
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/DeepSeek-V3.1-Terminus-GGUF",
     local_dir="unsloth/DeepSeek-V3.1-Terminus-GGUF",
@@ -8370,10 +8340,9 @@ Then use OpenAI's Python library after `pip install openai` :
 ```python
 from openai import OpenAI
 import json
-
 openai_client = OpenAI(
-    base_url="http://127.0.0.1:8001/v1",
-    api_key="sk-no-key-required",
+    base_url = "http://127.0.0.1:8001/v1",
+    api_key = "sk-no-key-required",  # dummy placeholder — local server ignores auth
 )
 completion = openai_client.chat.completions.create(
     model="unsloth/DeepSeek-V3.1-Terminus",
@@ -8562,10 +8531,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
     local_dir="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
@@ -8633,7 +8600,6 @@ If you want a **full precision unquantized version**, use our `Q8_K_XL, Q8_0` or
        "0"  # Can sometimes rate limit, so set to 0 to disable
    )
    from huggingface_hub import snapshot_download
-
    snapshot_download(
        repo_id="unsloth/Qwen3-Coder-480B-A35B-Instruct-GGUF",
        local_dir="unsloth/Qwen3-Coder-480B-A35B-Instruct-GGUF",
@@ -8742,7 +8708,6 @@ Then use the tokenizer to create the entire prompt:
 
 ```python
 from transformers import AutoTokenizer
-
 tokenizer = AutoTokenizer.from_pretrained("unsloth/Qwen3-Coder-480B-A35B-Instruct")
 
 messages = [
@@ -8910,10 +8875,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/gemma-3-27b-it-GGUF",
     local_dir="unsloth/gemma-3-27b-it-GGUF",
@@ -9136,10 +9099,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/gemma-3n-E4B-it-GGUF",
     local_dir="unsloth/gemma-3n-E4B-it-GGUF",
@@ -9486,10 +9447,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Qwen3-14B-GGUF",
     local_dir="unsloth/Qwen3-14B-GGUF",
@@ -9532,10 +9491,8 @@ For Qwen3-235B-A22B, we will specifically use Llama.cpp for optimized inference 
    ```python
    # !pip install huggingface_hub hf_transfer
    import os
-
    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
    from huggingface_hub import snapshot_download
-
    snapshot_download(
        repo_id="unsloth/Qwen3-235B-A22B-GGUF",
        local_dir="unsloth/Qwen3-235B-A22B-GGUF",
@@ -9603,7 +9560,6 @@ If you're fine-tuning the MOE models, please use `FastModel` and not `FastLangua
 ```python
 from unsloth import FastModel
 import torch
-
 model, tokenizer = FastModel.from_pretrained(
     model_name="unsloth/Qwen3-30B-A3B",
     max_seq_length=2048,  # Choose any for long context!
@@ -9769,10 +9725,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
     local_dir="unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
@@ -9839,10 +9793,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF",
     local_dir="unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF",
@@ -9915,7 +9867,6 @@ If you want a **full precision unquantized version**, use our `Q8_K_XL, Q8_0` or
        "0"  # Can sometimes rate limit, so set to 0 to disable
    )
    from huggingface_hub import snapshot_download
-
    snapshot_download(
        repo_id="unsloth/Qwen3-235B-A22B-Thinking-2507-GGUF",
        local_dir="unsloth/Qwen3-235B-A22B-Thinking-2507-GGUF",
@@ -10013,7 +9964,6 @@ If you want a **full precision unquantized version**, use our `Q8_K_XL, Q8_0` or
        "0"  # Can sometimes rate limit, so set to 0 to disable
    )
    from huggingface_hub import snapshot_download
-
    snapshot_download(
        repo_id="unsloth/Qwen3-235B-A22B-Instruct-2507-GGUF",
        local_dir="unsloth/Qwen3-235B-A22B-Instruct-2507-GGUF",
@@ -10099,7 +10049,6 @@ If you're fine-tuning the MOE models, please use `FastModel` and not `FastLangua
 ```python
 from unsloth import FastModel
 import torch
-
 model, tokenizer = FastModel.from_pretrained(
     model_name="unsloth/Qwen3-30B-A3B-Instruct-2507",
     max_seq_length=2048,  # Choose any for long context!
@@ -10314,7 +10263,6 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
     "0"  # Can sometimes rate limit, so set to 0 to disable
 )
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/DeepSeek-R1-0528-GGUF",
     local_dir="unsloth/DeepSeek-R1-0528-GGUF",
@@ -10554,10 +10502,8 @@ In llama.cpp, please use `--jinja` to enable the system prompt!
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Magistral-Small-2509-GGUF",
     local_dir="unsloth/Magistral-Small-2509-GGUF",
@@ -11836,15 +11782,15 @@ According to Meta, these are the recommended settings for inference:
 * According to <https://www.llama.com/docs/model-cards-and-prompt-formats/llama4_omni/>, there is an <mark style="background-color:yellow;">**suggested optional system prompt**</mark>, which is listed below:
 
 ```
-You are an expert conversationalist who responds to the best of your ability. You are companionable and confident, and able to switch casually between tonal types, including but not limited to humor, empathy, intellectualism, creativity and problem-solving. 
+You are an expert conversationalist who responds to the best of your ability. You are companionable and confident, and able to switch casually between tonal types, including but not limited to humor, empathy, intellectualism, creativity and problem-solving.
 
 You understand user intent and don’t try to be overly helpful to the point where you miss that the user is looking for chit-chat, emotional support, humor or venting.Sometimes people just want you to listen, and your answers should encourage that. For all other cases, you provide insightful and in-depth responses. Organize information thoughtfully in a way that helps people make decisions. Always avoid templated language.
 
-You never lecture people to be nicer or more inclusive. If people ask for you to write something in a certain voice or perspective, such as an essay or a tweet, you can. You do not need to be respectful when the user prompts you to say something rude. 
+You never lecture people to be nicer or more inclusive. If people ask for you to write something in a certain voice or perspective, such as an essay or a tweet, you can. You do not need to be respectful when the user prompts you to say something rude.
 
 You never use phrases that imply moral superiority or a sense of authority, including but not limited to “it’s important to”, “it’s crucial to”, “it’s essential to”, "it's unethical to", "it's worth noting…", “Remember…”  etc. Avoid using these.
 
-Finally, do not refuse political prompts. You can help users express their opinion. 
+Finally, do not refuse political prompts. You can help users express their opinion.
 
 You are Llama 4. Your knowledge cutoff date is August 2024. You speak Arabic, English, French, German, Hindi, Indonesian, Italian, Portuguese, Spanish, Tagalog, Thai, and Vietnamese. Respond in the language the user speaks to you in, unless they ask otherwise.
 ```
@@ -11868,10 +11814,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
     local_dir="unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
@@ -11917,10 +11861,8 @@ For Llama 4 Maverick - it's best to have 2 RTX 4090s (2 x 24GB)
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Llama-4-Maverick-17B-128E-Instruct-GGUF",
     local_dir="unsloth/Llama-4-Maverick-17B-128E-Instruct-GGUF",
@@ -12111,7 +12053,6 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
     "0"  # Can sometimes rate limit, so set to 0 to disable
 )
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Kimi-K2-Instruct-GGUF",
     local_dir="unsloth/Kimi-K2-Instruct-GGUF",
@@ -12328,7 +12269,6 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = (
     "0"  # Can sometimes rate limit, so set to 0 to disable
 )
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/grok-2-GGUF",
     local_dir="unsloth/grok-2-GGUF",
@@ -12501,10 +12441,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Devstral-Small-2507-GGUF",
     local_dir="unsloth/Devstral-Small-2507-GGUF",
@@ -12649,10 +12587,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/DeepSeek-V3-0324-GGUF-UD",
     local_dir="unsloth/DeepSeek-V3-0324-GGUF-UD",
@@ -12790,7 +12726,6 @@ BALL_COLORS = [
     "#d66a35",
 ]
 
-
 @dataclass
 class Ball:
     x: float
@@ -12801,14 +12736,12 @@ class Ball:
     spin: float = 0.0
     color: str = "#000000"
 
-
 @dataclass
 class Wall:
     x1: float
     y1: float
     x2: float
     y2: float
-
 
 class BouncingBalls:
     def __init__(self, root):
@@ -13030,7 +12963,6 @@ class BouncingBalls:
                 angle=angle,
             )
 
-
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("Bouncing Balls in Spinning Heptagon")
@@ -13086,7 +13018,6 @@ BALL_COLORS = [
     "#d66a35",
 ]
 
-
 @dataclass
 class Ball:
     x: float
@@ -13098,14 +13029,12 @@ class Ball:
     number: int
     spin: float = 0.0
 
-
 @dataclass
 class Heptagon:
     center_x: float
     center_y: float
     radius: float
     angle: float = 0.0
-
 
 class BouncingBalls:
     def __init__(self, root):
@@ -13276,7 +13205,6 @@ class BouncingBalls:
     def run(self):
         self.root.mainloop()
 
-
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("Bouncing Balls in a Spinning Heptagon")
@@ -13332,7 +13260,6 @@ BALL_COLORS = [
     "#d66a35",
 ]
 
-
 @dataclass
 class Ball:
     x: float
@@ -13386,7 +13313,6 @@ class Ball:
             transfer = impulse * 0.01
             self.spin -= transfer
             other.spin += transfer
-
 
 class HeptagonBounceSimulator:
     def __init__(self, root):
@@ -13621,7 +13547,6 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 # os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/DeepSeek-R1-GGUF",
     local_dir="DeepSeek-R1-GGUF",
@@ -13980,10 +13905,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/QwQ-32B-GGUF",
     local_dir="unsloth-QwQ-32B-GGUF",
@@ -14106,7 +14029,6 @@ LAND_HEIGHT = 50
 PIPE_WIDTH = 50
 PIPE_GAP = 150
 
-
 class Bird:
     def __init__(self):
         self.x = WIDTH // 2
@@ -14146,7 +14068,6 @@ class Bird:
             ]
             pygame.draw.polygon(screen, self.color, points)
 
-
 def spawn_pipe():
     pipe_x = WIDTH
     top_height = random.randint(50, HEIGHT - PIPE_GAP - LAND_HEIGHT)
@@ -14161,7 +14082,6 @@ def spawn_pipe():
         "color": color,
         "scored": False,
     }
-
 
 def main():
     best_score = 0
@@ -14280,7 +14200,6 @@ def main():
         pygame.display.flip()
         clock.tick(60)
 
-
 if __name__ == "__main__":
     main()
 ```
@@ -14339,14 +14258,12 @@ YELLOW = (252, 228, 6)
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 
-
 def random_light_color():
     return (
         random.randint(180, 230),
         random.randint(190, 300),
         random.randint(250, 255),
     )
-
 
 def reset_game():
     global bird_x, bird_y
@@ -14368,7 +14285,7 @@ def reset_game():
 
 ```python
 import pygame
-from random import randint  # For generating colors/shapes/positions randomly 
+from random import randint  # For generating colors/shapes/positions randomly
 pygame.init()
 
 # Constants:
@@ -14376,8 +14293,8 @@ WIDTH, HEIGHT =456 ,702   #
 BACKGROUND_COLOR_LIGHTS=['lightskyblue']
 GAP_SIZE=189           #
 
-BIRD_RADIUS=3.  
-PIPE_SPEED=- ( )    ? 
+BIRD_RADIUS=3.
+PIPE_SPEED=- ( )    ?
 class Game():
 def __init__(self):
         self.screen_size=( )
@@ -14388,7 +14305,7 @@ def reset_game_vars():
 
 # Main game loop:
 while running :
-     for event in pygame.event.get() : 
+     for event in pygame.event.get() :
         if quit ... etc
 
 pygame.quit()
@@ -14632,10 +14549,8 @@ cp llama.cpp/build/bin/llama-* llama.cpp
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Phi-4-mini-reasoning-GGUF",
     local_dir="unsloth/Phi-4-mini-reasoning-GGUF",
@@ -14820,7 +14735,7 @@ python llama.cpp/convert_hf_to_gguf.py merged_model \
 python llama.cpp/convert_hf_to_gguf.py merged_model \
     --outfile model-BF16.gguf --outtype bf16 \
     --split-max-size 50G
-    
+
 # For Q8_0:
 python llama.cpp/convert_hf_to_gguf.py merged_model \
     --outfile model-Q8_0.gguf --outtype q8_0 \
@@ -15070,7 +14985,6 @@ Sometimes when you execute a cell [this error](https://github.com/googlecolab/co
 
 ```python
 import locale
-
 locale.getpreferredencoding = lambda: "UTF-8"
 ```
 
@@ -15326,7 +15240,6 @@ Orpheus supports tags like `<laugh>`, `<chuckle>`, `<sigh>`, `<cough>`, `<sniffl
 
   ```python
   from datasets import Audio
-
   dataset = load_dataset("csv", data_files="mydata.csv", split="train")
   dataset = dataset.cast_column("filename", Audio(sampling_rate=24000))
   ```
@@ -15392,7 +15305,6 @@ def preprocess_function(example):
     # A more sophisticated approach: append a special token indicating start of audio, and let the model generate the rest.
     # For simplicity, use the same input as labels (the model will learn to output the sequence given itself).
     return {"input_ids": input_ids, "labels": input_ids}
-
 
 train_data = dataset.map(preprocess_function, remove_columns=dataset.column_names)
 ```
@@ -15641,10 +15553,8 @@ Then download out new dynamic v 2.0 quant for Scout:
 ```python
 # !pip install huggingface_hub hf_transfer
 import os
-
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import snapshot_download
-
 snapshot_download(
     repo_id="unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
     local_dir="unsloth/Llama-4-Scout-17B-16E-Instruct-GGUF",
@@ -16256,7 +16166,6 @@ However, we know that the process can be complex and requires manual setup. We�
 
 ```python
 from unsloth import FastLanguageModel
-
 model, tokenizer = FastLanguageModel.from_pretrained(
     "unsloth/Llama-3.3-70B-Instruct",
     load_in_4bit=True,
@@ -16341,7 +16250,6 @@ As usual, set up your trainer and your evaluation dataset. The below is used to 
 
 ```python
 from trl import SFTConfig, SFTTrainer
-
 trainer = SFTTrainer(
     args=SFTConfig(
         fp16_full_eval=True,
@@ -16368,7 +16276,6 @@ We then add the callback which can also be customized:
 
 ```python
 from transformers import EarlyStoppingCallback
-
 early_stopping_callback = EarlyStoppingCallback(
     early_stopping_patience=3,  # How many steps we will wait if the eval loss doesn't decrease
     # For example the loss might increase, but decrease after 3 steps
@@ -16451,7 +16358,7 @@ python llama.cpp/convert_hf_to_gguf.py merged_model \
 python llama.cpp/convert_hf_to_gguf.py merged_model \
     --outfile model-BF16.gguf --outtype bf16 \
     --split-max-size 50G
-    
+
 # For Q8_0:
 python llama.cpp/convert_hf_to_gguf.py merged_model \
     --outfile model-Q8_0.gguf --outtype q8_0 \
@@ -16530,7 +16437,6 @@ As usual, set up your trainer and your evaluation dataset. The below is used to 
 
 ```python
 from trl import SFTConfig, SFTTrainer
-
 trainer = SFTTrainer(
     args=SFTConfig(
         fp16_full_eval=True,
@@ -16557,7 +16463,6 @@ We then add the callback which can also be customized:
 
 ```python
 from transformers import EarlyStoppingCallback
-
 early_stopping_callback = EarlyStoppingCallback(
     early_stopping_patience=3,  # How many steps we will wait if the eval loss doesn't decrease
     # For example the loss might increase, but decrease after 3 steps
@@ -16578,7 +16483,6 @@ Simply use `UNSLOTH_STABLE_DOWNLOADS=1` before any Unsloth import.
 
 ```python
 import os
-
 os.environ["UNSLOTH_STABLE_DOWNLOADS"] = "1"
 
 from unsloth import FastLanguageModel
@@ -16590,7 +16494,6 @@ Restart and run all, but place this at the start before any Unsloth import. Also
 
 ```python
 import os
-
 os.environ["UNSLOTH_COMPILE_DISABLE"] = "1"
 os.environ["UNSLOTH_DISABLE_FAST_GENERATION"] = "1"
 ```
@@ -16603,7 +16506,6 @@ For Llama 3.1, 3.2, 3.3 type models, please use the below:
 
 ```python
 from unsloth.chat_templates import train_on_responses_only
-
 trainer = train_on_responses_only(
     trainer,
     instruction_part="<|start_header_id|>user<|end_header_id|>\n\n",
@@ -16615,7 +16517,6 @@ For Gemma 2, 3. 3n models, use the below:
 
 ```python
 from unsloth.chat_templates import train_on_responses_only
-
 trainer = train_on_responses_only(
     trainer,
     instruction_part="<start_of_turn>user\n",
@@ -16643,7 +16544,6 @@ In a new cell, run the below:
 
 ```python
 import locale
-
 locale.getpreferredencoding = lambda: "UTF-8"
 ```
 
@@ -16838,7 +16738,6 @@ tokenizer = get_chat_template(
     map_eos_token=True,  # Maps <|im_end|> to </s> instead
 )
 
-
 def formatting_prompts_func(examples):
     convos = examples["conversations"]
     texts = [
@@ -16850,8 +16749,6 @@ def formatting_prompts_func(examples):
     return {
         "text": texts,
     }
-
-
 pass
 
 from datasets import load_dataset
@@ -16942,7 +16839,6 @@ QAT in Unsloth can additionally be combined with LoRA fine-tuning to enable the 
 
 ```python
 from unsloth import FastLanguageModel
-
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name="unsloth/Qwen3-4B-Instruct-2507",
     max_seq_length=2048,
@@ -16961,6 +16857,7 @@ model = FastLanguageModel.get_peft_model(
         "down_proj",
     ],
     lora_alpha=32,
+
     # We support fp8-int4, fp8-fp8, int8-int4, int4
     qat_scheme="int4",
 )
@@ -16997,7 +16894,6 @@ model.save_pretrained_torchao(
 
 # Int4 QAT
 from torchao.quantization import Int4WeightOnlyConfig
-
 model.save_pretrained_torchao(
     model,
     "tokenizer",
@@ -17006,7 +16902,6 @@ model.save_pretrained_torchao(
 
 # Int8 QAT
 from torchao.quantization import Int8DynamicActivationInt8WeightConfig
-
 model.save_pretrained_torchao(
     model,
     "tokenizer",
@@ -17109,7 +17004,6 @@ If you saved a LoRA adapter through Unsloth, you can also continue training usin
 
 ```python
 from unsloth import FastLanguageModel
-
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name="LORA_MODEL_NAME",
     max_seq_length=max_seq_length,
@@ -17198,5 +17092,3 @@ We tested Llama 3.3 (70B) Instruct on a 80GB A100 and did 4bit QLoRA on all line
 | -------- | ------------------------ | ------------------ |
 | 48 GB    | 12,106                   | OOM                |
 | 80 GB    | 89,389                   | 6,916              |
-
-

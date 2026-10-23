@@ -1,6 +1,8 @@
 ---
 name: hardware-research
-description: "Research and compare hardware (mini PCs, workstations, servers) for self-hosted AI workloads. Covers Reddit scraping via pullpush.io, Ollama model compatibility analysis, competitor comparison tables, and price/spec aggregation."
+description: "Research and compare hardware for self-hosted AI."
+license: MIT
+platforms: [linux, macos, windows]
 version: 1.0.0
 author: Clawksis
 tags: [hardware, research, mini-pc, server, workstation, comparison, ai-inference, reddit, scraping]

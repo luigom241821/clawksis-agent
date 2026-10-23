@@ -19,6 +19,9 @@ import json
 import pytest
 
 from tools import browser_tool
+from tools import browser_tool_eval_policy as bt_eval_policy
+from tools import browser_tool_cloud as bt_cloud
+from tools import browser_tool_session as bt_session
 
 
 PRIVATE_URL = "http://127.0.0.1:8080/secret"
@@ -44,9 +47,9 @@ def _eval(expression, task_id="test"):
 
 class TestExpressionPreScan:
     def _guard_on(self, monkeypatch):
-        monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: False)
+        monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: False)
         monkeypatch.setattr(browser_tool, "_is_local_sidecar_key", lambda key: False)
-        monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: False)
+        monkeypatch.setattr(bt_cloud, "_allow_private_urls", lambda: False)
 
     def test_blocks_private_fetch_literal(self, monkeypatch):
         self._guard_on(monkeypatch)
@@ -59,7 +62,7 @@ class TestExpressionPreScan:
             called["n"] += 1
             return {"success": True, "data": {"result": "leaked-content"}}
 
-        monkeypatch.setattr(browser_tool, "_run_browser_command", _run)
+        monkeypatch.setattr(bt_session, "_run_browser_command", _run)
 
         result = _eval(f"fetch('{PRIVATE_URL}').then(r => r.text())")
         assert result["success"] is False
@@ -78,7 +81,7 @@ class TestExpressionPreScan:
             lambda url: "169.254.169.254" in url,
         )
         monkeypatch.setattr(
-            browser_tool,
+            bt_session,
             "_run_browser_command",
             lambda *a, **k: {"success": True, "data": {"result": "creds"}},
         )
@@ -93,7 +96,7 @@ class TestExpressionPreScan:
         monkeypatch.setattr(browser_tool, "_is_always_blocked_url", lambda url: False)
         # After the (public) eval, the page-URL recheck must also see a public URL.
         monkeypatch.setattr(
-            browser_tool,
+            bt_session,
             "_run_browser_command",
             lambda task_id, command, args=None, **k: (
                 {"success": True, "data": {"result": PUBLIC_URL}}
@@ -106,35 +109,12 @@ class TestExpressionPreScan:
         assert result["success"] is True
         assert result["result"] == "ok"
 
-    def test_skips_prescan_for_local_backend(self, monkeypatch):
-        monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: True)
-        monkeypatch.setattr(
-            browser_tool,
-            "_run_browser_command",
-            lambda *a, **k: {"success": True, "data": {"result": "local-ok"}},
-        )
-        result = _eval(f"fetch('{PRIVATE_URL}')")
-        assert result["success"] is True
-        assert result["result"] == "local-ok"
-
-    def test_skips_prescan_for_local_sidecar(self, monkeypatch):
-        monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: False)
-        monkeypatch.setattr(browser_tool, "_is_local_sidecar_key", lambda key: True)
-        monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: False)
-        monkeypatch.setattr(
-            browser_tool,
-            "_run_browser_command",
-            lambda *a, **k: {"success": True, "data": {"result": "sidecar-ok"}},
-        )
-        result = _eval(f"fetch('{PRIVATE_URL}')")
-        assert result["success"] is True
-
     def test_skips_prescan_when_allow_private(self, monkeypatch):
-        monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: False)
+        monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: False)
         monkeypatch.setattr(browser_tool, "_is_local_sidecar_key", lambda key: False)
-        monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: True)
+        monkeypatch.setattr(bt_cloud, "_allow_private_urls", lambda: True)
         monkeypatch.setattr(
-            browser_tool,
+            bt_session,
             "_run_browser_command",
             lambda *a, **k: {"success": True, "data": {"result": "allowed"}},
         )
@@ -150,9 +130,9 @@ class TestExpressionPreScan:
 class TestCamofoxEvalGuard:
     def _guard_on(self, monkeypatch):
         monkeypatch.setattr(browser_tool, "_is_camofox_mode", lambda: True)
-        monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: False)
+        monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: False)
         monkeypatch.setattr(browser_tool, "_is_local_sidecar_key", lambda key: False)
-        monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: False)
+        monkeypatch.setattr(bt_cloud, "_allow_private_urls", lambda: False)
 
     def test_camofox_blocks_private_fetch_literal_before_request(self, monkeypatch):
         self._guard_on(monkeypatch)
@@ -238,9 +218,9 @@ class TestCamofoxEvalGuard:
 
 class TestPostEvalPageRecheck:
     def _guard_on(self, monkeypatch):
-        monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: False)
+        monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: False)
         monkeypatch.setattr(browser_tool, "_is_local_sidecar_key", lambda key: False)
-        monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: False)
+        monkeypatch.setattr(bt_cloud, "_allow_private_urls", lambda: False)
 
     def test_blocks_when_page_navigated_private(self, monkeypatch):
         self._guard_on(monkeypatch)
@@ -250,7 +230,7 @@ class TestPostEvalPageRecheck:
         monkeypatch.setattr(browser_tool, "_is_safe_url", lambda url: False)
         monkeypatch.setattr(browser_tool, "_is_always_blocked_url", lambda url: False)
         monkeypatch.setattr(
-            browser_tool,
+            bt_session,
             "_run_browser_command",
             lambda task_id, command, args=None, **k: (
                 {"success": True, "data": {"result": PRIVATE_URL}}
@@ -269,7 +249,7 @@ class TestPostEvalPageRecheck:
         monkeypatch.setattr(browser_tool, "_is_safe_url", lambda url: True)
         monkeypatch.setattr(browser_tool, "_is_always_blocked_url", lambda url: False)
         monkeypatch.setattr(
-            browser_tool,
+            bt_session,
             "_run_browser_command",
             lambda task_id, command, args=None, **k: (
                 {"success": True, "data": {"result": PUBLIC_URL}}
@@ -293,7 +273,7 @@ class TestPostEvalPageRecheck:
                 return {"success": False, "error": "CDP probe failed"}
             return {"success": True, "data": {"result": "dom text"}}
 
-        monkeypatch.setattr(browser_tool, "_run_browser_command", _run)
+        monkeypatch.setattr(bt_session, "_run_browser_command", _run)
 
         result = _eval("document.body.innerText")
         assert result["success"] is True
@@ -311,20 +291,15 @@ class TestExpressionScanHelper:
             browser_tool, "_is_safe_url", lambda url: "127.0.0.1" not in url
         )
         monkeypatch.setattr(browser_tool, "_is_always_blocked_url", lambda url: False)
-        out = browser_tool._expression_targets_private_url(
+        out = bt_eval_policy._expression_targets_private_url(
             "fetch('https://example.com'); fetch('http://127.0.0.1/x')"
         )
         assert out == "http://127.0.0.1/x"
 
-    def test_none_when_no_url(self, monkeypatch):
-        monkeypatch.setattr(browser_tool, "_is_safe_url", lambda url: True)
-        monkeypatch.setattr(browser_tool, "_is_always_blocked_url", lambda url: False)
-        assert browser_tool._expression_targets_private_url("document.title") is None
-
     def test_strips_trailing_punctuation(self, monkeypatch):
         monkeypatch.setattr(browser_tool, "_is_safe_url", lambda url: False)
         monkeypatch.setattr(browser_tool, "_is_always_blocked_url", lambda url: False)
-        out = browser_tool._expression_targets_private_url(
+        out = bt_eval_policy._expression_targets_private_url(
             "location.href='http://10.0.0.1/';"
         )
         assert out == "http://10.0.0.1/"

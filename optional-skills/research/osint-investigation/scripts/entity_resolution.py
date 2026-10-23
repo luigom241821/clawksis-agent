@@ -26,7 +26,7 @@ from pathlib import Path
 
 # Allow running directly or as a module.
 sys.path.insert(0, str(Path(__file__).parent))
-from _normalize import (  # noqa: E402
+from _normalize import (
     normalize_name,
     normalize_aggressive,
     token_overlap_ratio,
@@ -89,18 +89,20 @@ def _emit(
     if key in seen:
         return
     seen.add(key)
-    out_rows.append({
-        "match_type": match_type,
-        "confidence": CONFIDENCE[match_type],
-        "left_name": left_raw,
-        "right_name": right_raw,
-        "left_normalized": normalize_name(left_raw),
-        "right_normalized": normalize_name(right_raw),
-        "left_row": left_row["__row__"],
-        "right_row": right_row["__row__"],
-        "overlap_ratio": f"{ratio:.3f}" if ratio else "",
-        "shared_tokens": str(shared) if shared else "",
-    })
+    out_rows.append(
+        {
+            "match_type": match_type,
+            "confidence": CONFIDENCE[match_type],
+            "left_name": left_raw,
+            "right_name": right_raw,
+            "left_normalized": normalize_name(left_raw),
+            "right_normalized": normalize_name(right_raw),
+            "left_row": left_row["__row__"],
+            "right_row": right_row["__row__"],
+            "overlap_ratio": f"{ratio:.3f}" if ratio else "",
+            "shared_tokens": str(shared) if shared else "",
+        }
+    )
 
 
 def resolve(

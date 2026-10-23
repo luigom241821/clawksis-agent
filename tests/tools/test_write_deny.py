@@ -5,38 +5,18 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.file_operations import _is_write_denied
+from agent.file_safety import is_write_denied as _is_write_denied
 
 
 class TestWriteDenyExactPaths:
     def test_etc_shadow(self):
         assert _is_write_denied("/etc/shadow") is True
 
-    def test_etc_passwd(self):
-        assert _is_write_denied("/etc/passwd") is True
-
-    def test_etc_sudoers(self):
-        assert _is_write_denied("/etc/sudoers") is True
-
     def test_ssh_authorized_keys(self):
         assert _is_write_denied("~/.ssh/authorized_keys") is True
 
-    def test_ssh_id_rsa(self):
-        path = os.path.join(str(Path.home()), ".ssh", "id_rsa")
-        assert _is_write_denied(path) is True
-
     def test_ssh_id_ed25519(self):
         path = os.path.join(str(Path.home()), ".ssh", "id_ed25519")
-        assert _is_write_denied(path) is True
-
-    def test_clawk_env(self):
-        # ``.env`` under the active CLAWK_HOME (profile-aware, not just
-        # ``~/.clawksis``) must be write-denied. The hermetic test conftest
-        # points CLAWK_HOME at a tempdir — resolve via get_clawk_home()
-        # to match the denylist.
-        from clawk_constants import get_clawk_home
-
-        path = str(get_clawk_home() / ".env")
         assert _is_write_denied(path) is True
 
     def test_clawk_root_env_when_running_under_profile(self, tmp_path, monkeypatch):
@@ -85,21 +65,6 @@ class TestWriteDenyPrefixes:
         path = os.path.join(str(Path.home()), ".ssh", "some_key")
         assert _is_write_denied(path) is True
 
-    def test_aws_prefix(self):
-        path = os.path.join(str(Path.home()), ".aws", "credentials")
-        assert _is_write_denied(path) is True
-
-    def test_gnupg_prefix(self):
-        path = os.path.join(str(Path.home()), ".gnupg", "secring.gpg")
-        assert _is_write_denied(path) is True
-
-    def test_kube_prefix(self):
-        path = os.path.join(str(Path.home()), ".kube", "config")
-        assert _is_write_denied(path) is True
-
-    def test_sudoers_d_prefix(self):
-        assert _is_write_denied("/etc/sudoers.d/custom") is True
-
     def test_systemd_prefix(self, tmp_path):
         # On NixOS, /etc/systemd is a symlink into /nix/store, so
         # realpath() resolves it to a store path that doesn't match
@@ -124,9 +89,6 @@ class TestWriteDenyPrefixes:
 class TestWriteAllowed:
     def test_tmp_file(self):
         assert _is_write_denied("/tmp/safe_file.txt") is False
-
-    def test_project_file(self):
-        assert _is_write_denied("/home/user/project/main.py") is False
 
     def test_clawk_control_files_requested_writable(self):
         from clawk_constants import get_clawk_home

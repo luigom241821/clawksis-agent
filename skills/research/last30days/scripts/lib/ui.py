@@ -174,7 +174,7 @@ def _format_completion_part(source: str, count: int, tty: bool) -> str:
     return f"{label}: {count} {unit}"
 
 
-def _build_nux_message(diag: dict = None) -> str:
+def _build_nux_message(diag: dict | None = None) -> str:
     """Build conversational NUX message with dynamic source status."""
     available = set((diag or {}).get("available_sources", []))
     if diag:
@@ -472,7 +472,7 @@ class ProgressDisplay:
             )
         sys.stderr.flush()
 
-    def show_cached(self, age_hours: float = None):
+    def show_cached(self, age_hours: float | None = None):
         if age_hours is not None:
             age_str = f" ({age_hours:.1f}h old)"
         else:
@@ -514,7 +514,7 @@ class ProgressDisplay:
             sys.stderr.write(f"✓ Ready for web search ({elapsed:.1f}s)\n")
         sys.stderr.flush()
 
-    def show_promo(self, missing: str = "both", diag: dict = None):
+    def show_promo(self, missing: str = "both", diag: dict | None = None):
         """Show NUX / promotional message for missing API keys.
 
         Args:

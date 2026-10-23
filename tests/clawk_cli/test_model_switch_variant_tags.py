@@ -38,7 +38,8 @@ def _run_switch(raw_input: str, current_provider: str = "openrouter") -> str:
             },
         ),
         patch(
-            "clawk_cli.models.validate_requested_model", return_value=_MOCK_VALIDATION
+            "clawk_cli.models_validate.validate_requested_model",
+            return_value=_MOCK_VALIDATION,
         ),
         patch("clawk_cli.model_switch.get_model_info", return_value=None),
         patch("clawk_cli.model_switch.get_model_capabilities", return_value=None),
@@ -79,17 +80,17 @@ class TestVariantTagPreservation:
         result = _run_switch("nvidia:nemotron-3-super-120b-a12b")
         assert result == "nvidia/nemotron-3-super-120b-a12b"
 
-    def test_legacy_colon_format_with_tag_converts_first_colon_only(self):
-        """vendor:model:free (no slash) → vendor/model:free — first colon becomes slash."""
-        result = _run_switch("nvidia:nemotron-3-super-120b-a12b:free")
-        assert result == "nvidia/nemotron-3-super-120b-a12b:free"
 
-    def test_bare_model_name_unaffected(self):
-        """Bare model names without colons or slashes should work normally."""
-        result = _run_switch("claude-sonnet-4.6")
-        assert result == "anthropic/claude-sonnet-4.6"
+class TestColonFormOffAggregators:
+    """``provider:model`` must resolve exactly like ``provider/model`` on a non-aggregator
+    current provider (#9748); an Ollama-style tag whose left side is not a provider is untouched."""
 
-    def test_already_correct_slug_no_tag(self):
-        """Standard vendor/model slugs without tags pass through unchanged."""
-        result = _run_switch("anthropic/claude-sonnet-4.6")
-        assert result == "anthropic/claude-sonnet-4.6"
+    def test_known_provider_colon_matches_slash_form(self):
+        with patch("clawk_cli.model_switch.resolve_provider_full", return_value=None):
+            colon = _run_switch("Alibaba:qwen3.6-plus", current_provider="alibaba")
+            slash = _run_switch("Alibaba/qwen3.6-plus", current_provider="alibaba")
+        assert colon == slash
+
+    def test_non_provider_left_side_keeps_colon(self):
+        with patch("clawk_cli.model_switch.resolve_provider_full", return_value=None):
+            assert _run_switch("qwen3.5:4b", current_provider="alibaba") == "qwen3.5:4b"

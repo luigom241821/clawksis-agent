@@ -1,8 +1,4 @@
-"""``clawk acp`` subcommand parser.
-
-Extracted from ``clawk_cli/main.py:main()`` (god-file Phase 2 follow-up).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk acp`` subcommand parser."""
 
 from __future__ import annotations
 

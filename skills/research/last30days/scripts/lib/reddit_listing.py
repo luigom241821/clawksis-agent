@@ -16,7 +16,7 @@ discovery source and to backfill scores onto RSS-discovered posts.
 import html as _html
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, Dict, List, Optional
 
@@ -62,7 +62,7 @@ def _to_epoch(value: Optional[str]) -> Optional[float]:
     try:
         dt = datetime.fromisoformat(value.strip())
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt.timestamp()
     except (ValueError, TypeError):
         return None
@@ -73,9 +73,9 @@ def _post_id(permalink: str) -> str:
     return m.group(1) if m else ""
 
 
-def parse_cards(html_text: str, query: str = "") -> List[Dict[str, Any]]:
+def parse_cards(html_text: str, query: str = "") -> list[dict[str, Any]]:
     """Parse <shreddit-post> cards into normalized post dicts with real scores."""
-    posts: List[Dict[str, Any]] = []
+    posts: list[dict[str, Any]] = []
     for m in _POST_CARD.finditer(html_text or ""):
         tag = m.group(0)
         permalink = _attr(tag, "permalink") or ""
@@ -95,30 +95,32 @@ def parse_cards(html_text: str, query: str = "") -> List[Dict[str, Any]]:
         created = _attr(tag, "created-timestamp")
         url = f"https://www.reddit.com{permalink}"
 
-        posts.append({
-            "id": "",
-            "title": title,
-            "url": url,
-            "score": score,
-            "num_comments": num_comments,
-            "subreddit": subreddit,
-            "created_utc": _to_epoch(created),
-            "author": author
-            if author not in ("[deleted]", "[removed]")
-            else "[deleted]",
-            "selftext": "",
-            "date": _to_date(created),
-            "engagement": {
+        posts.append(
+            {
+                "id": "",
+                "title": title,
+                "url": url,
                 "score": score,
                 "num_comments": num_comments,
-                "upvote_ratio": None,
-            },
-            "relevance": round(token_overlap_relevance(query, title), 3)
-            if query
-            else 0.0,
-            "why_relevant": "Reddit listing",
-            "metadata": {"post_id": _post_id(permalink)},
-        })
+                "subreddit": subreddit,
+                "created_utc": _to_epoch(created),
+                "author": author
+                if author not in ("[deleted]", "[removed]")
+                else "[deleted]",
+                "selftext": "",
+                "date": _to_date(created),
+                "engagement": {
+                    "score": score,
+                    "num_comments": num_comments,
+                    "upvote_ratio": None,
+                },
+                "relevance": round(token_overlap_relevance(query, title), 3)
+                if query
+                else 0.0,
+                "why_relevant": "Reddit listing",
+                "metadata": {"post_id": _post_id(permalink)},
+            }
+        )
     return posts
 
 
@@ -130,7 +132,7 @@ def _listing_url(subreddit: str, sort: str) -> str:
     return url
 
 
-def _fetch_one(subreddit: str, sort: str, query: str) -> List[Dict[str, Any]]:
+def _fetch_one(subreddit: str, sort: str, query: str) -> list[dict[str, Any]]:
     try:
         text = http.get_text(
             _listing_url(subreddit, sort), timeout=LISTING_TIMEOUT, accept="text/html"
@@ -142,10 +144,10 @@ def _fetch_one(subreddit: str, sort: str, query: str) -> List[Dict[str, Any]]:
 
 
 def fetch_listings(
-    subreddits: List[str],
+    subreddits: list[str],
     depth: str = "default",
     query: str = "",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Fetch scored post cards across subreddits × depth-appropriate sorts.
 
     Returns deduped normalized posts (with real scores), unranked/unsliced —
@@ -155,7 +157,7 @@ def fetch_listings(
         return []
     sorts = LISTING_SORTS.get(depth, LISTING_SORTS["default"])
     jobs = [(sub, sort) for sub in subreddits for sort in sorts]
-    all_posts: List[Dict[str, Any]] = []
+    all_posts: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(jobs)) or 1) as executor:
         futures = {
             executor.submit(_fetch_one, sub, sort, query): (sub, sort)
@@ -168,7 +170,7 @@ def fetch_listings(
                 _log(f"listing future failed: {e}")
 
     seen: set = set()
-    unique: List[Dict[str, Any]] = []
+    unique: list[dict[str, Any]] = []
     for p in all_posts:
         if p["url"] not in seen:
             seen.add(p["url"])
@@ -177,14 +179,14 @@ def fetch_listings(
 
 
 def score_index(
-    subreddits: List[str], depth: str = "default"
-) -> Dict[str, Dict[str, int]]:
+    subreddits: list[str], depth: str = "default"
+) -> dict[str, dict[str, int]]:
     """Build a {post_id: {score, num_comments}} map from subreddit listings.
 
     Used to backfill real scores onto posts discovered via RSS, which carries
     no engagement numbers.
     """
-    index: Dict[str, Dict[str, int]] = {}
+    index: dict[str, dict[str, int]] = {}
     for p in fetch_listings(subreddits, depth=depth):
         pid = p.get("metadata", {}).get("post_id") or _post_id(p["url"])
         if pid:

@@ -70,7 +70,7 @@ def test_xai_model_flow_cancel_skips_reauth(monkeypatch):
 
 
 def test_auth_credentials_choice_falls_back_to_numbered_prompt(monkeypatch):
-    from clawk_cli import main as main_mod
+    from clawk_cli import model_setup_flows_common as main_mod
 
     monkeypatch.setattr(
         "clawk_cli.setup._curses_prompt_choice",

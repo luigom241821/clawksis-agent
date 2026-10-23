@@ -3,7 +3,7 @@ Loader for G0DM0D3 scripts. Handles the exec-scoping issues.
 
 Usage in execute_code:
     exec(open(os.path.expanduser(
-        os.path.join(os.environ.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")), "skills/red-teaming/godmode/scripts/load_godmode.py")
+        os.path.join(os.environ.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")), "skills/security/godmode/scripts/load_godmode.py")
     )).read())
 
     # Now all functions are available:
@@ -18,9 +18,9 @@ import os, sys
 from pathlib import Path
 
 _gm_scripts_dir = (
-    Path(os.getenv("CLAWK_HOME", Path.home() / ".clawk"))
+    Path(os.getenv("CLAWK_HOME", Path.home() / ".clawksis"))
     / "skills"
-    / "red-teaming"
+    / "security"
     / "godmode"
     / "scripts"
 )

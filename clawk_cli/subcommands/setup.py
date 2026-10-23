@@ -1,8 +1,4 @@
-"""``clawk setup`` subcommand parser.
-
-Extracted verbatim from ``clawk_cli/main.py:main()`` (god-file Phase 2).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk setup`` subcommand parser."""
 
 from __future__ import annotations
 
@@ -11,19 +7,17 @@ from typing import Callable
 
 def build_setup_parser(subparsers, *, cmd_setup: Callable) -> None:
     """Attach the ``setup`` subcommand to ``subparsers``."""
-    # =========================================================================
-    # setup command
-    # =========================================================================
     setup_parser = subparsers.add_parser(
         "setup",
         help="Interactive setup wizard",
         description="Configure Clawksis with an interactive wizard. "
-        "Run a specific section: clawk setup model|tts|terminal|gateway|tools|agent",
+        "Run a specific section: "
+        "clawk setup model|tts|terminal|gateway|tools|telemetry|agent",
     )
     setup_parser.add_argument(
         "section",
         nargs="?",
-        choices=["model", "tts", "terminal", "gateway", "tools", "agent"],
+        choices=["model", "tts", "terminal", "gateway", "tools", "telemetry", "agent"],
         default=None,
         help="Run a specific setup section instead of the full wizard",
     )

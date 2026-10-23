@@ -1,16 +1,8 @@
 ---
 name: cloudflare-tunnel
-description: >-
-  Expose a local service to the public internet with a Cloudflare Quick Tunnel —
-  no Cloudflare account, login, or DNS needed. Run
-  `cloudflared tunnel --url http://localhost:PORT` and it prints a public
-  https://<random>.trycloudflare.com URL that forwards to your local port. Use
-  when you need to share a dev server, webhook receiver, demo, or local API with
-  someone outside the machine. Covers installing cloudflared, starting the tunnel
-  in the background, capturing the generated URL, and tearing it down. WARNING:
-  Quick Tunnel URLs are PUBLIC and UNAUTHENTICATED — anyone with the link reaches
-  your local service — and are ephemeral (they change on restart and are
-  rate-limited). Do not expose sensitive services.
+description: "Expose a local port publicly via a Cloudflare Quick Tunnel."
+author: Clawksis
+license: MIT
 version: 1.0.0
 platforms: [linux, macos, windows]
 metadata:
@@ -49,7 +41,7 @@ Install if missing:
 brew install cloudflared
 
 # Debian/Ubuntu
-curl -fsSL https://pkg.cloudflare.com/cloudflared-stable-linux-amd64.deb -o /tmp/cf.deb && sudo dpkg -i /tmp/cf.deb
+curl -fsSL https://pkg.cloudflare.com/cloudflared-stable-linux-amd64.deb -o "${TMPDIR:-/tmp}/cf.deb" && sudo dpkg -i "${TMPDIR:-/tmp}/cf.deb"
 #   (ARM: replace amd64 with arm64; or grab the static binary from
 #    https://github.com/cloudflare/cloudflared/releases/latest)
 
@@ -65,17 +57,18 @@ blocks. The public URL is printed to **stderr** within a few seconds. Run it in
 the background and read the URL out, e.g. for a service on port 8080:
 
 ```bash
-# Start in the background, logging to a file
-cloudflared tunnel --url http://localhost:8080 > /tmp/cf-tunnel.log 2>&1 &
-echo $! > /tmp/cf-tunnel.pid
+# Start in the background, logging to a file in the scratch dir
+CF_DIR="${TMPDIR:-/tmp}"
+cloudflared tunnel --url http://localhost:8080 > "$CF_DIR/cf-tunnel.log" 2>&1 &
+echo $! > "$CF_DIR/cf-tunnel.pid"
 
 # Wait for and extract the public URL
 for i in $(seq 1 20); do
-  url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf-tunnel.log | head -1)
+  url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$CF_DIR/cf-tunnel.log" | head -1)
   [ -n "$url" ] && break
   sleep 1
 done
-echo "Public URL: ${url:-<not ready — check /tmp/cf-tunnel.log>}"
+echo "Public URL: ${url:-<not ready — check $CF_DIR/cf-tunnel.log>}"
 ```
 
 If you have the `terminal` tool with `background=true`, prefer launching it that
@@ -90,7 +83,7 @@ service.
 
 ```bash
 # If you saved the PID:
-kill "$(cat /tmp/cf-tunnel.pid)" 2>/dev/null && rm -f /tmp/cf-tunnel.pid
+kill "$(cat "${TMPDIR:-/tmp}/cf-tunnel.pid")" 2>/dev/null && rm -f "${TMPDIR:-/tmp}/cf-tunnel.pid"
 
 # Otherwise:
 pkill -f 'cloudflared tunnel --url' 2>/dev/null

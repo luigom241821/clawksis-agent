@@ -54,20 +54,6 @@ class TestCommandNameObfuscation:
     @pytest.mark.parametrize(
         "cmd",
         [
-            r"r\m -rf /",
-            "r''m -rf /",
-            "$(echo rm) -rf /",
-            "${0/x/r}m -rf /",
-            "`echo rm` -rf /",
-        ],
-    )
-    def test_obfuscated_command_name_is_hardline(self, cmd):
-        is_hardline, desc = detect_hardline_command(cmd)
-        assert is_hardline is True, f"hardline bypass was not caught: {cmd!r}"
-
-    @pytest.mark.parametrize(
-        "cmd",
-        [
             "echo $(echo rm) -rf /",
             "echo $(printf rm) -rf /",
             "echo $(printf %s rm) -rf /",

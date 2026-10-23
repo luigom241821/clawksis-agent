@@ -34,7 +34,7 @@ def _log(msg: str) -> None:
     sys.stderr.flush()
 
 
-def _tier0_json(topic: str, depth: str) -> List[Dict[str, Any]]:
+def _tier0_json(topic: str, depth: str) -> list[dict[str, Any]]:
     """One cheap global ``.json`` discovery attempt. Returns [] on the 403 wall."""
     try:
         from . import reddit_public
@@ -46,14 +46,14 @@ def _tier0_json(topic: str, depth: str) -> List[Dict[str, Any]]:
 
 
 def _top_subreddits(
-    posts: List[Dict[str, Any]], limit: int = MAX_DERIVED_SUBS
-) -> List[str]:
+    posts: list[dict[str, Any]], limit: int = MAX_DERIVED_SUBS
+) -> list[str]:
     """Most frequent subreddits across discovered posts (for score backfill)."""
     counts = Counter(p.get("subreddit", "") for p in posts if p.get("subreddit"))
     return [sub for sub, _ in counts.most_common(limit)]
 
 
-def _apply_scores(post: Dict[str, Any], scored: Dict[str, int]) -> None:
+def _apply_scores(post: dict[str, Any], scored: dict[str, int]) -> None:
     post["score"] = scored["score"]
     post["num_comments"] = scored["num_comments"]
     post.setdefault("engagement", {})["score"] = scored["score"]
@@ -61,8 +61,8 @@ def _apply_scores(post: Dict[str, Any], scored: Dict[str, int]) -> None:
 
 
 def _discover(
-    topic: str, depth: str, subreddits: Optional[List[str]]
-) -> List[Dict[str, Any]]:
+    topic: str, depth: str, subreddits: Optional[list[str]]
+) -> list[dict[str, Any]]:
     # Tier 0: demoted one-shot .json (dead for normal users too, but free to try).
     posts = _tier0_json(topic, depth)
     if posts:
@@ -95,7 +95,7 @@ def _discover(
     )
 
     # Score lookup by post id, from the scored listing cards.
-    score_map: Dict[str, Dict[str, int]] = {}
+    score_map: dict[str, dict[str, int]] = {}
     for p in score_source:
         pid = p.get("metadata", {}).get("post_id", "")
         if pid:
@@ -103,7 +103,7 @@ def _discover(
 
     # Merge: scored listing posts first (targeted only), then RSS breadth,
     # backfilled with real scores where the post appears in a listing.
-    merged: List[Dict[str, Any]] = []
+    merged: list[dict[str, Any]] = []
     seen: set = set()
     for p in listing_posts:
         if p["url"] not in seen:
@@ -120,7 +120,7 @@ def _discover(
     return merged
 
 
-def _enrich_one(post: Dict[str, Any]) -> Dict[str, Any]:
+def _enrich_one(post: dict[str, Any]) -> dict[str, Any]:
     """Attach shreddit comments + real comment count. Never raises."""
     try:
         data = reddit_shreddit.fetch_comments(post.get("url", ""))
@@ -137,7 +137,7 @@ def _enrich_one(post: Dict[str, Any]) -> Dict[str, Any]:
     return post
 
 
-def _enrich(posts: List[Dict[str, Any]], depth: str) -> List[Dict[str, Any]]:
+def _enrich(posts: list[dict[str, Any]], depth: str) -> list[dict[str, Any]]:
     """Enrich the top N posts with comments under a total time budget."""
     limit = ENRICH_LIMITS.get(depth, ENRICH_LIMITS["default"])
     to_enrich = posts[:limit]
@@ -145,7 +145,7 @@ def _enrich(posts: List[Dict[str, Any]], depth: str) -> List[Dict[str, Any]]:
     if not to_enrich:
         return posts
 
-    result_map: Dict[int, Dict[str, Any]] = {}
+    result_map: dict[int, dict[str, Any]] = {}
     try:
         with ThreadPoolExecutor(max_workers=min(limit, MAX_ENRICH_WORKERS)) as executor:
             futures = {
@@ -170,7 +170,7 @@ def _enrich(posts: List[Dict[str, Any]], depth: str) -> List[Dict[str, Any]]:
     return enriched + rest
 
 
-def _slot_priority(topic: str, posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _slot_priority(topic: str, posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Order posts for enrichment slots: entity-matching posts first.
 
     Comment slots (ENRICH_LIMITS) are scarce; spending them on high-upvote
@@ -189,25 +189,25 @@ def _slot_priority(topic: str, posts: List[Dict[str, Any]]) -> List[Dict[str, An
     try:
         from . import relevance, rerank
 
-        def _post_text(post: Dict[str, Any]) -> str:
+        def _post_text(post: dict[str, Any]) -> str:
             return f"{post.get('title') or ''} {post.get('selftext') or ''}"
 
         entity = rerank._primary_entity(topic).lower()
         if entity:
 
-            def _matches(post: Dict[str, Any]) -> bool:
+            def _matches(post: dict[str, Any]) -> bool:
                 return rerank._entity_grounded(_post_text(post), entity)
 
         else:
             prepared = relevance.PreparedQuery(topic)
 
-            def _matches(post: Dict[str, Any]) -> bool:
+            def _matches(post: dict[str, Any]) -> bool:
                 return (
                     relevance.token_overlap_relevance(prepared, _post_text(post)) > 0.24
                 )
 
-        matches: List[Dict[str, Any]] = []
-        misses: List[Dict[str, Any]] = []
+        matches: list[dict[str, Any]] = []
+        misses: list[dict[str, Any]] = []
         for post in posts:
             (matches if _matches(post) else misses).append(post)
         return matches + misses
@@ -220,8 +220,8 @@ def search_and_enrich(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    subreddits: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    subreddits: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
     """Full keyless Reddit pipeline: discover (Tier 0/1) then enrich (Tier 2).
 
     Args:

@@ -160,7 +160,7 @@ class _RangeHandler(http.server.BaseHTTPRequestHandler):
 
     payload = b"GGUF" + bytes(range(256)) * 64  # ~16KB
 
-    def do_GET(self):  # noqa: N802 — nombre de la stdlib
+    def do_GET(self):
 
         rng = self.headers.get("Range")
 

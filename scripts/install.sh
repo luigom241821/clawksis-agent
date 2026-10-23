@@ -1,2791 +1,1446 @@
-#!/bin/bash
-# ============================================================================
-# Clawksis Installer
-# ============================================================================
-# Installation script for Linux, macOS, and Android/Termux.
-# Uses uv for desktop/server installs and Python's stdlib venv + pip on Termux.
+#!/usr/bin/env bash
+# Clawksis bootstrap: clone, acquire uv/Python, then hand the checkout to
+# the same completion an update runs -- command publication, product builds and
+# post-build maintenance -- so a fresh install and a finished update land in one
+# state. Heavy dependencies (tool binaries, browsers, node) are pm's job:
+# `clawk pm install`.
 #
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
-#
-# Or with options:
-#   curl -fsSL ... | bash -s -- --no-venv --skip-setup
-#
-# ============================================================================
-
-set -e
-
-# Guard against environment leakage when the installer is launched from another
-# Python-driven tool session (e.g. Clawksis terminal tool). A pre-set PYTHONPATH
-# can force pip/entrypoints to import a different checkout than the one being
-# installed, which makes fresh installs appear broken or stale.
-if [ -n "${PYTHONPATH:-}" ]; then
-    echo "⚠ Ignoring inherited PYTHONPATH during install to avoid module shadowing"
-    unset PYTHONPATH
-fi
-if [ -n "${PYTHONHOME:-}" ]; then
-    echo "⚠ Ignoring inherited PYTHONHOME during install"
-    unset PYTHONHOME
-fi
+# Stage protocol kept for Clawksis-Setup:
+#   --manifest            print the stage list as JSON
+#   --stage NAME [--json] run one stage
+#   --non-interactive     skip stages that need input
+#   --include-desktop     build the desktop app too (products stage)
+#   --verbose             stream every child command's output (the default
+#                         off a terminal and in CI)
+set -u
 
 # Prevent uv from discovering config files (uv.toml, pyproject.toml) from the
 # wrong user's home directory when running under sudo -u <user>.  See #21269.
+# pm's own venv sync re-isolates (pm/environment.py), so this bootstrap
+# hygiene can't break the locked sync the way it used to before pm owned it.
 export UV_NO_CONFIG=1
 
-# Suppress vanity postinstall banners (e.g. unicode-animations' UNICODE ASCII
-# art) that write to /dev/tty during `npm install`. Their postinstall scripts
-# self-skip when CI is set — keeps the install output clean.
-export CI=1
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
-BOLD='\033[1m'
-PURPLE='\033[38;2;108;79;214m'  # Clawksis brand (#6C4FD6), truecolor
-
-# Keep a handle to the real terminal (fd 3 = stdout, fd 4 = stderr) so the
-# progress bars and errors stay visible even while the noisy install phases
-# have their stdout/stderr routed to a log file — see main() / _on_exit.
-exec 3>&1 4>&2
-_INSTALL_LOG=""
-_QUIET=0
-
-# Configuration
-REPO_URL_SSH="git@github.com:samuelgradientai-sys/clawksis-agent.git"
-REPO_URL_HTTPS="https://github.com/samuelgradientai-sys/clawksis-agent.git"
-CLAWK_HOME="${CLAWK_HOME:-$HOME/.clawksis}"
-# INSTALL_DIR is resolved AFTER arg parsing and OS detection so we can pick an
-# FHS-style layout for root installs.  Track whether the user gave us an
-# explicit directory — if so we never override it.
-if [ -n "${CLAWK_INSTALL_DIR:-}" ]; then
-    INSTALL_DIR="$CLAWK_INSTALL_DIR"
-    INSTALL_DIR_EXPLICIT=true
-else
-    INSTALL_DIR=""
-    INSTALL_DIR_EXPLICIT=false
-fi
-PYTHON_VERSION="3.11"
-NODE_VERSION="22"
-
-# FHS-style root install layout (set by resolve_install_layout when applicable):
-#   code at /usr/local/lib/clawksis-agent, command at /usr/local/bin/clawk,
-#   data still at /root/.clawksis (CLAWK_HOME).  Matches Claude Code / Codex CLI
-#   and keeps Docker bind-mounted /root/ volumes lean.
-ROOT_FHS_LAYOUT=false
-SUDO_INSTALL_ACKNOWLEDGED=false
-# Bug #14 fix: detectar sudo UNA SOLA VEZ al inicio. Cada función que necesite
-# instalar paquetes del sistema consulta esta variable en vez de re-detectar
-# (lo que causaba 3+ prompts independientes que se colgaban en VPS sin sudo).
-HAS_USABLE_SUDO=""  # set by detect_sudo_capability(): "true" | "false"
-DETECTED_BROWSER_EXECUTABLE=""
-
-# Options
-USE_VENV=true
-RUN_SETUP=true
-SKIP_BROWSER=false
-NO_SKILLS=false
+REPO_URL="${CLAWK_REPO_URL:-https://github.com/samuelgradientai-sys/clawksis-agent.git}"
 BRANCH="main"
 INSTALL_COMMIT=""
-ENSURE_DEPS=""
-POSTINSTALL_MODE=false
-MANIFEST_MODE=false
-STAGE_NAME=""
-JSON_OUTPUT=false
+# The update channel to install: stable (the latest published release, the default for the
+# official repository's main line) or main (every commit). An explicit choice is persisted.
+CHANNEL="${CLAWK_INSTALL_CHANNEL:-}"
+INSTALL_DIR="${CLAWK_INSTALL_DIR:-}"
+CLAWK_HOME="${CLAWK_HOME:-$HOME/.clawksis}"
+STAGE=""
+WANT_MANIFEST=false
+JSON=false
 NON_INTERACTIVE=false
 INCLUDE_DESKTOP=false
+VERBOSE=false
+SKIP_BROWSER=false
+SKIP_COMPUTER_USE=false
+INSTALL_LADDER=false
+INSTALL_STARTED=0
+INSTALL_RUN_ID=""
+FAILURE_CLASS=""
+INSTALL_SIGNAL=""
+INSTALL_IN_STAGE=false
 
-# Detect non-interactive mode (e.g. curl | bash)
-# When stdin is not a terminal, read -p will fail with EOF,
-# causing set -e to silently abort the entire script.
-if [ -t 0 ]; then
-    IS_INTERACTIVE=true
-else
-    IS_INTERACTIVE=false
-fi
-
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --no-venv)
-            USE_VENV=false
-            shift
-            ;;
-        --skip-setup)
-            RUN_SETUP=false
-            # Bug #12 fix: --skip-setup implies fully non-interactive. The flag
-            # previously only suppressed the wizard at the end, but the installer
-            # still asked about ffmpeg / build-tools mid-flow. Anyone running
-            # --skip-setup wants automation; surprise prompts in the middle hang
-            # CI, Ansible, Terraform, container builds, etc.
-            NON_INTERACTIVE=true
-            shift
-            ;;
-        --skip-browser|--no-playwright)
-            SKIP_BROWSER=true
-            shift
-            ;;
-        --no-skills)
-            NO_SKILLS=true
-            shift
-            ;;
-        --branch|-Branch)
-            BRANCH="$2"
-            shift 2
-            ;;
-        --commit|-Commit)
-            INSTALL_COMMIT="$2"
-            shift 2
-            ;;
-        --manifest|-Manifest)
-            MANIFEST_MODE=true
-            shift
-            ;;
-        --stage|-Stage)
-            STAGE_NAME="$2"
-            shift 2
-            ;;
-        --json|-Json)
-            JSON_OUTPUT=true
-            shift
-            ;;
-        --non-interactive|-NonInteractive)
-            NON_INTERACTIVE=true
-            shift
-            ;;
-        --include-desktop|-IncludeDesktop)
-            INCLUDE_DESKTOP=true
-            shift
-            ;;
-        --dir)
-            INSTALL_DIR="$2"
-            INSTALL_DIR_EXPLICIT=true
-            shift 2
-            ;;
-        --clawk-home)
-            CLAWK_HOME="$2"
-            shift 2
-            ;;
-        --ensure)
-            ENSURE_DEPS="$2"
-            shift 2
-            ;;
-        --postinstall)
-            POSTINSTALL_MODE=true
-            shift
-            ;;
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --branch|-Branch|--commit|-Commit|--channel|-Channel|--dir|--clawk-home|-ClawkHome|--stage|-Stage)
+            option="$1"
+            if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == -* ]]; then
+                printf '%s needs a value\n' "$option" >&2
+                exit 2
+            fi
+            case "$option" in
+                --branch|-Branch) BRANCH="$2" ;;
+                --commit|-Commit) INSTALL_COMMIT="$2" ;;
+                --channel|-Channel) CHANNEL="$2" ;;
+                --dir) INSTALL_DIR="$2" ;;
+                --clawk-home|-ClawkHome) CLAWK_HOME="$2" ;;
+                --stage|-Stage) STAGE="$2" ;;
+            esac
+            shift 2 ;;
+        --manifest|-Manifest) WANT_MANIFEST=true; shift ;;
+        --json|-Json) JSON=true; shift ;;
+        --non-interactive|-NonInteractive) NON_INTERACTIVE=true; shift ;;
+        --skip-setup) NON_INTERACTIVE=true; shift ;;
+        --skip-browser|--no-playwright|-SkipBrowser) SKIP_BROWSER=true; shift ;;
+        --skip-computer-use|-SkipComputerUse) SKIP_COMPUTER_USE=true; shift ;;
+        --include-desktop|-IncludeDesktop) INCLUDE_DESKTOP=true; shift ;;
+        --verbose|-Verbose) VERBOSE=true; shift ;;
         -h|--help)
-            echo "Clawksis Installer"
-            echo ""
-            echo "Usage: install.sh [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  --no-venv      Don't create virtual environment"
-            echo "  --skip-setup   Skip interactive setup wizard"
-            echo "  --skip-browser Skip Playwright/Chromium install (browser tools won't work)"
-            echo "  --no-skills    Start with a blank slate — seed no bundled skills, and"
-            echo "                   write \$CLAWK_HOME/.no-bundled-skills so future"
-            echo "                   'clawk update' runs never inject bundled skills either"
-            echo "  --branch NAME  Git branch to install (default: main)"
-            echo "  --commit SHA   Pin checkout to a specific commit after clone/update"
-            echo "  --manifest     Print desktop bootstrap stage manifest as JSON"
-            echo "  --stage NAME   Run one desktop bootstrap stage"
-            echo "  --json         Print a JSON result frame for --stage"
-            echo "  --non-interactive  Skip stages that require user input"
-            echo "  --include-desktop  Also build the desktop app (apps/desktop -> Clawksis.app)"
-            echo "  --dir PATH     Installation directory"
-            echo "                   default (non-root):  ~/.clawksis/clawksis-agent"
-            echo "                   default (root, Linux): /usr/local/lib/clawksis-agent"
-            echo "  --clawk-home PATH  Data directory (default: ~/.clawksis, or \$CLAWK_HOME)"
-            echo "  -h, --help     Show this help"
-            echo ""
-            echo "Notes:"
-            echo "  When running as root on Linux, Clawksis installs the code under"
-            echo "  /usr/local/lib/clawksis-agent and links the command into"
-            echo "  /usr/local/bin/clawk (FHS layout — matches Claude Code / Codex CLI)."
-            echo "  Data, config, sessions, and logs still live in \$CLAWK_HOME"
-            echo "  (default /root/.clawksis).  This keeps Docker bind-mounted volumes"
-            echo "  small and ensures the command is on PATH for all shells."
-            echo "  Existing installs at \$CLAWK_HOME/clawksis-agent are preserved in-place."
-            echo "  --ensure DEPS  Install only specified deps (comma-separated)"
-            echo "                   Supported: node, browser, ripgrep, ffmpeg"
-            echo "                   Does NOT clone repo or create venv"
-            echo "  --postinstall  Run post-install setup only (for pip users)"
-            echo "                   Installs optional deps + runs clawk setup"
-            echo "                   Does NOT clone repo or create venv"
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
+            echo "Usage: install.sh [--channel stable|main] [--branch NAME] [--commit SHA]"
+            echo "                  [--dir PATH] [--clawk-home PATH]"
+            echo "                  [--manifest] [--stage NAME] [--json]"
+            echo "                  [--non-interactive] [--include-desktop] [--verbose]"
+            echo "                  [--skip-browser] [--skip-computer-use]"
+            echo
+            echo "  --channel       stable (default): the latest published release, then release"
+            echo "                  to release. main: every commit. Also CLAWK_INSTALL_CHANNEL;"
+            echo "                  an explicit choice is saved like 'clawk update --set-channel'."
+            echo "  --skip-browser  Do not install the browser tools (agent-browser + Chromium)."
+            echo "                  Alias: --no-playwright. Remembered by later"
+            echo "                  installs and 'clawk update'; undo with 'clawk pm install agent-browser'."
+            echo "  --skip-computer-use"
+            echo "                  Do not install the computer-use driver (cua-driver). Remembered"
+            echo "                  the same way; undo with 'clawk pm install cua-driver'."
+            exit 0 ;;
+        *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
 done
 
-# ============================================================================
-# Helper functions
-# ============================================================================
+case "$CHANNEL" in
+    ""|stable|main) ;;
+    *) printf -- '--channel must be stable or main, not %s\n' "$CHANNEL" >&2; exit 2 ;;
+esac
+
+INSTALL_DIR="${INSTALL_DIR:-$CLAWK_HOME/clawksis-agent}"
+export CLAWK_HOME
+
+INSTALL_LOG="$CLAWK_HOME/logs/install.log"
+
+# Same glyphs as the pre-pm installer. Colour only on a terminal, so CI
+# transcripts and the Clawksis-Setup driver read plain text.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    C_RED=$'\033[0;31m' C_GREEN=$'\033[0;32m' C_YELLOW=$'\033[0;33m'
+    C_CYAN=$'\033[0;36m' C_MAGENTA=$'\033[0;35m' C_BOLD=$'\033[1m'
+    C_DIM=$'\033[2m' C_NC=$'\033[0m'
+    # Clawksis brand purple (#6C4FD6), truecolor.
+    C_PURPLE=$'\033[38;2;108;79;214m'
+else
+    C_RED="" C_GREEN="" C_YELLOW="" C_CYAN="" C_MAGENTA="" C_BOLD="" C_DIM="" C_NC=""
+    C_PURPLE=""
+fi
+
+# Clawksis quiet install: while the ladder runs its unattended stages on a
+# terminal, only the purple progress bars (plus warnings and errors) reach the
+# screen; the step details go to $INSTALL_LOG. Set per stage by the ladder.
+QUIET_LADDER=false
+quiet_log() {
+    { mkdir -p "${INSTALL_LOG%/*}" && printf '%s\n' "$1" >> "$INSTALL_LOG"; } 2>/dev/null || printf '%s\n' "$1"
+}
+
+log() {
+    if [ "$QUIET_LADDER" = true ]; then quiet_log "→ $1"; return; fi
+    printf '%s→%s %s\n' "$C_CYAN" "$C_NC" "$1"
+}
+log_success() {
+    if [ "$QUIET_LADDER" = true ]; then quiet_log "✓ $1"; return; fi
+    printf '%s✓%s %s\n' "$C_GREEN" "$C_NC" "$1"
+}
+log_warn() { printf '%s⚠%s %s\n' "$C_YELLOW" "$C_NC" "$1"; }
+log_error() { printf '%s✗%s %s\n' "$C_RED" "$C_NC" "$1" >&2; }
+# $2: closed failure class for the local install receipt (write_install_receipt).
+fail() { STAGE_REASON="$1"; FAILURE_CLASS="${2:-other}"; log_error "$1"; exit 1; }
+# The last failed run_logged command's own error line (git's "fatal: ..."), so a
+# failure reason -- which Clawksis-Setup shows as-is -- names the cause, not just the step.
+RUN_LOGGED_ERROR=""
+native_detail() { [ -z "$RUN_LOGGED_ERROR" ] || printf ': %s' "$RUN_LOGGED_ERROR"; }
+# Pick the error line from a command's output on stdin: the first fatal:/error:
+# line (git's cause; later ones are generic), else the last non-empty one.
+error_line() {
+    local line pick="" last=""
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"; line="${line##*$'\r'}"
+        [ -n "${line//[[:space:]]/}" ] || continue
+        last="$line"
+        [ -n "$pick" ] || case "$line" in fatal:*|error:*|*" fatal: "*|*" error: "*) pick="$line" ;; esac
+    done
+    pick="${pick:-$last}"
+    printf '%s' "${pick:0:240}"
+}
+
+# One local receipt per full-ladder run, under the profile's shared-metrics dir.
+# Only closed tokens and two timestamps (never STAGE_REASON, paths or URLs); the
+# installer never sends anything. Clawksis reports it as clawk.install.run on a
+# later start only while shared metrics collection is on, and deletes it
+# unreported when collection is off. Best effort: never fails the install.
+write_install_receipt() {
+    # $1 outcome, $2 failed stage, $3 failure class. One file per run: the first writer wins.
+    # A failed write (full disk) removes its partial temp file: the reader never sees dotfiles.
+    {
+        local dir="$CLAWK_HOME/telemetry/shared_metrics/pending_installs" id="$INSTALL_RUN_ID"
+        [ -n "$id" ] && [ ! -e "$dir/$id.json" ] && mkdir -p "$dir" && {
+            printf '{"id":"%s","installer":"install_sh","outcome":"%s","failed_stage":"%s","failure_class":"%s","started_at":%s,"finished_at":%s}\n' \
+                "$id" "$1" "$2" "$3" "$INSTALL_STARTED" "$(date +%s)" > "$dir/.$id.tmp" \
+                && mv -f "$dir/.$id.tmp" "$dir/$id.json" \
+                || rm -f "$dir/.$id.tmp"
+        }
+    } >/dev/null 2>&1 || :
+}
+
+# Ladder signal handling. The traps only note the signal while a stage owns the
+# terminal: bash runs a trap once the foreground stage returns, and that stage's
+# result decides. A stage whose child caught Ctrl-C and succeeded (setup's
+# provider picker: "Provider setup skipped.") lets the ladder carry on, as bash's
+# own wait-and-cooperative-exit did before these traps existed. A stage that
+# failed after the signal is recorded as `interrupted`, then the signal is
+# re-raised so the exit status is the signal's. A TERM or HUP sent to the
+# installer alone (not its process group) takes effect when the running stage
+# returns, and the receipt names the stage the run stopped before. The stage
+# stays in the foreground because a background stage's children ignore Ctrl-C
+# under bash 3.2 (macOS /bin/bash), even after `trap -`.
+install_signal() {
+    # $1 signal name. Outside a stage (platform check, banner, between stages) stop now.
+    INSTALL_SIGNAL="$1"
+    [ "$INSTALL_IN_STAGE" = true ] || install_interrupted
+}
+
+install_interrupted() {
+    # Record the stage the signal cut off, then die by that signal (exit code if it is blocked).
+    local stage="${s:-prerequisites}" sig="${INSTALL_SIGNAL:-INT}" code=130
+    case "$sig" in HUP) code=129 ;; TERM) code=143 ;; esac
+    write_install_receipt failed "${stage//-/_}" interrupted
+    trap - INT TERM HUP EXIT
+    kill -s "$sig" "$$" 2>/dev/null
+    exit "$code"
+}
+
+# Inside a ladder stage: a child the signal killed ends the stage like bash's own
+# cooperative exit (its status is the signal's, 128+N); a child that caught the
+# signal keeps its own result, and the stage's receipt reads `interrupted`.
+stage_signal() {
+    # $1 status of the command the signal arrived during, $2 this signal's 128+N.
+    STAGE_INTERRUPTED=true
+    [ "$1" -ne "$2" ] || exit "$2"
+}
 
 print_banner() {
-    echo ""
-    echo -e "${BOLD}[38;2;141;112;240m  ██████╗██╗      █████╗ ██╗    ██╗██╗  ██╗███████╗██╗███████╗${NC}"
-    echo -e "${BOLD}[38;2;124;98;226m ██╔════╝██║     ██╔══██╗██║    ██║██║ ██╔╝██╔════╝██║██╔════╝${NC}"
-    echo -e "${BOLD}[38;2;108;79;214m ██║     ██║     ███████║██║ █╗ ██║█████╔╝ ███████╗██║███████╗${NC}"
-    echo -e "${BOLD}[38;2;92;66;190m ██║     ██║     ██╔══██║██║███╗██║██╔═██╗ ╚════██║██║╚════██║${NC}"
-    echo -e "${BOLD}[38;2;74;52;150m ╚██████╗███████╗██║  ██║╚███╔███╔╝██║  ██╗███████║██║███████║${NC}"
-    echo -e "${BOLD}[38;2;52;36;110m  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚═╝╚══════╝${NC}"
-    echo ""
-}
-
-log_info() {
-    echo -e "${CYAN}→${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}✓${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
-# ============================================================================
-# Barra de progreso de instalacion
-# ============================================================================
-INSTALL_STEP=0
-INSTALL_TOTAL=11
-
-progress_bar() {
-    local label="$1"
-    INSTALL_STEP=$((INSTALL_STEP + 1))
-    local pct=$((INSTALL_STEP * 100 / INSTALL_TOTAL))
-    local filled=$((pct * 30 / 100))
-    local empty=$((30 - filled))
-    local DIM='\033[2m'
-    local NC_='\033[0m'
-    local bar=""
+    # CLAWKSIS wordmark (ANSI Shadow) in the brand purple gradient.
+    local shades=("141;112;240" "124;98;226" "108;79;214" "92;66;190" "74;52;150" "52;36;110")
+    local lines=(
+        "  ██████╗██╗      █████╗ ██╗    ██╗██╗  ██╗███████╗██╗███████╗"
+        " ██╔════╝██║     ██╔══██╗██║    ██║██║ ██╔╝██╔════╝██║██╔════╝"
+        " ██║     ██║     ███████║██║ █╗ ██║█████╔╝ ███████╗██║███████╗"
+        " ██║     ██║     ██╔══██║██║███╗██║██╔═██╗ ╚════██║██║╚════██║"
+        " ╚██████╗███████╗██║  ██║╚███╔███╔╝██║  ██╗███████║██║███████║"
+        "  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚═╝╚══════╝"
+    )
     local i
-    for ((i=0; i<filled; i++)); do bar="${bar}█"; done
-    for ((i=0; i<empty; i++)); do bar="${bar}░"; done
-    printf "\n${PURPLE}[%b] %3d%%${NC_} ${DIM}(%d/%d)${NC_} %s\n" "$bar" "$pct" "$INSTALL_STEP" "$INSTALL_TOTAL" "$label" >&3
-}
-
-
-log_error() {
-    echo -e "${RED}✗${NC} $1" >&3
-}
-
-json_escape() {
-    # Enough for short installer status strings; avoids requiring jq during
-    # pre-install bootstrap.
-    printf '%s' "$1" | tr '\n' ' ' | sed \
-        -e 's/\\/\\\\/g' \
-        -e 's/"/\\"/g'
-}
-
-# npm rewrites tracked package-lock.json files non-deterministically during
-# `npm install` / `npm run pack`. On a managed install those diffs are never
-# intentional, but they leave the checkout dirty — which forces `clawk update`
-# to autostash on every run and makes branch switches fragile. Restore them so
-# a fresh install ends with a clean tree. Best-effort; only touches lockfiles.
-restore_dirty_lockfiles() {
-    local repo="${1:-$INSTALL_DIR}"
-    [ -n "$repo" ] && [ -d "$repo/.git" ] || return 0
-    command -v git >/dev/null 2>&1 || return 0
-    local dirty
-    dirty=$(git -C "$repo" diff --name-only 2>/dev/null | grep 'package-lock\.json$' || true)
-    [ -z "$dirty" ] && return 0
-    echo "$dirty" | while IFS= read -r f; do
-        [ -n "$f" ] && git -C "$repo" checkout -- "$f" 2>/dev/null || true
+    printf '\n'
+    for i in "${!lines[@]}"; do
+        if [ -n "$C_PURPLE" ]; then
+            printf '%s\033[38;2;%sm%s%s\n' "$C_BOLD" "${shades[$i]}" "${lines[$i]}" "$C_NC"
+        else
+            printf '%s\n' "${lines[$i]}"
+        fi
     done
-}
-
-emit_manifest() {
-    # Stage-Desktop is included only with --include-desktop, mirroring
-    # install.ps1: the signed bootstrap installer (Clawksis-Setup) passes it so
-    # a GUI install ends up with a launchable app; the Electron app's own
-    # first-launch bootstrap and the CLI one-liner omit it (building the
-    # desktop from inside the already-running app would clobber it).
-    local desktop_stage=""
-    if [ "$INCLUDE_DESKTOP" = true ]; then
-        desktop_stage='{"name":"desktop","title":"Build desktop app","category":"runtime","needs_user_input":false},'
-    fi
-    printf '%s' '{"protocol_version":1,"stages":[{"name":"prerequisites","title":"System prerequisites","category":"runtime","needs_user_input":false},{"name":"repository","title":"Download Clawksis","category":"runtime","needs_user_input":false},{"name":"venv","title":"Create Python virtual environment","category":"runtime","needs_user_input":false},{"name":"python-deps","title":"Install Python dependencies","category":"runtime","needs_user_input":false},{"name":"node-deps","title":"Install browser-tool dependencies","category":"runtime","needs_user_input":false},{"name":"path","title":"Install clawk command","category":"runtime","needs_user_input":false},{"name":"config","title":"Prepare config and skills","category":"configuration","needs_user_input":false},{"name":"setup","title":"Configure API keys and settings","category":"configuration","needs_user_input":true},{"name":"gateway","title":"Configure gateway service","category":"configuration","needs_user_input":true},'"$desktop_stage"'{"name":"complete","title":"Finish install","category":"runtime","needs_user_input":false}]}'
     printf '\n'
 }
 
-stage_needs_user_input() {
+# Clawksis install progress: one purple bar with its percentage per ladder stage.
+INSTALL_STEP=0
+INSTALL_TOTAL=0
+
+# "$1" stage name -> the progress-bar label shown for it.
+stage_progress_label() {
     case "$1" in
-        setup|gateway) return 0 ;;
+        prerequisites) echo "Verificando requisitos del sistema (git, curl)..." ;;
+        repository)    echo "Descargando Clawksis..." ;;
+        venv)          echo "Preparando Python (uv)..." ;;
+        python-deps)   echo "Instalando dependencias (puede tardar 2-5 minutos la primera vez)..." ;;
+        config)        echo "Preparando configuracion y skills..." ;;
+        products)      echo "Construyendo el comando clawk, la TUI y el dashboard + CLIs de agentes..." ;;
+        setup)         echo "Listo. Iniciando asistente de configuracion..." ;;
+        gateway)       echo "Configurando el gateway (mensajeria + cron)..." ;;
+        complete)      echo "Finalizando la instalacion..." ;;
+        *)             echo "$1" ;;
+    esac
+}
+
+progress_bar() {
+    local label="$1" pct filled bar="" i
+    INSTALL_STEP=$((INSTALL_STEP + 1))
+    [ "$INSTALL_TOTAL" -ge "$INSTALL_STEP" ] || INSTALL_TOTAL="$INSTALL_STEP"
+    pct=$((INSTALL_STEP * 100 / INSTALL_TOTAL))
+    filled=$((pct * 30 / 100))
+    for ((i = 0; i < filled; i++)); do bar="${bar}█"; done
+    for ((i = filled; i < 30; i++)); do bar="${bar}░"; done
+    printf '\n%s[%s] %3d%%%s %s(%d/%d)%s %s\n' "$C_PURPLE" "$bar" "$pct" "$C_NC" \
+        "$C_DIM" "$INSTALL_STEP" "$INSTALL_TOTAL" "$C_NC" "$label"
+}
+
+# Interactive runs collapse child-process output (git, uv, pm, the builds)
+# into one status line. CI, --verbose and a non-terminal stdout -- the
+# Clawksis-Setup --json driver, E2E transcripts -- keep the full stream those
+# readers parse.
+quiet_output() {
+    [ "$VERBOSE" = true ] && return 1
+    if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${CLAWK_INSTALL_VERBOSE:-}" ]; then
+        return 1
+    fi
+    [ -t 1 ]
+}
+
+status_line() {
+    local text="  $1" width=$(( $2 - 1 ))
+    [ "${#text}" -le "$width" ] || text="${text:0:width}"
+    printf '\r\033[K%s%s%s' "$C_DIM" "$text" "$C_NC"
+}
+
+# run_logged [--may-fail] LABEL CMD...: run CMD. Quiet mode shows LABEL with
+# CMD's latest output line rewritten in place, appends everything to
+# $INSTALL_LOG and, on failure, prints the tail and the log path; --may-fail
+# is for probes whose failure the caller handles (no report). Otherwise LABEL
+# is logged and the output streams untouched. Returns CMD's exit status.
+run_logged() {
+    local may_fail=false
+    if [ "$1" = --may-fail ]; then may_fail=true; shift; fi
+    local label="$1"; shift
+    RUN_LOGGED_ERROR=""
+    if ! quiet_output || ! { mkdir -p "${INSTALL_LOG%/*}" && : >> "$INSTALL_LOG"; } 2>/dev/null; then
+        log "$label"
+        local err rc
+        err="$(mktemp 2>/dev/null)" || { "$@"; return; }
+        # stderr still streams (Clawksis-Setup logs it); a copy names the failure.
+        { "$@" 2>&1 1>&3 | tee "$err" >&2; } 3>&1
+        rc=${PIPESTATUS[0]}
+        [ "$rc" -eq 0 ] || RUN_LOGGED_ERROR="$(error_line < "$err")"
+        rm -f "$err"
+        return "$rc"
+    fi
+    local start cols rc line shown
+    start=$(( $(wc -l < "$INSTALL_LOG") + 1 ))
+    cols="$(tput cols 2>/dev/null)" || cols=80
+    [ "${cols:-0}" -gt 20 ] 2>/dev/null || cols=80
+    printf '==> %s (%s)\n' "$label" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$INSTALL_LOG"
+    status_line "$label" "$cols"
+    # stdin closed: under `curl | bash` it is the script itself, and nothing
+    # run here may prompt behind a status line.
+    "$@" </dev/null 2>&1 | {
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%$'\r'}"
+            printf '%s\n' "$line" >&3
+            # git and uv redraw progress with bare CRs; show the newest.
+            shown="${line##*$'\r'}"
+            [ -z "$shown" ] || status_line "$label: $shown" "$cols"
+        done
+    } 3>>"$INSTALL_LOG"
+    rc=${PIPESTATUS[0]}
+    printf '\r\033[K'
+    [ "$rc" -eq 0 ] || RUN_LOGGED_ERROR="$(tail -n +"$(( start + 1 ))" "$INSTALL_LOG" | error_line)"
+    if [ "$rc" -ne 0 ] && [ "$may_fail" = false ]; then
+        log_error "$label failed (exit $rc). Last output:"
+        tail -n +"$(( start + 1 ))" "$INSTALL_LOG" | tail -n 20 | sed 's/^/    /' >&2
+        printf '    full log: %s\n' "$INSTALL_LOG" >&2
+    fi
+    return "$rc"
+}
+
+# --- BEGIN GENERATED: bootstrap pins (scripts/gen-bootstrap-pins.py) ---
+# Derived from pm/lock.json. DO NOT EDIT BY HAND:
+# run scripts/gen-bootstrap-pins.py after a pin bump.
+UV_PIN_VERSION="0.13.5"
+
+# Sets UV_PIN_URL + UV_PIN_SHA256 for a <os>-<arch> target key.
+uv_bootstrap_pin() {
+    case "$1" in
+        linux-x64)
+            UV_PIN_URL="https://github.com/astral-sh/uv/releases/download/0.13.5/uv-x86_64-unknown-linux-gnu.tar.gz"
+            UV_PIN_MIRROR="https://hermes-assets.nousresearch.com/upstream/sha256/f68d291c75783122dad58ab77def0e13f3233f358731db5d6d7e8715603b928f"
+            UV_PIN_SHA256="f68d291c75783122dad58ab77def0e13f3233f358731db5d6d7e8715603b928f"
+            ;;
+        linux-arm64)
+            UV_PIN_URL="https://github.com/astral-sh/uv/releases/download/0.13.5/uv-aarch64-unknown-linux-gnu.tar.gz"
+            UV_PIN_MIRROR="https://hermes-assets.nousresearch.com/upstream/sha256/4bb69cf95ed13f23713bb7bc09f241896ea0c75b7c557e615a20604b82f9c403"
+            UV_PIN_SHA256="4bb69cf95ed13f23713bb7bc09f241896ea0c75b7c557e615a20604b82f9c403"
+            ;;
+        linux-x64-musl)
+            UV_PIN_URL="https://github.com/astral-sh/uv/releases/download/0.13.5/uv-x86_64-unknown-linux-musl.tar.gz"
+            UV_PIN_MIRROR="https://hermes-assets.nousresearch.com/upstream/sha256/57ef9d9ccb01fb1bd998df995b0dd221b52f7d7841fbea93f2d4463bf61fb7a9"
+            UV_PIN_SHA256="57ef9d9ccb01fb1bd998df995b0dd221b52f7d7841fbea93f2d4463bf61fb7a9"
+            ;;
+        linux-arm64-musl)
+            UV_PIN_URL="https://github.com/astral-sh/uv/releases/download/0.13.5/uv-aarch64-unknown-linux-musl.tar.gz"
+            UV_PIN_MIRROR="https://hermes-assets.nousresearch.com/upstream/sha256/7906c79adb21c81abd559841ba76bb1d9af9d791acac7a041b2972e03ae16538"
+            UV_PIN_SHA256="7906c79adb21c81abd559841ba76bb1d9af9d791acac7a041b2972e03ae16538"
+            ;;
+        darwin-x64)
+            UV_PIN_URL="https://github.com/astral-sh/uv/releases/download/0.13.5/uv-x86_64-apple-darwin.tar.gz"
+            UV_PIN_MIRROR="https://hermes-assets.nousresearch.com/upstream/sha256/b0f52b0e3945b4107d89024ea38e625683011fbfc05a0d98f9fa2d6dcee28c66"
+            UV_PIN_SHA256="b0f52b0e3945b4107d89024ea38e625683011fbfc05a0d98f9fa2d6dcee28c66"
+            ;;
+        darwin-arm64)
+            UV_PIN_URL="https://github.com/astral-sh/uv/releases/download/0.13.5/uv-aarch64-apple-darwin.tar.gz"
+            UV_PIN_MIRROR="https://hermes-assets.nousresearch.com/upstream/sha256/743f85035a1996ecb350659e01cd9faea9709829be09b1b4b03c73eaf3c9cd73"
+            UV_PIN_SHA256="743f85035a1996ecb350659e01cd9faea9709829be09b1b4b03c73eaf3c9cd73"
+            ;;
+        *)
+            UV_PIN_URL=""
+            UV_PIN_SHA256=""
+            return 1
+            ;;
+    esac
+}
+# --- END GENERATED: bootstrap pins ---
+
+uv_bootstrap_target() {
+    # Map this host to a pm/lock.json target key (<os>-<arch>).
+    local _arch
+    case "$(uname -m)" in
+        arm64|aarch64) _arch="arm64" ;;
+        x86_64|amd64)  _arch="x64" ;;
         *) return 1 ;;
     esac
-}
-
-emit_stage_json() {
-    local stage="$1"
-    local ok="$2"
-    local skipped="${3:-false}"
-    local reason="${4:-}"
-    local escaped_reason
-    escaped_reason="$(json_escape "$reason")"
-    if [ -n "$escaped_reason" ]; then
-        printf '{"ok":%s,"stage":"%s","skipped":%s,"reason":"%s"}\n' "$ok" "$stage" "$skipped" "$escaped_reason"
-    else
-        printf '{"ok":%s,"stage":"%s","skipped":%s}\n' "$ok" "$stage" "$skipped"
-    fi
-}
-
-prompt_yes_no() {
-    local question="$1"
-    local default="${2:-yes}"
-    local prompt_suffix
-    local answer=""
-
-    # Use case patterns (not ${var,,}) so this works on bash 3.2 (macOS /bin/bash).
-    case "$default" in
-        [yY]|[yY][eE][sS]|[tT][rR][uU][eE]|1) prompt_suffix="[Y/n]" ;;
-        *) prompt_suffix="[y/N]" ;;
-    esac
-
-    if [ "$NON_INTERACTIVE" = true ]; then
-        answer=""
-    elif [ "$IS_INTERACTIVE" = true ]; then
-        read -r -p "$question $prompt_suffix " answer || answer=""
-    elif [ -r /dev/tty ] && [ -w /dev/tty ]; then
-        printf "%s %s " "$question" "$prompt_suffix" > /dev/tty
-        IFS= read -r answer < /dev/tty || answer=""
-    else
-        answer=""
-    fi
-
-    answer="${answer#"${answer%%[![:space:]]*}"}"
-    answer="${answer%"${answer##*[![:space:]]}"}"
-
-    if [ -z "$answer" ]; then
-        case "$default" in
-            [yY]|[yY][eE][sS]|[tT][rR][uU][eE]|1) return 0 ;;
-            *) return 1 ;;
-        esac
-    fi
-
-    case "$answer" in
-        [yY]|[yY][eE][sS]) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
-is_termux() {
-    [ -n "${TERMUX_VERSION:-}" ] || [[ "${PREFIX:-}" == *"com.termux/files/usr"* ]]
-}
-
-# Decide where the repo checkout + venv live, and where the `clawk` command
-# symlink goes.  Called after detect_os so $OS/$DISTRO are known.
-#
-# Defaults:
-#   - Non-root, any OS:       INSTALL_DIR = $CLAWK_HOME/clawksis-agent
-#                             command link in $HOME/.local/bin
-#   - Termux (any uid):       INSTALL_DIR = $CLAWK_HOME/clawksis-agent
-#                             command link in $PREFIX/bin (already on PATH)
-#   - Root on Linux (new):    INSTALL_DIR = /usr/local/lib/clawksis-agent
-#                             command link in /usr/local/bin
-#                             (unless a legacy install already exists at
-#                              $CLAWK_HOME/clawksis-agent — then preserve it)
-#
-# Always no-op when the user set --dir or $CLAWK_INSTALL_DIR.
-resolve_install_layout() {
-    # `curl ... | sudo bash` trap: SUDO_USER set means a normal user escalated.
-    # The install then lands in root's world (data in /root/.clawksis, FHS code
-    # layout) and the human's own account ends up with no config, no sessions,
-    # and a `clawk` that reads root's state. Warn loudly and require explicit
-    # confirmation; the right call for almost everyone is to re-run WITHOUT sudo.
-    if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ] && [ "$SUDO_INSTALL_ACKNOWLEDGED" != true ]; then
-        log_warn "Running under sudo (invoked by user '${SUDO_USER}')."
-        log_warn "Clawksis is designed to install per-user, WITHOUT sudo:"
-        log_warn "  data/config →  ~/.clawksis of the installing user"
-        log_warn "Installing as root puts data in /root/.clawksis — your normal"
-        log_warn "account '${SUDO_USER}' will NOT see this install."
-        echo ""
-        log_info "Recommended: exit and re-run as your normal user:"
-        log_info "  curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash"
-        echo ""
-        if prompt_yes_no "Continue installing as root anyway?" "no"; then
-            SUDO_INSTALL_ACKNOWLEDGED=true
-            log_warn "Proceeding with root install (FHS layout)."
-        else
-            log_error "Install aborted. Re-run without sudo as '${SUDO_USER}'."
-            exit 1
-        fi
-    fi
-
-    if [ "$INSTALL_DIR_EXPLICIT" = true ]; then
-        log_info "Install directory: $INSTALL_DIR (explicit)"
-        return 0
-    fi
-
-    # Termux: package manager manages /data/data/..., keep code in CLAWK_HOME.
-    if is_termux; then
-        INSTALL_DIR="$CLAWK_HOME/clawksis-agent"
-        return 0
-    fi
-
-    # Root on Linux: prefer FHS layout unless a legacy install already exists.
-    # macOS root installs keep the legacy layout because /usr/local/ on macOS
-    # is Homebrew territory and we don't want to fight that.
-    if [ "$OS" = "linux" ] && [ "$(id -u)" -eq 0 ]; then
-        if [ -d "$CLAWK_HOME/clawksis-agent/.git" ]; then
-            INSTALL_DIR="$CLAWK_HOME/clawksis-agent"
-            log_info "Existing install detected at $INSTALL_DIR — keeping legacy layout"
-            log_info "  (new root installs use /usr/local/lib/clawksis-agent)"
-            return 0
-        fi
-        INSTALL_DIR="/usr/local/lib/clawksis-agent"
-        ROOT_FHS_LAYOUT=true
-        # Place uv-managed Python under /usr/local/share so the venv interpreter
-        # is world-readable.  Default uv paths land in /root/.local/share/uv,
-        # which non-root users can't traverse — leaving the shared
-        # /usr/local/bin/clawk wrapper unable to exec the bad-interpreter venv
-        # python.  See #21457.
-        export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/usr/local/share/uv/python}"
-        export UV_PYTHON_BIN_DIR="${UV_PYTHON_BIN_DIR:-/usr/local/share/uv/bin}"
-        log_info "Root install on Linux — using FHS layout"
-        log_info "  Code:    $INSTALL_DIR"
-        log_info "  Command: /usr/local/bin/clawk"
-        log_info "  Data:    $CLAWK_HOME (unchanged)"
-        log_info "  uv Python: $UV_PYTHON_INSTALL_DIR (world-readable)"
-        return 0
-    fi
-
-    # Default: non-root, non-Termux → legacy user-scoped layout.
-    INSTALL_DIR="$CLAWK_HOME/clawksis-agent"
-}
-
-get_command_link_dir() {
-    if is_termux && [ -n "${PREFIX:-}" ]; then
-        echo "$PREFIX/bin"
-    elif [ "$ROOT_FHS_LAYOUT" = true ]; then
-        echo "/usr/local/bin"
-    else
-        echo "$HOME/.local/bin"
-    fi
-}
-
-get_command_link_display_dir() {
-    if is_termux && [ -n "${PREFIX:-}" ]; then
-        echo '$PREFIX/bin'
-    elif [ "$ROOT_FHS_LAYOUT" = true ]; then
-        echo '/usr/local/bin'
-    else
-        echo '~/.local/bin'
-    fi
-}
-
-get_clawk_command_path() {
-    local link_dir
-    link_dir="$(get_command_link_dir)"
-    if [ -x "$link_dir/clawk" ]; then
-        echo "$link_dir/clawk"
-    else
-        echo "clawk"
-    fi
-}
-
-# ============================================================================
-# System detection
-# ============================================================================
-
-detect_sudo_capability() {
-    # Single source of truth: HAS_USABLE_SUDO is set ONCE here.
-    #
-    # The installer historically asked about sudo in 3+ places (ffmpeg, ripgrep,
-    # build-essential, browser deps) and re-prompted each time. On VPS where the
-    # service user has no sudo, each prompt hung waiting for a password that
-    # didn't exist — bug #14. With this gate, all sudo-requiring steps consult
-    # this flag and quietly skip when sudo isn't usable.
-    if [ "$(id -u)" -eq 0 ]; then
-        HAS_USABLE_SUDO=true   # already root, no need for sudo
-        return 0
-    fi
-
-    if ! command -v sudo >/dev/null 2>&1; then
-        HAS_USABLE_SUDO=false
-        log_info "sudo not available — system-package installs will be skipped."
-        return 0
-    fi
-
-    # `sudo -n` returns success only when sudo can run WITHOUT prompting for
-    # a password (NOPASSWD entry, valid timestamp cache, or already root).
-    if sudo -n true 2>/dev/null; then
-        HAS_USABLE_SUDO=true
-        return 0
-    fi
-
-    # sudo exists but needs a password. In non-interactive mode we cannot ask,
-    # so skip silently. In interactive mode we still set false here; individual
-    # callers may re-prompt if they have a good reason to.
-    HAS_USABLE_SUDO=false
-    if [ "$NON_INTERACTIVE" = true ] || [ "$IS_INTERACTIVE" != true ]; then
-        log_info "sudo requires a password and no TTY for prompts — system-package installs will be skipped."
-    fi
-}
-
-detect_os() {
     case "$(uname -s)" in
-        Linux*)
-            if is_termux; then
-                OS="android"
-                DISTRO="termux"
+        Linux)
+            # Same precedence as pm/store.py::_is_musl_libc: the native
+            # userland's ELF interpreter decides; ldd and a musl loader on
+            # disk are fallbacks only (a glibc host may carry musl as a
+            # secondary toolchain, and minimal musl roots may lack ldd).
+            local _libc="" _probe _head
+            for _probe in /bin/sh /bin/ls; do
+                _head="$(head -c 8192 "$_probe" 2>/dev/null | LC_ALL=C tr -d '\000')" || continue
+                [[ "$_head" == $'\x7f'ELF* ]] || continue
+                case "$_head" in
+                    *ld-musl-*) _libc="musl"; break ;;
+                    *ld-linux*) _libc="glibc"; break ;;
+                esac
+            done
+            if [[ -z "$_libc" ]]; then
+                _libc="$(ldd --version 2>&1 || true)"
+                _libc="${_libc,,}"
+            fi
+            if [[ "$_libc" == *musl* ]]; then
+                echo "linux-$_arch-musl"
+            elif [[ "$_libc" == *glibc* || "$_libc" == *"gnu libc"* || "$_libc" == *"gnu c library"* ]]; then
+                echo "linux-$_arch"
+            elif compgen -G '/lib/ld-musl-*.so.1' >/dev/null; then
+                echo "linux-$_arch-musl"
             else
-                OS="linux"
-                if [ -f /etc/os-release ]; then
-                    . /etc/os-release
-                    DISTRO="$ID"
-                else
-                    DISTRO="unknown"
-                fi
+                echo "linux-$_arch"
             fi
             ;;
-        Darwin*)
-            OS="macos"
-            DISTRO="macos"
-            ;;
-        CYGWIN*|MINGW*|MSYS*)
-            OS="windows"
-            DISTRO="windows"
-            log_error "Windows detected. Please use the PowerShell installer:"
-            log_info "  iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)"
-            exit 1
-            ;;
-        *)
-            OS="unknown"
-            DISTRO="unknown"
-            log_warn "Unknown operating system"
-            ;;
+        Darwin) echo "darwin-$_arch" ;;
+        *) return 1 ;;
     esac
-
-    log_success "Detected: $OS ($DISTRO)"
 }
 
-# ============================================================================
-# Dependency checks
-# ============================================================================
-
-install_uv() {
-    if [ "$DISTRO" = "termux" ]; then
-        log_info "Termux detected — using Python's stdlib venv + pip instead of uv"
-        UV_CMD=""
-        return 0
+# Provision uv for this host from the pinned pm/lock.json artifact. Stages
+# the EXACT artifact pm itself uses into the same store slot
+# (<store>/uv-<version>-<target>/, the store pm's store_root() resolves),
+# sha256-verified, so the byte authority is pm/lock.json - no astral-latest,
+# no curl|sh.
+UV_CMD=""
+ensure_uv() {
+    [ -n "$UV_CMD" ] && return 0
+    # Always the pinned artifact, never a uv already on PATH: Clawksis runs only
+    # its own packaged toolchain.
+    local _target
+    if ! _target="$(uv_bootstrap_target)"; then
+        fail "no pinned uv build for this platform ($(uname -s) $(uname -m)); Clawksis does not support this host" unsupported_platform
     fi
-
-    # Clawksis owns its own uv at $CLAWK_HOME/bin/uv.  Always install there —
-    # no PATH probing, no conda guards, no multi-location resolution chains.
-    # The runtime update path (clawk_cli/managed_uv.py) looks in the same
-    # place, so install.sh and `clawk update` stay in sync.
-    local _managed_uv="$CLAWK_HOME/bin/uv"
-
-    if [ -x "$_managed_uv" ]; then
-        UV_CMD="$_managed_uv"
-        UV_VERSION=$($UV_CMD --version 2>/dev/null)
-        log_success "Managed uv found ($UV_VERSION)"
-        return 0
+    if ! uv_bootstrap_pin "$_target"; then
+        fail "no pinned uv artifact for $_target; Clawksis does not support this host" unsupported_platform
     fi
-
-    log_info "Installing managed uv into $CLAWK_HOME/bin ..."
-    mkdir -p "$CLAWK_HOME/bin"
-
-    # Two-stage: download the installer, then run it.  Piping
-    # `curl | sh` masks curl failures (sh exits 0 on empty stdin)
-    # and conflates network errors with installer errors.
-    local _uv_install_log _uv_installer
-    _uv_install_log="$(mktemp 2>/dev/null || echo "/tmp/clawk-uv-install.$$.log")"
-    _uv_installer="$(mktemp 2>/dev/null || echo "/tmp/clawk-uv-installer.$$.sh")"
-    if ! curl -LsSf https://astral.sh/uv/install.sh -o "$_uv_installer" 2>"$_uv_install_log"; then
-        log_error "Failed to download uv installer from https://astral.sh/uv/install.sh"
-        log_info "curl output:"
-        sed 's/^/    /' "$_uv_install_log" >&2
-        log_info "Install manually: https://docs.astral.sh/uv/getting-started/installation/"
-        rm -f "$_uv_install_log" "$_uv_installer"
-        exit 1
-    fi
-    # UV_UNMANAGED_INSTALL tells the astral installer to place the binary
-    # directly into $CLAWK_HOME/bin instead of ~/.local/bin.
-    if UV_UNMANAGED_INSTALL="$CLAWK_HOME/bin" sh "$_uv_installer" >>"$_uv_install_log" 2>&1; then
-        rm -f "$_uv_installer"
-        if [ -x "$_managed_uv" ]; then
-            UV_CMD="$_managed_uv"
+    local _store="${CLAWK_RUNTIME_DIR:-$CLAWK_HOME/tools}"
+    local _entry="$_store/uv-$UV_PIN_VERSION-$_target"
+    UV_CMD="$_entry/uv"
+    if [ ! -x "$UV_CMD" ]; then
+        log "Downloading uv $UV_PIN_VERSION ($_target)"
+        local _tmp
+        # no-tmp: ok — last-resort fallback when mktemp itself is missing
+        _tmp="$(mktemp -d 2>/dev/null || echo "/tmp/clawk-uv-bootstrap.$$")"
+        mkdir -p "$_tmp"
+        local _fetched_from="$UV_PIN_URL"
+        # Only network availability failures permit trying identical mirrored bytes.
+        if curl -LsSf "$UV_PIN_URL" -o "$_tmp/uv.tar.gz"; then
+            :
         else
-            log_error "uv installer reported success but binary not found at $_managed_uv"
-            log_info "Installer output:"
-            sed 's/^/    /' "$_uv_install_log" >&2
-            rm -f "$_uv_install_log"
-            exit 1
-        fi
-        rm -f "$_uv_install_log"
-        UV_VERSION=$($UV_CMD --version 2>/dev/null)
-        log_success "Managed uv installed ($UV_VERSION)"
-    else
-        log_error "Failed to install uv"
-        log_info "Installer output:"
-        sed 's/^/    /' "$_uv_install_log" >&2
-        log_info "Install manually: https://docs.astral.sh/uv/getting-started/installation/"
-        rm -f "$_uv_install_log" "$_uv_installer"
-        exit 1
-    fi
-}
-
-check_python() {
-    if [ "$DISTRO" = "termux" ]; then
-        log_info "Checking Termux Python..."
-        if command -v python >/dev/null 2>&1; then
-            PYTHON_PATH="$(command -v python)"
-            if "$PYTHON_PATH" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
-                PYTHON_FOUND_VERSION="$("$PYTHON_PATH" --version 2>/dev/null)"
-                log_success "Python found: $PYTHON_FOUND_VERSION"
-                return 0
-            fi
-        fi
-
-        log_info "Installing Python via pkg..."
-        pkg install -y python >/dev/null
-        PYTHON_PATH="$(command -v python)"
-        PYTHON_FOUND_VERSION="$("$PYTHON_PATH" --version 2>/dev/null)"
-        log_success "Python installed: $PYTHON_FOUND_VERSION"
-        return 0
-    fi
-
-    log_info "Checking Python $PYTHON_VERSION..."
-
-    # Let uv handle Python — it can download and manage Python versions
-    # First check if a suitable Python is already available
-    if PYTHON_PATH="$("$UV_CMD" python find "$PYTHON_VERSION" 2>/dev/null)"; then
-        PYTHON_FOUND_VERSION="$("$PYTHON_PATH" --version 2>/dev/null)"
-        log_success "Python found: $PYTHON_FOUND_VERSION"
-        return 0
-    fi
-
-    # Python not found — use uv to install it (no sudo needed!)
-    log_info "Python $PYTHON_VERSION not found, installing via uv..."
-    if "$UV_CMD" python install "$PYTHON_VERSION"; then
-        PYTHON_PATH="$("$UV_CMD" python find "$PYTHON_VERSION")"
-        PYTHON_FOUND_VERSION="$("$PYTHON_PATH" --version 2>/dev/null)"
-        log_success "Python installed: $PYTHON_FOUND_VERSION"
-    else
-        log_error "Failed to install Python $PYTHON_VERSION"
-        log_info "Install Python $PYTHON_VERSION manually, then re-run this script"
-        exit 1
-    fi
-}
-
-# Best-effort automatic git provisioning, mirroring install.ps1's Install-Git
-# (which downloads PortableGit on Windows). git is required to clone the repo,
-# and a fresh "normie" machine with no developer tools won't have it. Returns 0
-# if git is available afterwards, non-zero otherwise (caller prints manual
-# instructions and aborts).
-attempt_install_git() {
-    case "$OS" in
-        macos)
-            # Prefer Homebrew — fully headless when present.
-            if command -v brew >/dev/null 2>&1; then
-                log_info "Installing Git via Homebrew..."
-                brew install git >/dev/null 2>&1 || true
-                command -v git >/dev/null 2>&1 && return 0
-            fi
-            # Fall back to Apple Command Line Tools, which provide git AND the
-            # compiler some Python wheels need. `xcode-select --install` pops a
-            # system dialog (Apple gates CLT behind it — it cannot be fully
-            # silent without MDM), so we trigger it and poll for git to appear.
-            if command -v xcode-select >/dev/null 2>&1; then
-                log_info "Requesting Apple Command Line Tools (provides git + compiler)..."
-                log_info "If a macOS dialog appears, click \"Install\" and accept the license."
-                xcode-select --install >/dev/null 2>&1 || true
-                local waited=0
-                local timeout=900
-                while [ "$waited" -lt "$timeout" ]; do
-                    if command -v git >/dev/null 2>&1 && git --version >/dev/null 2>&1; then
-                        return 0
-                    fi
-                    sleep 5
-                    waited=$((waited + 5))
-                    if [ $((waited % 60)) -eq 0 ]; then
-                        log_info "Still waiting for Command Line Tools install ($((waited / 60))m)..."
-                    fi
-                done
-            fi
-            return 1
-            ;;
-        linux)
-            local sudo_cmd=""
-            if [ "$(id -u 2>/dev/null || echo 1000)" -ne 0 ]; then
-                command -v sudo >/dev/null 2>&1 && sudo_cmd="sudo"
-            fi
-            case "$DISTRO" in
-                ubuntu|debian)
-                    log_info "Installing Git via apt..."
-                    $sudo_cmd env DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || true
-                    $sudo_cmd env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git >/dev/null 2>&1 || true
-                    ;;
-                fedora)
-                    log_info "Installing Git via dnf..."
-                    $sudo_cmd dnf install -y git >/dev/null 2>&1 || true
-                    ;;
-                arch)
-                    log_info "Installing Git via pacman..."
-                    $sudo_cmd pacman -S --noconfirm git >/dev/null 2>&1 || true
-                    ;;
-                *)
-                    return 1
-                    ;;
+            local _curl_status=$?
+            case "$_curl_status" in
+                5|6|7|18|22|28|52|55|56) ;;
+                *) rm -rf "$_tmp"; fail "failed to download pinned uv from $UV_PIN_URL (curl $_curl_status)" download_failed ;;
             esac
-            command -v git >/dev/null 2>&1 && return 0
-            return 1
-            ;;
-    esac
-    return 1
-}
-
-check_git() {
-    log_info "Checking Git..."
-
-    # On fresh macOS /usr/bin/git is a stub that exits non-zero until CLT is installed.
-    if command -v git &> /dev/null && git --version &> /dev/null; then
-        GIT_VERSION=$(git --version | awk '{print $3}')
-        log_success "Git $GIT_VERSION found"
-        return 0
-    fi
-
-    log_error "Git not found"
-
-    if [ "$DISTRO" = "termux" ]; then
-        log_info "Installing Git via pkg..."
-        pkg install -y git >/dev/null
-        if command -v git >/dev/null 2>&1; then
-            GIT_VERSION=$(git --version | awk '{print $3}')
-            log_success "Git $GIT_VERSION installed"
-            return 0
+            if [ -n "${UV_PIN_MIRROR:-}" ] && curl -LsSf "$UV_PIN_MIRROR" -o "$_tmp/uv.tar.gz"; then
+                _fetched_from="$UV_PIN_MIRROR"
+            else
+                rm -rf "$_tmp"
+                fail "failed to download pinned uv from $UV_PIN_URL or ${UV_PIN_MIRROR:-no mirror}" download_failed
+            fi
         fi
-    fi
-
-    # Try to install it automatically before giving up (parity with install.ps1).
-    log_info "Attempting to install Git automatically..."
-    if attempt_install_git; then
-        GIT_VERSION=$(git --version | awk '{print $3}')
-        log_success "Git $GIT_VERSION installed"
-        return 0
-    fi
-
-    log_warn "Could not install Git automatically. Please install it manually:"
-
-    case "$OS" in
-        linux)
-            case "$DISTRO" in
-                ubuntu|debian)
-                    log_info "  sudo apt update && sudo apt install git"
-                    ;;
-                fedora)
-                    log_info "  sudo dnf install git"
-                    ;;
-                arch)
-                    log_info "  sudo pacman -S git"
-                    ;;
-                *)
-                    log_info "  Use your package manager to install git"
-                    ;;
-            esac
-            ;;
-        android)
-            log_info "  pkg install git"
-            ;;
-        macos)
-            log_info "  xcode-select --install"
-            log_info "  Or: brew install git"
-            ;;
-    esac
-
-    exit 1
-}
-
-# The desktop build runs Vite ^8, which refuses to start on Node outside
-# `^20.19 || >=22.12` — older Node lacks `node:util.styleText`, so `vite build`
-# crashes with a SyntaxError that surfaces only as the opaque "Build desktop
-# app … exit code 1" install failure. Returns 0 when the given `node --version`
-# string clears that floor; anything below it is replaced with the Clawksis-
-# managed Node $NODE_VERSION LTS.
-node_satisfies_build() {
-    local ver="${1#v}"
-    local major="${ver%%.*}"
-    local minor="${ver#*.}"; minor="${minor%%.*}"
-    case "$major" in ''|*[!0-9]*) return 1 ;; esac
-    case "$minor" in ''|*[!0-9]*) minor=0 ;; esac
-    if [ "$major" -eq 20 ] && [ "$minor" -ge 19 ]; then return 0; fi
-    if [ "$major" -ge 22 ] && { [ "$major" -gt 22 ] || [ "$minor" -ge 12 ]; }; then return 0; fi
-    return 1
-}
-
-check_node() {
-    log_info "Checking Node.js (for browser tools)..."
-
-    if command -v node &> /dev/null && node_satisfies_build "$(node --version)"; then
-        log_success "Node.js $(node --version) found"
-        HAS_NODE=true
-        return 0
-    fi
-
-    # Prefer a Clawksis-managed Node from a previous run over a too-old system one.
-    if [ -x "$CLAWK_HOME/node/bin/node" ] && node_satisfies_build "$("$CLAWK_HOME/node/bin/node" --version)"; then
-        export PATH="$CLAWK_HOME/node/bin:$PATH"
-        log_success "Node.js $("$CLAWK_HOME/node/bin/node" --version) found (Clawksis-managed)"
-        HAS_NODE=true
-        return 0
-    fi
-
-    if command -v node &> /dev/null; then
-        log_warn "Node.js $(node --version) is too old for the desktop build (need ^20.19 or >=22.12) — installing Clawksis-managed Node $NODE_VERSION LTS..."
-    elif [ "$DISTRO" = "termux" ]; then
-        log_info "Node.js not found — installing Node.js via pkg..."
-    else
-        log_info "Node.js not found — installing Node.js $NODE_VERSION LTS..."
-    fi
-    install_node
-}
-
-install_node() {
-    if [ "$DISTRO" = "termux" ]; then
-        log_info "Installing Node.js via pkg..."
-        if pkg install -y nodejs >/dev/null; then
-            local installed_ver
-            installed_ver=$(node --version 2>/dev/null)
-            log_success "Node.js $installed_ver installed via pkg"
-            HAS_NODE=true
+        local _digest
+        if command -v sha256sum >/dev/null 2>&1; then
+            _digest="$(sha256sum "$_tmp/uv.tar.gz" | cut -d' ' -f1)"
         else
-            log_warn "Failed to install Node.js via pkg"
-            HAS_NODE=false
+            _digest="$(shasum -a 256 "$_tmp/uv.tar.gz" | cut -d' ' -f1)"
         fi
-        return 0
+        if [ "$_digest" != "$UV_PIN_SHA256" ]; then
+            rm -rf "$_tmp"
+            fail "uv download digest mismatch from $_fetched_from (expected $UV_PIN_SHA256, got $_digest)" download_digest_mismatch
+        fi
+        if ! tar -xzf "$_tmp/uv.tar.gz" -C "$_tmp"; then
+            rm -rf "$_tmp"
+            fail "failed to extract pinned uv archive" uv_unusable
+        fi
+        local _unpacked
+        _unpacked="$(find "$_tmp" -mindepth 1 -maxdepth 2 -name uv -type f | head -n1)"
+        if [ -z "$_unpacked" ]; then
+            rm -rf "$_tmp"
+            fail "uv binary not found in the downloaded archive" uv_unusable
+        fi
+        mkdir -p "$_entry"
+        mv "$_unpacked" "$UV_CMD"
+        [ -f "$(dirname "$_unpacked")/uvx" ] && mv "$(dirname "$_unpacked")/uvx" "$_entry/uvx"
+        chmod +x "$UV_CMD"
+        chmod +x "$_entry/uvx" 2>/dev/null || true
+        rm -rf "$_tmp"
     fi
-
-    local arch=$(uname -m)
-    local node_arch
-    case "$arch" in
-        x86_64)        node_arch="x64"    ;;
-        aarch64|arm64) node_arch="arm64"  ;;
-        armv7l)        node_arch="armv7l" ;;
-        *)
-            log_warn "Unsupported architecture ($arch) for Node.js auto-install"
-            log_info "Install manually: https://nodejs.org/en/download/"
-            HAS_NODE=false
-            return 0
-            ;;
-    esac
-
-    local node_os
-    case "$OS" in
-        linux) node_os="linux"  ;;
-        macos) node_os="darwin" ;;
-        *)
-            log_warn "Unsupported OS for Node.js auto-install"
-            HAS_NODE=false
-            return 0
-            ;;
-    esac
-
-    # Resolve the latest v22.x.x tarball name from the index page
-    local index_url="https://nodejs.org/dist/latest-v${NODE_VERSION}.x/"
-    local tarball_name
-    tarball_name=$(curl -fsSL "$index_url" \
-        | grep -oE "node-v${NODE_VERSION}\.[0-9]+\.[0-9]+-${node_os}-${node_arch}\.tar\.xz" \
-        | head -1)
-
-    # Fallback to .tar.gz if .tar.xz not available
-    if [ -z "$tarball_name" ]; then
-        tarball_name=$(curl -fsSL "$index_url" \
-            | grep -oE "node-v${NODE_VERSION}\.[0-9]+\.[0-9]+-${node_os}-${node_arch}\.tar\.gz" \
-            | head -1)
+    # Bootstrap keeps the installer private; only UV_CMD invokes it.
+    if ! "$UV_CMD" --version >/dev/null 2>&1; then
+        fail "pinned uv staged but does not run on this host" uv_unusable
     fi
-
-    if [ -z "$tarball_name" ]; then
-        log_warn "Could not find Node.js $NODE_VERSION binary for $node_os-$node_arch"
-        log_info "Install manually: https://nodejs.org/en/download/"
-        HAS_NODE=false
-        return 0
-    fi
-
-    local download_url="${index_url}${tarball_name}"
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-
-    log_info "Downloading $tarball_name..."
-    if ! curl -fsSL "$download_url" -o "$tmp_dir/$tarball_name"; then
-        log_warn "Download failed"
-        rm -rf "$tmp_dir"
-        HAS_NODE=false
-        return 0
-    fi
-
-    log_info "Extracting to $CLAWK_HOME/node/..."
-    if [[ "$tarball_name" == *.tar.xz ]]; then
-        tar xf "$tmp_dir/$tarball_name" -C "$tmp_dir"
-    else
-        tar xzf "$tmp_dir/$tarball_name" -C "$tmp_dir"
-    fi
-
-    local extracted_dir
-    extracted_dir=$(ls -d "$tmp_dir"/node-v* 2>/dev/null | head -1)
-
-    if [ ! -d "$extracted_dir" ]; then
-        log_warn "Extraction failed"
-        rm -rf "$tmp_dir"
-        HAS_NODE=false
-        return 0
-    fi
-
-    # Place into ~/.clawksis/node/ and symlink binaries into the same bin dir
-    # the clawk command uses (get_command_link_dir): /usr/local/bin for root
-    # FHS installs, $PREFIX/bin on Termux, ~/.local/bin otherwise.
-    rm -rf "$CLAWK_HOME/node"
-    mkdir -p "$CLAWK_HOME"
-    mv "$extracted_dir" "$CLAWK_HOME/node"
-    rm -rf "$tmp_dir"
-
-    local node_link_dir
-    node_link_dir="$(get_command_link_dir)"
-    mkdir -p "$node_link_dir"
-    ln -sf "$CLAWK_HOME/node/bin/node" "$node_link_dir/node"
-    ln -sf "$CLAWK_HOME/node/bin/npm"  "$node_link_dir/npm"
-    ln -sf "$CLAWK_HOME/node/bin/npx"  "$node_link_dir/npx"
-
-    export PATH="$CLAWK_HOME/node/bin:$PATH"
-
-    local installed_ver
-    installed_ver=$("$CLAWK_HOME/node/bin/node" --version 2>/dev/null)
-    log_success "Node.js $installed_ver installed to $CLAWK_HOME/node/"
-    HAS_NODE=true
+    log_success "uv ready ($("$UV_CMD" --version 2>/dev/null))"
 }
 
-check_network_prerequisites() {
-    log_info "Checking internet connectivity for package install and web tools..."
-
-    local url
-    local failed=false
-    local checks=("https://pypi.org/simple/" "https://duckduckgo.com/")
-
-    if ! command -v curl >/dev/null 2>&1; then
-        log_warn "curl not found; skipping connectivity probes"
-        return 0
+check_platform() {
+    # Termux is Linux by uname, but this installer builds a glibc source
+    # install the phone cannot run (no Android wheels in the lock). The
+    # signed APT package is the only supported shape there.
+    if [ -n "${TERMUX_VERSION:-}" ] || case "${PREFIX:-}" in *com.termux/files/usr*) true ;; *) false ;; esac; then
+        fail "Termux is installed from its APT repository, not install.sh: pkg install clawksis-agent (setup: https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/website/docs/getting-started/termux.md)" unsupported_platform
     fi
+    case "$(uname -s 2>/dev/null)" in
+        Linux*) : ;;
+        Darwin*) : ;;
+        *) fail "unsupported platform: $(uname -s). On Windows use install.ps1." unsupported_platform ;;
+    esac
+}
 
-    for url in "${checks[@]}"; do
-        if ! curl -fsSI --max-time 8 "$url" >/dev/null 2>&1; then
-            failed=true
-            log_warn "Could not reach $url"
-        fi
+json_string() {
+    local value="$1" code char escaped
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    for ((code = 1; code < 32; code++)); do
+        printf -v char '\\%03o' "$code"
+        printf -v char '%b' "$char"
+        printf -v escaped '\\u%04x' "$code"
+        value="${value//"$char"/$escaped}"
     done
+    printf '"%s"' "$value"
+}
 
-    if [ "$failed" = false ]; then
-        log_success "Internet connectivity looks good"
-        return 0
-    fi
-
-    if [ "$DISTRO" = "termux" ]; then
-        log_warn "Termux network prerequisites may be incomplete."
-        log_info "Try: pkg install -y ca-certificates curl && pkg update"
-        log_info "If mirrors are stale: termux-change-repo"
-        log_info "Then test: curl -I https://pypi.org/simple/ && curl -I https://duckduckgo.com/"
+json_frame() {
+    # $1 ok, $2 stage, $3 skipped, $4 reason
+    if [ -n "${4:-}" ]; then
+        printf '{"ok":%s,"stage":%s,"skipped":%s,"reason":%s}\n' "$1" "$(json_string "$2")" "$3" "$(json_string "$4")"
     else
-        log_warn "Network checks failed. Clawksis install may complete, but web search and dependency downloads can fail."
-        log_info "Verify internet/DNS and retry if pip install fails."
+        printf '{"ok":%s,"stage":%s,"skipped":%s}\n' "$1" "$(json_string "$2")" "$3"
     fi
 }
 
-install_system_packages() {
-    # Detect what's missing
-    HAS_RIPGREP=false
-    HAS_FFMPEG=false
-    local need_ripgrep=false
-    local need_ffmpeg=false
-
-    log_info "Checking ripgrep (fast file search)..."
-    if command -v rg &> /dev/null; then
-        log_success "$(rg --version | head -1) found"
-        HAS_RIPGREP=true
+stage_result() {
+    local code="$1" ok=false reason="${STAGE_REASON:-}"
+    if [ "$code" -eq 0 ]; then
+        ok=true
     else
-        need_ripgrep=true
+        reason="${reason:-stage failed (exit $code)}"
     fi
+    if [ "$JSON" = true ]; then
+        json_frame "$ok" "$STAGE" "${STAGE_SKIPPED:-false}" "$reason"
+    fi
+    if [ "$ok" = false ] && [ "${INSTALL_LADDER:-false}" = true ]; then
+        local class="${FAILURE_CLASS:-other}"
+        # A user abort beats the stage's own class: a child that caught Ctrl-C and exited 1
+        # (pm, source_completion, `clawk setup`) still reaches the stage's `|| fail ... <class>`.
+        case "$code" in 129|130|143) class=interrupted ;; esac
+        [ "${STAGE_INTERRUPTED:-false}" = false ] || class=interrupted
+        write_install_receipt failed "${STAGE//-/_}" "$class"
+    fi
+}
 
-    log_info "Checking ffmpeg (TTS voice messages)..."
-    if command -v ffmpeg &> /dev/null; then
-        local ffmpeg_ver=$(ffmpeg -version 2>/dev/null | head -1 | awk '{print $3}')
-        log_success "ffmpeg $ffmpeg_ver found"
-        HAS_FFMPEG=true
+# The single authoritative stage list: emit_manifest prints it AND the
+# no-flag ladder runs it. `products` is the shared completion tail -- the same
+# call `clawk update` makes -- so the manifest and the run cannot disagree.
+# `desktop` stays directly dispatchable via --stage for external callers, but
+# is never listed: --include-desktop selects the desktop product inside
+# `products` instead of adding a second build stage.
+stage_names() {
+    printf '%s\n' prerequisites repository venv python-deps config products setup gateway complete
+}
+
+# "title|category|needs_user_input".
+products_record() {
+    if [ "$INCLUDE_DESKTOP" = true ]; then
+        echo "Install command and app + desktop|runtime|false"
     else
-        need_ffmpeg=true
+        echo "Install command and app|runtime|false"
     fi
+}
 
-    # Termux always needs the Android build toolchain for the tested pip path,
-    # even when ripgrep/ffmpeg are already present.
-    if [ "$DISTRO" = "termux" ]; then
-        local termux_pkgs=(clang rust make pkg-config libffi openssl ca-certificates curl)
-        if [ "$need_ripgrep" = true ]; then
-            termux_pkgs+=("ripgrep")
-        fi
-        if [ "$need_ffmpeg" = true ]; then
-            termux_pkgs+=("ffmpeg")
-        fi
+# "$1" stage name -> its manifest record fields (title|category|needs_user_input).
+stage_record() {
+    case "$1" in
+        prerequisites) echo "System prerequisites|runtime|false" ;;
+        repository)    echo "Download Clawksis|runtime|false" ;;
+        venv)          echo "Create Python environment|runtime|false" ;;
+        python-deps)   echo "Install Python dependencies|runtime|false" ;;
+        config)        echo "Prepare config and skills|configuration|false" ;;
+        products)      products_record ;;
+        setup)         echo "Configure API keys and settings|configuration|true" ;;
+        gateway)       echo "Configure gateway service|configuration|true" ;;
+        desktop)       echo "Build desktop app|runtime|false" ;;
+        complete)      echo "Finish install|runtime|false" ;;
+    esac
+}
 
-        log_info "Installing Termux packages: ${termux_pkgs[*]}"
-        if pkg install -y "${termux_pkgs[@]}" >/dev/null; then
-            [ "$need_ripgrep" = true ] && HAS_RIPGREP=true && log_success "ripgrep installed"
-            [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
-            log_success "Termux build dependencies installed"
+emit_manifest() {
+    printf '%s' '{"protocol_version":1,"stages":['
+    _sep=""
+    for _s in $(stage_names); do
+        IFS='|' read -r _title _category _needs <<< "$(stage_record "$_s")"
+        printf '%s{"name":"%s","title":"%s","category":"%s","needs_user_input":%s}' \
+            "$_sep" "$_s" "$_title" "$_category" "$_needs"
+        _sep=","
+    done
+    printf '%s\n' ']}'
+}
+
+git_runs() { command -v git >/dev/null 2>&1 && git --version >/dev/null 2>&1; }
+
+# macOS ships /usr/bin/git as a stub until Apple's Command Line Tools are
+# installed: it is on PATH, but every call fails ("see man xcode-select").
+# Prefer Homebrew (headless); else open Apple's install dialog and wait for the
+# user to finish it, so the install continues in this run.
+install_macos_git() {
+    # Developer tools present with their git (e.g. an Xcode license never
+    # accepted, or a broken ~/.gitconfig): installing another git won't help,
+    # so let the caller report git's own error. A folder alone is not enough:
+    # a macOS upgrade can leave it behind empty.
+    local _dev
+    _dev="$(xcode-select -p 2>/dev/null)" || _dev=""
+    [ -n "$_dev" ] && [ -x "$_dev/usr/bin/git" ] && return 0
+    if command -v brew >/dev/null 2>&1; then
+        # Auto-update runs git (the broken stub here) and can take minutes.
+        run_logged --may-fail "Installing git with Homebrew" env HOMEBREW_NO_AUTO_UPDATE=1 brew install git || true
+        hash -r
+        git_runs && return 0
+    fi
+    # Opens Apple's install dialog. With a leftover folder it may refuse
+    # instead ("already installed"); no dialog opens, so don't wait for one.
+    local _xs
+    if ! _xs="$(xcode-select --install 2>&1)"; then
+        if [ -n "$_dev" ] && [ -d "$_dev" ]; then
+            fail "The developer tools at $_dev are incomplete and xcode-select --install declined to reinstall them. Reinstall the Command Line Tools (run: sudo rm -rf /Library/Developer/CommandLineTools, then xcode-select --install), then re-run this installer." git_missing
+        fi
+        # Say why (e.g. no GUI session over SSH) before any wait.
+        log_warn "xcode-select --install: $(printf '%s\n' "$_xs" | error_line)"
+    fi
+    local _remedy="Install Apple's Command Line Tools (run: xcode-select --install), then re-run this installer."
+    # Clawksis-Setup drives stages with --json: no stage timeout, a Cancel
+    # button, and these log lines show as progress, so it waits too.
+    if [ "$JSON" != true ] && { [ "$NON_INTERACTIVE" = true ] || ! has_terminal; }; then
+        fail "git needs Apple's Command Line Tools. $_remedy" git_missing
+    fi
+    log "git needs Apple's Command Line Tools: click Install in the macOS dialog and accept the license"
+    local _waited=0
+    while [ "$_waited" -lt 900 ]; do
+        git_runs && return 0
+        sleep 5
+        _waited=$((_waited + 5))
+        [ $((_waited % 60)) -ne 0 ] || log "Still waiting for the Command Line Tools install ($((_waited / 60))m)"
+    done
+    fail "Command Line Tools did not finish within 15 minutes. $_remedy" git_missing
+}
+
+stage_prerequisites() {
+    # No git on PATH at all is not the stub: report "git is required" below.
+    if [ "$(uname -s 2>/dev/null)" = Darwin ] && command -v git >/dev/null 2>&1 && ! git_runs; then
+        install_macos_git
+    fi
+    command -v git >/dev/null 2>&1 || fail "git is required. Install it with your system package manager." git_missing
+    local _git_err
+    if ! _git_err="$(git --version 2>&1)"; then
+        fail "git is installed but cannot run: $(printf '%s\n' "$_git_err" | error_line)" git_missing
+    fi
+    command -v curl >/dev/null 2>&1 || fail "curl is required. Install it with your system package manager." curl_missing
+    # PM's Node on musl is the unofficial-builds musl archive, which links the
+    # system libstdc++; without it every node/npm stage fails verification.
+    local _target
+    _target="$(uv_bootstrap_target 2>/dev/null)" || _target=""
+    if [[ "$_target" == *-musl ]]; then
+        local _libdir _stdcxx=""
+        for _libdir in /lib /usr/lib /usr/local/lib; do
+            compgen -G "$_libdir/libstdc++.so.6*" >/dev/null && { _stdcxx=yes; break; }
+        done
+        [ -n "$_stdcxx" ] || fail "musl host: the Node.js runtime needs the system libstdc++. Install it (Alpine: apk add libstdc++, Void: xbps-install libstdc++) and re-run." libstdcxx_missing
+    fi
+    # glibc Node links libatomic.so.1, absent on minimal Debian/RHEL hosts. PM
+    # installs the distro package with `sudo -n` under its install lock, so
+    # cache sudo credentials now, while the terminal can answer the prompt.
+    if [ "$NON_INTERACTIVE" != true ] && [[ "$_target" == linux-* && "$_target" != *-musl ]] \
+        && [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && has_terminal \
+        && ! { ldconfig -p 2>/dev/null || /sbin/ldconfig -p 2>/dev/null; } | grep -q 'libatomic\.so\.1'; then
+        log "Node.js needs libatomic.so.1; sudo may ask for your password to install it"
+        sudo -v </dev/tty || log_warn "sudo failed; if Node.js fails, install libatomic (Debian/Ubuntu: libatomic1) and re-run"
+    fi
+    log_success "prerequisites ok (git, curl)"
+}
+
+# The update channel this install chose (config.yaml update.installs.<id>.channel,
+# id = sha16 of the canonical install path, as clawk_cli.update_channel keys it).
+# Pre-Python reader of the block YAML Clawksis writes; anything it cannot read prints
+# nothing, which keeps the plain branch behaviour.
+chosen_channel() {
+    local config="$CLAWK_HOME/config.yaml" root id
+    [ -f "$config" ] || return 0
+    root="$(cd "$INSTALL_DIR" 2>/dev/null && pwd -P)" || return 0
+    if command -v sha256sum >/dev/null 2>&1; then id="$(printf '%s' "$root" | sha256sum)"
+    elif command -v shasum >/dev/null 2>&1; then id="$(printf '%s' "$root" | shasum -a 256)"
+    else return 0; fi
+    awk -v id="${id:0:16}" -v q="'" '
+        function bare(s,  f) {
+            sub(/^[ \t]+/, "", s); sub(/[ \t]+#.*$/, "", s); sub(/[ \t\r]+$/, "", s)
+            f = substr(s, 1, 1)
+            if (length(s) > 1 && (f == "\"" || f == q) && substr(s, length(s), 1) == f) s = substr(s, 2, length(s) - 2)
+            return s
+        }
+        /^[ \t]*(#|\r?$)/ { next }
+        {
+            match($0, /^ */); indent = RLENGTH; line = substr($0, indent + 1)
+            colon = index(line, ":"); if (!colon) next
+            while (depth && at[depth] >= indent) depth--
+            at[++depth] = indent; key[depth] = bare(substr(line, 1, colon - 1))
+            if (depth == 4 && key[1] == "update" && key[2] == "installs" && key[3] == id \
+                && key[4] == "channel") { print bare(substr(line, colon + 1)); exit }
+        }' "$config" | grep -E '^[a-z0-9]+(-[a-z0-9]+)*$' || :
+}
+
+# Forks and mirrors publish no official releases; they keep following their branch, as
+# clawk_cli.update_channel.default_channel decides.
+is_official_repo() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' \
+        | grep -Eq '^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)samuelgradientai-sys/clawksis-agent(\.git)?/?$'
+}
+
+# The latest published stable release (vX.Y.Z), the release `clawk update` resolves for the
+# stable channel. github.com's /releases/latest redirect answers when the API quota is spent, and
+# origin's highest vX.Y.Z tag (final tags are pushed by the publication run) when github.com's web
+# endpoints are unreachable but git is not. $1 is the origin URL. Prints nothing when none answers.
+latest_stable_release() {
+    local tag
+    tag="$(curl -fsSL --connect-timeout 5 --max-time 20 -H 'Accept: application/vnd.github+json' \
+        https://api.github.com/repos/samuelgradientai-sys/clawksis-agent/releases/latest 2>/dev/null \
+        | sed -n 's/^[[:space:]]*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    if ! valid_stable_tag "$tag"; then
+        tag="$(curl -fsSI --connect-timeout 5 --max-time 20 \
+            https://github.com/samuelgradientai-sys/clawksis-agent/releases/latest 2>/dev/null \
+            | tr -d '\r' | sed -n 's#^[Ll]ocation:.*/releases/tag/\([^/]*\)$#\1#p' | tail -n 1)"
+    fi
+    if ! valid_stable_tag "$tag"; then
+        tag="$(git ls-remote --tags --refs "$1" 'refs/tags/v*' 2>/dev/null | sed 's#.*refs/tags/##' \
+            | grep -E '^v(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -n 1)"
+    fi
+    if valid_stable_tag "$tag"; then printf '%s' "$tag"; fi
+}
+# Same shape as clawk_cli.update_channel.STABLE_TAG_RE.
+valid_stable_tag() {
+    printf '%s' "$1" | grep -Eq '^v(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+}
+
+# The stable release this run installs, nothing to follow the branch, or "-" when stable applies
+# but no release could be looked up: an explicit --channel, else stable for the official
+# repository's main line. $1 is the origin URL.
+stable_target() {
+    [ -z "$INSTALL_COMMIT" ] || return 0
+    case "$CHANNEL" in
+        main) return 0 ;;
+        stable) ;;
+        *) [ "$BRANCH" = main ] && is_official_repo "$1" || return 0 ;;
+    esac
+    local release
+    release="$(latest_stable_release "$1")"
+    # Clawksis: until the repository publishes its first vX.Y.Z release, a default
+    # install keeps following its branch instead of stopping at the stable lookup.
+    if [ -z "$release" ] && [ "$CHANNEL" != stable ] && no_published_releases "$1"; then
+        return 0
+    fi
+    printf '%s' "${release:--}"
+}
+
+# True only when origin answers and carries no v* release tag at all (exit 2 of
+# `git ls-remote --exit-code`); an unreachable origin stays a lookup failure. $1 is the origin URL.
+no_published_releases() {
+    local rc=0
+    git ls-remote --exit-code --tags --refs "$1" 'refs/tags/v*' >/dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 2 ]
+}
+
+# Fetch tag $release into checkout $1 (releases can be cut off main, on release/* branches).
+fetch_release() {
+    run_logged --may-fail "Fetching $release" git -C "$1" fetch origin "+refs/tags/$release:refs/tags/$release"
+}
+
+# Stable applies but cannot be reached. A fresh install stops (installing main instead would be
+# a channel nobody chose); a rerun keeps its checkout for `clawk update`, unless stable was
+# asked for by name. $1 says what failed.
+stable_unreachable() {
+    if [ -d "$INSTALL_DIR/.git" ] && [ "$CHANNEL" != stable ]; then
+        log_warn "$1; keeping the checkout where it is"
+        return 0
+    fi
+    fail "$1$(native_detail). Rerun the installer to retry, or pass --channel main to install main's tip" git_fetch_failed
+}
+
+stage_repository() {
+    local pinned=false channel="" release="" origin
+    # An interrupted clone from an older installer can leave a .git with no
+    # initial commit, where stash/checkout abort ("You do not have the
+    # initial commit yet", #40998); a killed update or a sync tool can leave
+    # one git rejects outright (empty HEAD, a gitdir: file pointing nowhere),
+    # where `clawk update` cannot fetch. Move it aside -- never delete it, it
+    # may hold something the user wants -- and clone fresh below.
+    if [ -e "$INSTALL_DIR/.git" ] && ! git -C "$INSTALL_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
+        local broken
+        broken="${INSTALL_DIR}.broken-$(date -u +%Y%m%d-%H%M%S)"
+        log_warn "$INSTALL_DIR is not a usable git checkout (interrupted clone or damaged .git); moving it aside to $broken"
+        mv "$INSTALL_DIR" "$broken" || fail "cannot move $INSTALL_DIR aside" filesystem_error
+    fi
+    if [ -d "$INSTALL_DIR/.git" ]; then
+        # A chosen channel (stable, a preview) owns where this checkout sits: `clawk update`
+        # moves it. Switching it to the installer's branch would leave it on main while its
+        # channel still says otherwise, and the next check would offer the release as an update.
+        # Only an explicit --commit pin outranks the choice.
+        # An explicit --channel is a new choice and replaces the recorded one.
+        [ -n "$INSTALL_COMMIT" ] || [ -n "$CHANNEL" ] || channel="$(chosen_channel)"
+        # An explicit CLAWK_REPO_URL names the source for reruns too, not
+        # just the first clone.
+        if [ -n "${CLAWK_REPO_URL:-}" ]; then
+            git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL" || fail "cannot point origin at $REPO_URL" git_fetch_failed
+        fi
+        # No recorded choice: an official checkout tracks stable, as `clawk update` does.
+        if [ -z "$channel" ]; then
+            # The configured URL, as clawk_cli.update_channel reads it (`remote get-url`
+            # applies insteadOf rewrites).
+            origin="$(git -C "$INSTALL_DIR" config --get remote.origin.url 2>/dev/null)" || origin=""
+            release="$(stable_target "$origin")"
+        fi
+        [ "$channel" != main ] || channel=""
+        if [ "$release" = - ]; then
+            stable_unreachable "could not look up the latest stable release"
+            channel=stable release=""
+        elif [ -n "$channel" ]; then
+            log "Repairing $INSTALL_DIR on the $channel update channel it chose"
+        elif [ -n "$release" ]; then
+            log "Updating $INSTALL_DIR to the latest stable release ($release)"
+        else
+            log "Updating $INSTALL_DIR ($BRANCH)"
+        fi
+        # Explicit refspec: a tag-pinned --single-branch checkout from an older
+        # installer maps only the tag, so a by-name fetch writes FETCH_HEAD and
+        # never the origin/$BRANCH everything below resolves (#125112).
+        # git 2.53+ aborts fetches into a partial clone whose packs lack a .promisor
+        # marker (#124272), and an install stuck there never fetches the updater that
+        # heals it. Marking is idempotent and never rewrites objects.
+        if [ "$(git -C "$INSTALL_DIR" config --bool --get remote.origin.promisor)" = true ]; then
+            local pack
+            for pack in "$INSTALL_DIR"/.git/objects/pack/pack-*.pack; do
+                if [ -f "$pack" ] && [ ! -e "${pack%.pack}.promisor" ]; then
+                    : > "${pack%.pack}.promisor" || log_warn "could not mark $pack as a partial-clone pack"
+                fi
+            done
+            # Existing treeless checkout: same commit-graph lazy-fetch loop guard (#127711).
+            git -C "$INSTALL_DIR" config maintenance.commit-graph.enabled false \
+                || log_warn "could not disable maintenance.commit-graph.enabled in $INSTALL_DIR"
+            git -C "$INSTALL_DIR" config gc.writeCommitGraph false \
+                || log_warn "could not disable gc.writeCommitGraph in $INSTALL_DIR"
+            git -C "$INSTALL_DIR" config fetch.writeCommitGraph false \
+                || log_warn "could not disable fetch.writeCommitGraph in $INSTALL_DIR"
+            # A treeless (tree:0) checkout from a late-September installer downloads whole
+            # directory snapshots again on every history walk (#129514). Fetch its trees once; the
+            # new filter is recorded only after that succeeds, so `clawk update` retries otherwise.
+            if [ "$(git -C "$INSTALL_DIR" config --get remote.origin.partialclonefilter)" = tree:0 ]; then
+                if run_logged --may-fail "Fetching directory history once (treeless checkout)" \
+                    git -C "$INSTALL_DIR" -c gc.auto=0 -c maintenance.auto=false fetch --refetch \
+                    --filter=blob:none origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"; then
+                    git -C "$INSTALL_DIR" config remote.origin.partialclonefilter blob:none \
+                        || log_warn "could not record the blobless filter in $INSTALL_DIR"
+                else
+                    log_warn "could not fetch the directory history; the next clawk update retries it"
+                fi
+            fi
+        fi
+        if [ -n "$channel" ]; then
+            log "Keeping its checkout: \`clawk update\` moves it (\`clawk update --set-channel main\` follows main)"
             return 0
         fi
-
-        log_warn "Could not auto-install all Termux packages"
-        log_info "Install manually: pkg install ${termux_pkgs[*]}"
-        return 0
-    fi
-
-    # Nothing to install — done
-    if [ "$need_ripgrep" = false ] && [ "$need_ffmpeg" = false ]; then
-        return 0
-    fi
-
-    # Build a human-readable description + package list
-    local desc_parts=()
-    local pkgs=()
-    if [ "$need_ripgrep" = true ]; then
-        desc_parts+=("ripgrep for faster file search")
-        pkgs+=("ripgrep")
-    fi
-    if [ "$need_ffmpeg" = true ]; then
-        desc_parts+=("ffmpeg for TTS voice messages")
-        pkgs+=("ffmpeg")
-    fi
-    local description
-    description=$(IFS=" and "; echo "${desc_parts[*]}")
-
-    # ── macOS: brew ──
-    if [ "$OS" = "macos" ]; then
-        if command -v brew &> /dev/null; then
-            log_info "Installing ${pkgs[*]} via Homebrew..."
-            if brew install "${pkgs[@]}"; then
-                [ "$need_ripgrep" = true ] && HAS_RIPGREP=true && log_success "ripgrep installed"
-                [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
-                return 0
-            fi
+        if [ -n "$release" ] && ! fetch_release "$INSTALL_DIR"; then
+            stable_unreachable "could not fetch $release"
+            return 0
         fi
-        log_warn "Could not auto-install (brew not found or install failed)"
-        log_info "Install manually: brew install ${pkgs[*]}"
-        return 0
-    fi
-
-    # ── Linux: resolve package manager command ──
-    local pkg_install=""
-    case "$DISTRO" in
-        ubuntu|debian) pkg_install="apt install -y"   ;;
-        fedora)        pkg_install="dnf install -y"   ;;
-        arch)          pkg_install="pacman -S --noconfirm" ;;
-    esac
-
-    if [ -n "$pkg_install" ]; then
-        local install_cmd="$pkg_install ${pkgs[*]}"
-
-        # Prevent needrestart/whiptail dialogs from blocking non-interactive installs
-        case "$DISTRO" in
-            ubuntu|debian) export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a ;;
-        esac
-
-        # Already root — just install
-        if [ "$(id -u)" -eq 0 ]; then
-            log_info "Installing ${pkgs[*]}..."
-            if $install_cmd; then
-                [ "$need_ripgrep" = true ] && HAS_RIPGREP=true && log_success "ripgrep installed"
-                [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
+        if [ -n "$release" ]; then
+            # A rerun only moves a checkout forward onto the release. Any other move (a main
+            # checkout diverged from a release cut on release/*, one already past it, a shallow
+            # one that cannot tell) is `clawk update`'s: it refuses a release that predates the
+            # session stores this checkout wrote (update_downgrade_guard).
+            if git -C "$INSTALL_DIR" merge-base --is-ancestor "$release" HEAD 2>/dev/null; then
+                log "Keeping its checkout: it already has $release (\`clawk update\` moves it to the next release)"
                 return 0
             fi
-        # Bug #14 fix: consult HAS_USABLE_SUDO instead of re-detecting.
-        # Previously each step did its own sudo check + prompt, hanging the
-        # installer on VPS where the service user has no sudo.
-        elif [ "$HAS_USABLE_SUDO" = true ]; then
-            log_info "Installing ${pkgs[*]}..."
-            if sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a $install_cmd; then
-                [ "$need_ripgrep" = true ] && HAS_RIPGREP=true && log_success "ripgrep installed"
-                [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
+            if ! git -C "$INSTALL_DIR" merge-base --is-ancestor HEAD "$release" 2>/dev/null; then
+                log "Keeping its checkout: $release does not descend from it (\`clawk update\` decides that move)"
                 return 0
-            fi
-        # sudo exists but isn't usable (no password cache, no NOPASSWD, no TTY).
-        # Only re-prompt when we're truly interactive — never auto-trigger a
-        # password prompt that would hang in CI / scripts / VPS-without-sudo.
-        elif command -v sudo &> /dev/null && [ "$IS_INTERACTIVE" = true ] && [ "$NON_INTERACTIVE" != true ]; then
-            echo ""
-            log_info "sudo is needed ONLY to install optional system packages (${pkgs[*]}) via your package manager."
-            log_info "Clawksis itself does not require or retain root access."
-            if prompt_yes_no "Install ${description}? (requires sudo)" "no"; then
-                if sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a $install_cmd; then
-                    [ "$need_ripgrep" = true ] && HAS_RIPGREP=true && log_success "ripgrep installed"
-                    [ "$need_ffmpeg" = true ]  && HAS_FFMPEG=true  && log_success "ffmpeg installed"
-                    return 0
-                fi
             fi
         else
-            # No sudo, no root, no interactive — skip cleanly with guidance.
-            log_warn "Skipping ${pkgs[*]} install — sudo not usable in this environment."
-            log_info "Install manually after setup: sudo $install_cmd"
+            run_logged "Fetching origin/$BRANCH" git -C "$INSTALL_DIR" fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" \
+                || fail "git fetch failed$(native_detail)" git_fetch_failed
         fi
-    fi
-
-    # ── Fallback for ripgrep: cargo ──
-    if [ "$need_ripgrep" = true ] && [ "$HAS_RIPGREP" = false ]; then
-        if command -v cargo &> /dev/null; then
-            log_info "Trying cargo install ripgrep (no sudo needed)..."
-            if cargo install ripgrep; then
-                log_success "ripgrep installed via cargo"
-                HAS_RIPGREP=true
+        local stamp
+        stamp="$(date -u +%Y%m%d-%H%M%S)"
+        # Park local work BEFORE switching branches: checkout refuses a dirty
+        # tree that conflicts, and the reset below would discard it. Work
+        # that cannot be parked stops the install -- never overwrite it.
+        if [ -n "$(git -C "$INSTALL_DIR" status --porcelain)" ]; then
+            # An interrupted update can leave unmerged index entries, where
+            # stash aborts ("could not write index"). Dropping only the
+            # index-level conflict state keeps the working-tree changes for
+            # the stash below (#4735).
+            if [ -n "$(git -C "$INSTALL_DIR" ls-files --unmerged)" ]; then
+                log_warn "clearing unmerged index entries from a previous conflict"
+                git -C "$INSTALL_DIR" reset -q || fail "cannot clear the unmerged index in $INSTALL_DIR" local_changes_blocked
             fi
+            run_logged "Stashing local changes" \
+                git -C "$INSTALL_DIR" stash push --include-untracked -m "clawk-install-autostash-$stamp" \
+                || fail "could not stash local changes in $INSTALL_DIR; commit or move them aside, then rerun" local_changes_blocked
+            log_warn "local changes stashed as clawk-install-autostash-$stamp"
         fi
-    fi
-
-    # ── Show manual instructions for anything still missing ──
-    if [ "$HAS_RIPGREP" = false ] && [ "$need_ripgrep" = true ]; then
-        log_warn "ripgrep not installed (file search will use grep fallback)"
-        show_manual_install_hint "ripgrep"
-    fi
-    if [ "$HAS_FFMPEG" = false ] && [ "$need_ffmpeg" = true ]; then
-        log_warn "ffmpeg not installed (TTS voice messages will be limited)"
-        show_manual_install_hint "ffmpeg"
-    fi
-}
-
-show_manual_install_hint() {
-    local pkg="$1"
-    log_info "To install $pkg manually:"
-    case "$OS" in
-        linux)
-            case "$DISTRO" in
-                ubuntu|debian) log_info "  sudo apt install $pkg" ;;
-                fedora)        log_info "  sudo dnf install $pkg" ;;
-                arch)          log_info "  sudo pacman -S $pkg"   ;;
-                *)             log_info "  Use your package manager or visit the project homepage" ;;
-            esac
-            ;;
-        android)
-            log_info "  pkg install $pkg"
-            ;;
-        macos) log_info "  brew install $pkg" ;;
-    esac
-}
-
-# ============================================================================
-# Installation
-# ============================================================================
-
-clone_repo() {
-    log_info "Installing to $INSTALL_DIR..."
-
-    # #40998: a previous clone that died before its first commit leaves
-    # $INSTALL_DIR/.git present but with no resolvable HEAD. `git rev-parse
-    # --is-inside-work-tree` and `git status` both still succeed there, so the
-    # update path below would treat it as a valid checkout -- but `git stash`/
-    # `git checkout` abort with "You do not have the initial commit yet". Treat a
-    # commit-less checkout as broken and move it aside so a fresh clone proceeds.
-    # Never delete it: the partial download is preserved in a .broken-* backup.
-    if [ -d "$INSTALL_DIR/.git" ] && ! git -C "$INSTALL_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
-        _broken_backup="${INSTALL_DIR}.broken-$(date +%Y%m%d%H%M%S)-$$"
-        log_warn "Found an interrupted previous install at $INSTALL_DIR (no initial commit)."
-        log_warn "Moving it aside to $_broken_backup and starting a fresh clone."
-        mv "$INSTALL_DIR" "$_broken_backup"
-    fi
-
-    if [ -d "$INSTALL_DIR" ]; then
-        if [ -d "$INSTALL_DIR/.git" ]; then
-            log_info "Existing installation found, updating..."
-            cd "$INSTALL_DIR"
-
-            # This is a managed clone the user never edits, so any working-tree
-            # dirt is git artifact (CRLF renormalization, npm lockfile churn,
-            # files left behind when a directory was deleted upstream such as
-            # apps/bootstrap-installer/). The old path stashed that dirt and
-            # re-applied it after the pull, but the stash/restore cycle has
-            # clobbered freshly-pulled source files (apps/desktop/ →
-            # "[UNRESOLVED_ENTRY] Cannot resolve entry module index.html").
-            # Discard the dirt with a hard reset instead — mirrors install.ps1's
-            # update path. Fork users customize via `clawk update`, which keeps
-            # the stash machinery; the installer is a managed-only entry point.
-            git fetch origin
-            if [ -n "$(git status --porcelain)" ]; then
-                log_info "Discarding working-tree changes on managed clone before update..."
-                git reset --hard HEAD >/dev/null 2>&1 || true
-                git clean -fd >/dev/null 2>&1 || true
-            fi
-            git checkout "$BRANCH"
-            git reset --hard "origin/$BRANCH"
+        if [ -n "$release" ]; then
+            # Detached at the release commit, the way `clawk update` places a stable checkout;
+            # branches (and any commits on them) stay where they are.
+            run_logged "Checking out $release" git -C "$INSTALL_DIR" checkout --detach "$release" \
+                || fail "git checkout failed$(native_detail)" git_checkout_failed
+            return 0
+        fi
+        # checkout's branch guess only sees remote refs the refspec maps, so a
+        # narrow checkout (detached at its tag, no local branch) gets the branch
+        # created at the fetched tip.
+        if git -C "$INSTALL_DIR" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+            run_logged "Checking out $BRANCH" git -C "$INSTALL_DIR" checkout "$BRANCH" || fail "git checkout failed$(native_detail)" git_checkout_failed
         else
-            log_error "Directory exists but is not a git repository: $INSTALL_DIR"
-            log_info "Remove it or choose a different directory with --dir"
-            exit 1
+            run_logged "Checking out $BRANCH" git -C "$INSTALL_DIR" checkout -b "$BRANCH" "origin/$BRANCH" \
+                || fail "git checkout failed$(native_detail)" git_checkout_failed
+        fi
+        if ! run_logged --may-fail "Fast-forwarding to origin/$BRANCH" \
+            git -C "$INSTALL_DIR" merge --ff-only "origin/$BRANCH"; then
+            # A release cut off the main line, a force-pushed remote, or the
+            # user's own commits cannot fast-forward. Every stage below reads
+            # files only the new tree has (pm/), so an install left on the old
+            # tree cannot finish -- match the remote the way `clawk update`
+            # does, after parking the old tip.
+            # Only commits absent from origin need a rescue ref. Keep the same
+            # namespace as `clawk update` so its pruning and recovery work.
+            local dropped rescue_kind rescue_ref prior
+            dropped="$(git -C "$INSTALL_DIR" rev-list --count "origin/$BRANCH..HEAD")" \
+                || fail "cannot count commits before reset" git_reset_failed
+            if [ "$dropped" -gt 0 ]; then
+                rescue_kind="diverged"
+                git -C "$INSTALL_DIR" merge-base HEAD "origin/$BRANCH" >/dev/null 2>&1 \
+                    || rescue_kind="orphan"
+                prior="$(git -C "$INSTALL_DIR" rev-parse --short=12 HEAD)" \
+                    || fail "cannot identify commits before reset" git_reset_failed
+                rescue_ref="refs/clawk-update-backups/$rescue_kind-$BRANCH-$stamp-$prior"
+                git -C "$INSTALL_DIR" update-ref "$rescue_ref" HEAD \
+                    || fail "cannot back up $dropped local commit(s); refusing to reset" git_reset_failed
+                log_warn "$dropped commit(s) not on origin/$BRANCH backed up to $rescue_ref"
+                log "List them with: git -C \"$INSTALL_DIR\" log origin/$BRANCH..$rescue_ref"
+            fi
+            run_logged "Resetting to origin/$BRANCH" git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH" \
+                || fail "git reset failed$(native_detail)" git_reset_failed
+            log_warn "not fast-forwardable; reset to origin/$BRANCH"
         fi
     else
-        # Try SSH first (for private repo access), fall back to HTTPS
-        # GIT_SSH_COMMAND disables interactive prompts and sets a short timeout
-        # so SSH fails fast instead of hanging when no key is configured.
-        log_info "Trying SSH clone..."
-        if GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
-           git clone --depth 1 --branch "$BRANCH" "$REPO_URL_SSH" "$INSTALL_DIR" 2>/dev/null; then
-            log_success "Cloned via SSH"
-        else
-            rm -rf "$INSTALL_DIR" 2>/dev/null  # Clean up partial SSH clone
-            log_info "SSH failed, trying HTTPS..."
-            if git clone --depth 1 --branch "$BRANCH" "$REPO_URL_HTTPS" "$INSTALL_DIR"; then
-                log_success "Cloned via HTTPS"
+        # `mv <clone> <existing dir>` nests the checkout INSIDE it as
+        # <dir>/tree, so a pre-existing destination must be empty (we take
+        # the empty dir over) or we refuse: whatever lives there is not ours.
+        if [ -e "$INSTALL_DIR" ] || [ -L "$INSTALL_DIR" ]; then
+            if [ -d "$INSTALL_DIR" ] && [ ! -L "$INSTALL_DIR" ] && [ -z "$(ls -A "$INSTALL_DIR")" ]; then
+                rmdir "$INSTALL_DIR" || fail "cannot replace empty $INSTALL_DIR" filesystem_error
             else
-                log_error "Failed to clone repository"
-                exit 1
+                fail "$INSTALL_DIR exists and is not a Clawksis git checkout. Move it aside, or install elsewhere with --dir <path>." dir_not_checkout
             fi
         fi
-    fi
-
-    cd "$INSTALL_DIR"
-
-    if [ -n "$INSTALL_COMMIT" ]; then
-        log_info "Pinning checkout to commit $INSTALL_COMMIT..."
-        if ! git cat-file -e "$INSTALL_COMMIT^{commit}" 2>/dev/null; then
-            git fetch origin "$INSTALL_COMMIT" || true
-        fi
-        git checkout --detach "$INSTALL_COMMIT"
-    fi
-
-    log_success "Repository ready"
-}
-
-setup_venv() {
-    if [ "$USE_VENV" = false ]; then
-        log_info "Skipping virtual environment (--no-venv)"
-        return 0
-    fi
-
-    if [ "$DISTRO" = "termux" ]; then
-        log_info "Creating virtual environment with Termux Python..."
-
-        if [ -d "venv" ]; then
-            log_info "Virtual environment already exists, recreating..."
-            rm -rf venv
-        fi
-
-        "$PYTHON_PATH" -m venv venv
-        log_success "Virtual environment ready ($(./venv/bin/python --version 2>/dev/null))"
-        return 0
-    fi
-
-    log_info "Creating virtual environment with Python $PYTHON_VERSION..."
-
-    if [ -d "venv" ]; then
-        log_info "Virtual environment already exists, recreating..."
-        rm -rf venv
-    fi
-
-    # uv creates the venv and pins the Python version in one step
-    $UV_CMD venv venv --python "$PYTHON_VERSION"
-
-    # Neutralize any inherited UV_PYTHON (e.g. UV_PYTHON=3.14 left in the
-    # user's shell env). uv honours UV_PYTHON over an existing venv for the
-    # later `uv sync` / `uv pip install` tiers, so without this it would
-    # silently delete this 3.11 venv and recreate it at the inherited
-    # version — building Rust transitives that have no wheel for that
-    # version from source via maturin, which fails. Pinning UV_PYTHON to the
-    # interpreter we just created forces every subsequent uv command onto it.
-    if [ -x "$INSTALL_DIR/venv/bin/python" ]; then
-        export UV_PYTHON="$INSTALL_DIR/venv/bin/python"
-    fi
-
-    log_success "Virtual environment ready (Python $PYTHON_VERSION)"
-}
-
-install_deps() {
-    log_info "Installing dependencies..."
-
-    # Re-pin UV_PYTHON to the venv interpreter. setup_venv already does this,
-    # but the bootstrap runs install stages (`venv`, `python-deps`) as separate
-    # processes, so an export from setup_venv does NOT survive into a separate
-    # python-deps invocation. Re-deriving it here covers that path. Without it,
-    # an inherited UV_PYTHON=3.14 makes the uv sync/pip tiers below recreate the
-    # venv at 3.14 and fail the maturin source build (no cp314 wheels yet).
-    if [ "$DISTRO" != "termux" ] && [ -x "$INSTALL_DIR/venv/bin/python" ]; then
-        export UV_PYTHON="$INSTALL_DIR/venv/bin/python"
-    fi
-
-    if [ "$DISTRO" = "termux" ]; then
-        if [ "$USE_VENV" = true ]; then
-            export VIRTUAL_ENV="$INSTALL_DIR/venv"
-            PIP_PYTHON="$INSTALL_DIR/venv/bin/python"
-        else
-            PIP_PYTHON="$PYTHON_PATH"
-        fi
-
-        if [ -z "${ANDROID_API_LEVEL:-}" ]; then
-            ANDROID_API_LEVEL="$(getprop ro.build.version.sdk 2>/dev/null || true)"
-            if [ -z "$ANDROID_API_LEVEL" ]; then
-                ANDROID_API_LEVEL=24
-            fi
-            export ANDROID_API_LEVEL
-            log_info "Using ANDROID_API_LEVEL=$ANDROID_API_LEVEL for Android wheel builds"
-        fi
-
-        "$PIP_PYTHON" -m pip install --upgrade pip setuptools wheel >/dev/null
-
-        # On Android, psutil's setup.py rejects sys.platform == 'android' before
-        # it ever invokes the C build, so the next pip install would fail at
-        # "platform android is not supported".  Prebuild psutil from the official
-        # sdist with a one-line marker patch (Linux source path is fine on
-        # Android).  Stopgap until psutil#2762 ships upstream.
-        if "$PIP_PYTHON" -c 'import sys; raise SystemExit(0 if sys.platform == "android" else 1)' 2>/dev/null; then
-            log_info "Android Python detected: prebuilding psutil compatibility shim..."
-            if ! "$PIP_PYTHON" "$INSTALL_DIR/scripts/install_psutil_android.py" --pip "$PIP_PYTHON -m pip"; then
-                log_warn "psutil Android prebuild failed — package install will likely fail next."
-                log_info "Workaround: manually rerun 'python scripts/install_psutil_android.py' once your toolchain is set up."
-            fi
-        fi
-
-        # Try the broad Termux profile first (best-effort "install all" for Android),
-        # then fall back to the conservative Termux baseline, then base package.
-        if ! "$PIP_PYTHON" -m pip install -e '.[termux-all]' -c constraints-termux.txt; then
-            log_warn "Termux broad profile (.[termux-all]) failed, trying baseline Termux profile..."
-            if ! "$PIP_PYTHON" -m pip install -e '.[termux]' -c constraints-termux.txt; then
-                log_warn "Termux baseline profile (.[termux]) failed, trying base install..."
-                if ! "$PIP_PYTHON" -m pip install -e '.' -c constraints-termux.txt; then
-                    log_error "Package installation failed on Termux."
-                    log_info "Ensure these packages are installed: pkg install clang rust make pkg-config libffi openssl ca-certificates curl"
-                    log_info "Then re-run: cd $INSTALL_DIR && python -m pip install -e '.[termux-all]' -c constraints-termux.txt"
-                    exit 1
-                fi
-            fi
-        fi
-
-        log_success "Main package installed"
-        log_info "Termux note: matrix e2ee and local faster-whisper extras are excluded from .[termux-all] due to upstream Android wheel/toolchain blockers."
-        log_info "Termux note: browser/WhatsApp tooling is not installed by default; see the Termux guide for optional follow-up steps."
-
-        log_success "All dependencies installed"
-        return 0
-    fi
-
-    if [ "$USE_VENV" = true ]; then
-        # Tell uv to install into our venv (no need to activate)
-        export VIRTUAL_ENV="$INSTALL_DIR/venv"
-    fi
-
-    # On Debian/Ubuntu (including WSL), some Python packages need build tools.
-    # Check and offer to install them if missing.
-    if [ "$DISTRO" = "ubuntu" ] || [ "$DISTRO" = "debian" ]; then
-        local need_build_tools=false
-        for pkg in gcc python3-dev libffi-dev; do
-            if ! dpkg -s "$pkg" &>/dev/null; then
-                need_build_tools=true
+        mkdir -p "$(dirname "$INSTALL_DIR")"
+        local staged attempt label cloned=false progress=() materialize=(reset --hard HEAD) no_checkout=""
+        release="$(stable_target "$REPO_URL")"
+        [ "$release" != - ] || stable_unreachable "could not look up the latest stable release"
+        [ -z "$INSTALL_COMMIT$release" ] || no_checkout=--no-checkout
+        [ -z "$release" ] || log "Installing the latest stable release ($release); --channel main follows every commit"
+        # Phase lines ("Receiving objects: 42%") feed the status line; git
+        # prints none to a pipe unless asked.
+        if quiet_output; then progress=(--progress); fi
+        staged="$(mktemp -d "$(dirname "$INSTALL_DIR")/.clawk-clone-XXXXXX")" || fail "cannot stage clone" filesystem_error
+        for attempt in 1 2 3; do
+            # Blobless: every commit, tree and release tag (runtime identity is
+            # the nearest reachable release; --commit pins and branch switches
+            # still resolve), file contents fetched on demand. Not treeless:
+            # a long-lived treeless checkout re-downloads whole trees on every
+            # checkout and history walk (#129712).
+            label="Cloning $REPO_URL ($BRANCH) into $INSTALL_DIR"
+            [ "$attempt" = 1 ] || label="$label (attempt $attempt of 3)"
+            # A pinned install materializes only the pin (below): checking out the
+            # branch tip first fetches and rewrites every file the two differ in.
+            if run_logged "$label" git clone ${progress[@]+"${progress[@]}"} \
+                --filter=blob:none ${no_checkout:+"$no_checkout"} --branch "$BRANCH" "$REPO_URL" "$staged/tree"; then
+                cloned=true
                 break
             fi
+            rm -rf "$staged/tree"
+            [ "$attempt" = 3 ] || sleep "$((attempt * 5))"
         done
-        if [ "$need_build_tools" = true ]; then
-            log_info "Some build tools may be needed for Python packages..."
-            # Bug #14 fix: consult HAS_USABLE_SUDO instead of re-detecting.
-            if [ "$HAS_USABLE_SUDO" = true ]; then
-                sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -qq build-essential python3-dev libffi-dev >/dev/null 2>&1 || true
-                log_success "Build tools installed"
-            elif command -v sudo &> /dev/null && [ "$IS_INTERACTIVE" = true ] && [ "$NON_INTERACTIVE" != true ]; then
-                # Truly interactive — fine to ask. Default 'no' so a stray Enter
-                # doesn't trigger a sudo password prompt that would hang.
-                log_info "sudo is needed ONLY to install build tools (build-essential, python3-dev, libffi-dev) via apt."
-                log_info "Clawksis itself does not require or retain root access."
-                if prompt_yes_no "Install build tools?" "no"; then
-                    sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -qq build-essential python3-dev libffi-dev >/dev/null 2>&1 || true
-                    log_success "Build tools installed"
-                fi
-            else
-                log_info "Build tools (build-essential, python3-dev, libffi-dev) not installed — sudo not usable."
-                log_info "If a Python package fails to build, install them manually: sudo apt install build-essential python3-dev libffi-dev"
+        if [ "$cloned" = false ]; then
+            # The checkout step is where throttled downloads die: clone the
+            # graph alone, then retry materializing the tree separately.
+            log_warn "direct clone failed; trying deferred checkout"
+            if run_logged "Cloning history" git clone ${progress[@]+"${progress[@]}"} \
+                --filter=blob:none --no-checkout --branch "$BRANCH" "$REPO_URL" "$staged/tree"; then
+                cloned=deferred
             fi
         fi
-    fi
-
-    # Install the main package in editable mode with all extras.
-    #
-    # Hash-verified install (Tier 0) — when uv.lock is present, prefer
-    # `uv sync --locked`. The lockfile records SHA256 hashes for every
-    # transitive, so a compromised transitive (different hash than what
-    # we shipped) is REJECTED by the resolver. This is the *only* path
-    # that protects against the "direct dep is fine, but the dep's dep
-    # got worm-poisoned overnight" failure mode. All `uv pip install`
-    # tiers below re-resolve transitives fresh from PyPI without any
-    # hash verification — they exist to keep installs working when the
-    # lockfile is stale, missing, or out-of-sync with the current
-    # extras spec, NOT because they're equivalent in posture.
-    if [ -f "uv.lock" ]; then
-        log_info "Trying tier: hash-verified (uv.lock) ..."
-        log_info "(this resolves + downloads the curated [all] set — first run on a"
-        log_info " fresh venv can take 1-5 minutes; uv prints progress below)"
-        # Stream uv's progress directly to the user instead of swallowing
-        # it with `2>"$(mktemp)"`.  Two reasons:
-        #   1. `--extra all --locked` against a fresh venv has to pull
-        #      every transitive — silencing stderr makes the install
-        #      look frozen for minutes on slow networks. Users see
-        #      "Trying tier: hash-verified ..." and assume it's hung.
-        #   2. The previous `2>"$(mktemp)"` substituted the path at
-        #      command-build time but never saved it, so on failure the
-        #      uv error message was unreachable — the user just got the
-        #      generic "lockfile may be stale" warning.
-        #
-        # Critical flag choice: `--extra all`, NOT `--all-extras`.
-        #   --all-extras = every [project.optional-dependencies] key.
-        #                  This bypasses the curated `[all]` extra
-        #                  entirely and pulls e.g. [matrix] (which
-        #                  needs python-olm + make on Windows) and
-        #                  [rl] (git+https deps that fail offline).
-        #   --extra all  = install just the `[all]` extra's contents.
-        #                  This respects the curation in pyproject.toml.
-        # uv's own progress UI handles TTY detection and downgrades
-        # gracefully when stdout/stderr aren't terminals.
-        if UV_PROJECT_ENVIRONMENT="$INSTALL_DIR/venv" $UV_CMD sync --extra all --locked; then
-            log_success "Main package installed (hash-verified via uv.lock)"
-            log_success "All dependencies installed"
-            return 0
+        if [ "$cloned" = false ]; then
+            rm -rf "$staged"
+            fail "git clone failed; no checkout published$(native_detail)" git_clone_failed
         fi
-        log_warn "uv.lock sync failed (see uv output above), falling back to PyPI resolve..."
-    else
-        log_info "uv.lock not found — falling back to PyPI resolve (no hash verification)"
-    fi
-
-    # Multi-tier fallback. The point of the tiers is that ONE compromised
-    # PyPI package (a worm-poisoned release that gets quarantined, like
-    # mistralai 2.4.6 in May 2026) shouldn't be able to silently demote a
-    # fresh install all the way down to "core only" — the user should keep
-    # everything else they signed up for.
-    #
-    # Tier 1: [all] — the curated extra in pyproject.toml.
-    # Tier 2: [all] minus the currently-broken extras list (_BROKEN_EXTRAS).
-    #         Edit _BROKEN_EXTRAS below when something on PyPI breaks; this
-    #         lets users keep the rest of [all] when one transitive is
-    #         unavailable. The list of [all]'s contents is parsed from
-    #         pyproject.toml at runtime — there is NO hand-mirrored copy
-    #         to drift out of sync. If you want to change what [all]
-    #         contains, edit pyproject.toml only.
-    # Tier 3: bare `.` — last-resort so at least the core CLI launches.
-    #         Skipped tiers like "PyPI-only extras (no git deps)" used to
-    #         exist to dodge [rl] / [matrix] git+sdist deps; those are no
-    #         longer in [all] post-2026-05-12 lazy-install migration, so
-    #         a separate PyPI-only tier had no remaining content.
-    local _BROKEN_EXTRAS=()  # populate when an extra becomes unresolvable
-
-    # Parse [project.optional-dependencies].all from pyproject.toml.
-    # tomllib is stdlib on Python 3.11+ which uv's bootstrap guarantees.
-    # Falls back to a hand list if parse fails — defensive only.
-    local _ALL_EXTRAS_CSV
-    _ALL_EXTRAS_CSV="$(
-        "$PYTHON_PATH" - <<'PY' 2>/dev/null
-import re, sys, tomllib
-try:
-    with open("pyproject.toml", "rb") as fh:
-        data = tomllib.load(fh)
-    specs = data["project"]["optional-dependencies"]["all"]
-    extras = []
-    for s in specs:
-        m = re.search(r"clawksis-agent\[([\w-]+)\]", s)
-        if m:
-            extras.append(m.group(1))
-    print(",".join(extras))
-except Exception as e:
-    print("", file=sys.stderr)
-    sys.exit(1)
-PY
-    )"
-    if [ -z "$_ALL_EXTRAS_CSV" ]; then
-        log_warn "Could not parse [all] from pyproject.toml; falling back to .[all] only."
-        _ALL_EXTRAS_CSV=""
-    fi
-
-    # Build "[all] minus broken" spec by filtering the parsed list.
-    local _SAFE_SPEC=".[all]"
-    if [ -n "$_ALL_EXTRAS_CSV" ] && [ "${#_BROKEN_EXTRAS[@]}" -gt 0 ]; then
-        local _SAFE_EXTRAS=()
-        local _e _b _skip
-        IFS=',' read -ra _ALL_EXTRAS_ARR <<< "$_ALL_EXTRAS_CSV"
-        for _e in "${_ALL_EXTRAS_ARR[@]}"; do
-            _skip=false
-            for _b in "${_BROKEN_EXTRAS[@]}"; do
-                if [ "$_e" = "$_b" ]; then _skip=true; break; fi
+        if [ -n "$INSTALL_COMMIT" ]; then
+            # Pin before publishing: a pinned or deferred clone has no files yet,
+            # and an unpublished tree never leaves an empty checkout behind.
+            git -C "$staged/tree" merge-base --is-ancestor "$INSTALL_COMMIT" "origin/$BRANCH" 2>/dev/null \
+                || { rm -rf "$staged"; fail "commit $INSTALL_COMMIT is not on branch $BRANCH" commit_not_on_branch; }
+        fi
+        if [ -n "$release" ]; then
+            fetch_release "$staged/tree" || { rm -rf "$staged"; stable_unreachable "could not fetch $release"; }
+            materialize=(checkout --force --detach "$release")
+        fi
+        if [ -n "$INSTALL_COMMIT$release" ] || [ "$cloned" = deferred ]; then
+            # The checkout step is where throttled downloads die: retry it alone.
+            # A pin detaches HEAD and leaves the branch at its tip, as the published pin did.
+            [ -z "$INSTALL_COMMIT" ] || materialize=(checkout --force --detach "$INSTALL_COMMIT")
+            cloned=false
+            for attempt in 1 2; do
+                if run_logged "Checking out ${INSTALL_COMMIT:-${release:-files}} (attempt $attempt of 2)" \
+                    git -C "$staged/tree" "${materialize[@]}"; then
+                    cloned=true
+                    [ -z "$INSTALL_COMMIT" ] || pinned=true
+                    break
+                fi
+                [ "$attempt" = 2 ] || sleep 5
             done
-            if [ "$_skip" = false ]; then _SAFE_EXTRAS+=("$_e"); fi
-        done
-        _SAFE_SPEC=".[$(IFS=,; echo "${_SAFE_EXTRAS[*]}")]"
-    fi
-
-    ALL_INSTALL_LOG=$(mktemp)
-    local _installed=false
-    local _tier_name=""
-
-    install_tier() {
-        local name="$1"; local spec="$2"
-        log_info "Trying tier: $name ..."
-        if $UV_CMD pip install -e "$spec" 2>"$ALL_INSTALL_LOG"; then
-            log_success "Main package installed ($name)"
-            _installed=true
-            _tier_name="$name"
-            return 0
-        fi
-        log_warn "Tier '$name' failed. Top of pip output:"
-        head -5 "$ALL_INSTALL_LOG" | sed 's/^/    /' >&2
-        return 1
-    }
-
-    install_tier "all" ".[all]" \
-        || install_tier "all minus known-broken (${_BROKEN_EXTRAS[*]:-none})" "$_SAFE_SPEC" \
-        || install_tier "core only (no extras)" "."
-
-    rm -f "$ALL_INSTALL_LOG"
-
-    if [ "$_installed" = false ]; then
-        log_error "Package installation failed even with no extras."
-        log_info "Check that build tools are installed: sudo apt install build-essential python3-dev"
-        log_info "Then re-run: cd $INSTALL_DIR && uv pip install -e '.[all]'"
-        exit 1
-    fi
-
-    if [ "$_tier_name" != "all (with RL/matrix extras)" ]; then
-        log_warn "Note: installed via fallback tier ($_tier_name)."
-        log_info "Some optional features may be missing. After resolving any"
-        log_info "PyPI/network issue, re-run: $UV_CMD pip install -e '.[all]'"
-    fi
-
-    log_success "Main package installed"
-
-    log_success "All dependencies installed"
-}
-
-setup_path() {
-    log_info "Setting up clawk command..."
-
-    if [ "$USE_VENV" = true ]; then
-        CLAWK_BIN="$INSTALL_DIR/venv/bin/clawk"
-    else
-        CLAWK_BIN="$(which clawk 2>/dev/null || echo "")"
-        if [ -z "$CLAWK_BIN" ]; then
-            log_warn "clawk not found on PATH after install"
-            return 0
-        fi
-    fi
-
-    # Verify the entry point script was actually generated
-    if [ ! -x "$CLAWK_BIN" ]; then
-        log_warn "clawk entry point not found at $CLAWK_BIN"
-        log_info "This usually means the pip install didn't complete successfully."
-        if [ "$DISTRO" = "termux" ]; then
-            log_info "Try: cd $INSTALL_DIR && python -m pip install -e '.[termux-all]' -c constraints-termux.txt"
-        else
-            log_info "Try: cd $INSTALL_DIR && uv pip install -e '.[all]'"
-        fi
-        return 0
-    fi
-
-    local command_link_dir
-    local command_link_display_dir
-    command_link_dir="$(get_command_link_dir)"
-    command_link_display_dir="$(get_command_link_display_dir)"
-
-    # Create a user-facing shim for the clawk command.
-    # We intentionally clear PYTHONPATH/PYTHONHOME here so inherited env vars
-    # can't make this launcher import modules from another checkout.
-    mkdir -p "$command_link_dir"
-    # Older installs created this path as a symlink to $CLAWK_BIN. Without
-    # the rm, `cat >` follows the symlink and overwrites the venv pip entry
-    # point with this shim — making `exec "$CLAWK_BIN"` self-recurse. (#21454)
-    rm -f "$command_link_dir/clawk"
-    cat > "$command_link_dir/clawk" <<EOF
-#!/usr/bin/env bash
-unset PYTHONPATH
-unset PYTHONHOME
-exec "$CLAWK_BIN" "\$@"
-EOF
-    chmod +x "$command_link_dir/clawk"
-    log_success "Installed clawk launcher → $command_link_display_dir/clawk"
-
-    if [ "$DISTRO" = "termux" ]; then
-        export PATH="$command_link_dir:$PATH"
-        log_info "$command_link_display_dir is the native Termux command path"
-        log_success "clawk command ready"
-        return 0
-    fi
-
-    # FHS layout: /usr/local/bin is normally on PATH for login shells (via
-    # /etc/profile pathmunge), but on RHEL/CentOS/Rocky/Alma 8+ non-login
-    # interactive root shells (su, sudo -s, tmux panes, some web terminals)
-    # only source /etc/bashrc, which does NOT add /usr/local/bin — and
-    # /root/.bash_profile doesn't either.  So verify with `command -v` and
-    # fall back to writing a PATH guard into /root/.bashrc when needed.
-    if [ "$ROOT_FHS_LAYOUT" = true ]; then
-        export PATH="$command_link_dir:$PATH"
-        # Probe a fresh non-login interactive bash the way the user will use it.
-        # `bash -i -c` sources ~/.bashrc but NOT ~/.bash_profile or /etc/profile,
-        # which is the exact scenario where RHEL root loses /usr/local/bin.
-        if env -i HOME="$HOME" TERM="${TERM:-dumb}" bash -i -c 'command -v clawk' \
-                >/dev/null 2>&1; then
-            log_info "/usr/local/bin is already on PATH for all shells"
-            log_success "clawk command ready"
-            return 0
-        fi
-
-        log_info "clawk not on PATH in non-login shells (common on RHEL-family)"
-        PATH_LINE='export PATH="/usr/local/bin:$PATH"'
-        PATH_COMMENT='# Clawksis — ensure /usr/local/bin is on PATH (RHEL non-login shells)'
-        for SHELL_CONFIG in "$HOME/.bashrc" "$HOME/.bash_profile"; do
-            [ -f "$SHELL_CONFIG" ] || continue
-            if ! grep -v '^[[:space:]]*#' "$SHELL_CONFIG" 2>/dev/null \
-                    | grep -qE 'PATH=.*(/usr/local/bin|\$command_link_dir)'; then
-                echo "" >> "$SHELL_CONFIG"
-                echo "$PATH_COMMENT" >> "$SHELL_CONFIG"
-                echo "$PATH_LINE" >> "$SHELL_CONFIG"
-                log_success "Added /usr/local/bin to PATH in $SHELL_CONFIG"
-            fi
-        done
-        log_success "clawk command ready"
-        return 0
-    fi
-
-    # Check if ~/.local/bin is on PATH; if not, add it to shell config.
-    # Detect the user's actual login shell (not the shell running this script,
-    # which is always bash when piped from curl).
-    if ! echo "$PATH" | tr ':' '\n' | grep -q "^$command_link_dir$"; then
-        SHELL_CONFIGS=()
-        IS_FISH=false
-        LOGIN_SHELL="$(basename "${SHELL:-/bin/bash}")"
-        case "$LOGIN_SHELL" in
-            zsh)
-                [ -f "$HOME/.zshrc" ] && SHELL_CONFIGS+=("$HOME/.zshrc")
-                [ -f "$HOME/.zprofile" ] && SHELL_CONFIGS+=("$HOME/.zprofile")
-                # If neither exists, create ~/.zshrc (common on fresh macOS installs)
-                if [ ${#SHELL_CONFIGS[@]} -eq 0 ]; then
-                    touch "$HOME/.zshrc"
-                    SHELL_CONFIGS+=("$HOME/.zshrc")
-                fi
-                ;;
-            bash)
-                [ -f "$HOME/.bashrc" ] && SHELL_CONFIGS+=("$HOME/.bashrc")
-                [ -f "$HOME/.bash_profile" ] && SHELL_CONFIGS+=("$HOME/.bash_profile")
-                ;;
-            fish)
-                # fish uses ~/.config/fish/config.fish and fish_add_path — not export PATH=
-                IS_FISH=true
-                FISH_CONFIG="$HOME/.config/fish/config.fish"
-                mkdir -p "$(dirname "$FISH_CONFIG")"
-                touch "$FISH_CONFIG"
-                ;;
-            *)
-                [ -f "$HOME/.bashrc" ] && SHELL_CONFIGS+=("$HOME/.bashrc")
-                [ -f "$HOME/.zshrc" ] && SHELL_CONFIGS+=("$HOME/.zshrc")
-                ;;
-        esac
-        # Also ensure ~/.profile has it (sourced by login shells on
-        # Ubuntu/Debian/WSL even when ~/.bashrc is skipped)
-        [ "$IS_FISH" = "false" ] && [ -f "$HOME/.profile" ] && SHELL_CONFIGS+=("$HOME/.profile")
-
-        PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
-
-        for SHELL_CONFIG in "${SHELL_CONFIGS[@]}"; do
-            if ! grep -v '^[[:space:]]*#' "$SHELL_CONFIG" 2>/dev/null | grep -qE 'PATH=.*\.local/bin'; then
-                echo "" >> "$SHELL_CONFIG"
-                echo "# Clawksis — ensure ~/.local/bin is on PATH" >> "$SHELL_CONFIG"
-                echo "$PATH_LINE" >> "$SHELL_CONFIG"
-                log_success "Added ~/.local/bin to PATH in $SHELL_CONFIG"
-            fi
-        done
-
-        # fish uses fish_add_path instead of export PATH=...
-        if [ "$IS_FISH" = "true" ]; then
-            if ! grep -q 'fish_add_path.*\.local/bin' "$FISH_CONFIG" 2>/dev/null; then
-                echo "" >> "$FISH_CONFIG"
-                echo "# Clawksis — ensure ~/.local/bin is on PATH" >> "$FISH_CONFIG"
-                echo 'fish_add_path "$HOME/.local/bin"' >> "$FISH_CONFIG"
-                log_success "Added ~/.local/bin to PATH in $FISH_CONFIG"
+            if [ "$cloned" = false ]; then
+                rm -rf "$staged"
+                fail "could not check out ${INSTALL_COMMIT:-the cloned tree}; no checkout published$(native_detail)" git_checkout_failed
             fi
         fi
-
-        if [ "$IS_FISH" = "false" ] && [ ${#SHELL_CONFIGS[@]} -eq 0 ]; then
-            log_warn "Could not detect shell config file to add ~/.local/bin to PATH"
-            log_info "Add manually: $PATH_LINE"
+        if ! mv "$staged/tree" "$INSTALL_DIR"; then
+            rm -rf "$staged"
+            fail "cannot publish cloned checkout" filesystem_error
         fi
-    else
-        log_info "~/.local/bin already on PATH"
+        rmdir "$staged"
+        # A treeless checkout must never write a commit-graph: over a graph with
+        # changed-path data that lazy-fetches the trees of every unseen commit, in a
+        # loop (#127711). gc.auto stays on: `clawk update` folds lazy-fetch packs with
+        # `gc --auto`.
+        git -C "$INSTALL_DIR" config maintenance.commit-graph.enabled false \
+            || log_warn "could not disable maintenance.commit-graph.enabled in $INSTALL_DIR"
+        git -C "$INSTALL_DIR" config gc.writeCommitGraph false \
+            || log_warn "could not disable gc.writeCommitGraph in $INSTALL_DIR"
+        git -C "$INSTALL_DIR" config fetch.writeCommitGraph false \
+            || log_warn "could not disable fetch.writeCommitGraph in $INSTALL_DIR"
+        log_success "Clawksis cloned"
     fi
-
-    # Export for current session so clawk works immediately
-    export PATH="$command_link_dir:$PATH"
-
-    log_success "clawk command ready"
-}
-
-copy_config_templates() {
-    log_info "Setting up configuration files..."
-
-    # Create ~/.clawksis directory structure (config at top level, code in subdir)
-    mkdir -p "$CLAWK_HOME"/{cron,sessions,logs,pairing,hooks,image_cache,audio_cache,memories,skills}
-
-    # Create .env at ~/.clawksis/.env (top level, easy to find)
-    if [ ! -f "$CLAWK_HOME/.env" ]; then
-        if [ -f "$INSTALL_DIR/.env.example" ]; then
-            cp "$INSTALL_DIR/.env.example" "$CLAWK_HOME/.env"
-            log_success "Created $CLAWK_HOME/.env from template"
-        else
-            touch "$CLAWK_HOME/.env"
-            log_success "Created $CLAWK_HOME/.env"
-        fi
-    else
-        log_info "$CLAWK_HOME/.env already exists, keeping it"
-    fi
-    # Restrict .env permissions — this file holds API keys and tokens.
-    # 0600 ensures only the file owner can read/write, matching standard
-    # practice for credential files (.netrc, .aws/credentials, .ssh/config).
-    chmod 600 "$CLAWK_HOME/.env"
-    configure_browser_env_from_system_browser
-
-    # Create config.yaml at ~/.clawksis/config.yaml (top level, easy to find)
-    if [ ! -f "$CLAWK_HOME/config.yaml" ]; then
-        if [ -f "$INSTALL_DIR/cli-config.yaml.example" ]; then
-            cp "$INSTALL_DIR/cli-config.yaml.example" "$CLAWK_HOME/config.yaml"
-            log_success "Created $CLAWK_HOME/config.yaml from template"
-        fi
-    else
-        log_info "$CLAWK_HOME/config.yaml already exists, keeping it"
-    fi
-
-    # SOUL.md (global persona) is intentionally NOT created here. It is seeded
-    # from the bundled persona in clawk_cli/default_soul.py (DEFAULT_SOUL_MD) by
-    # _ensure_default_soul_md() during config init, so the in-repo persona stays
-    # the single source of truth and ships with every install.
-
-    log_success "Configuration directory ready: $CLAWK_HOME/"
-
-    # Seed bundled skills into ~/.clawksis/skills/ (manifest-based, one-time per skill)
-    if [ "$NO_SKILLS" = true ]; then
-        # Blank-slate install: write the opt-out marker and skip seeding.
-        # skills_sync.py and `clawk update` both honor this marker, so the
-        # default profile stays empty across future updates too.
-        printf '%s\n' \
-            "This profile opted out of bundled-skill seeding (installed with --no-skills)." \
-            "Delete this file to re-enable sync on the next 'clawk update'." \
-            > "$CLAWK_HOME/.no-bundled-skills" 2>/dev/null || true
-        log_info "Skipping bundled skills (--no-skills). Wrote $CLAWK_HOME/.no-bundled-skills"
-        log_info "  Future 'clawk update' runs will not inject bundled skills. Delete the marker to opt back in."
-    else
-        log_info "Syncing bundled skills to $CLAWK_HOME/skills/ ..."
-        if "$INSTALL_DIR/venv/bin/python" "$INSTALL_DIR/tools/skills_sync.py" 2>/dev/null; then
-            log_success "Skills synced to $CLAWK_HOME/skills/"
-        else
-            # Fallback: simple directory copy if Python sync fails
-            if [ -d "$INSTALL_DIR/skills" ] && [ ! "$(ls -A "$CLAWK_HOME/skills/" 2>/dev/null | grep -v '.bundled_manifest')" ]; then
-                cp -r "$INSTALL_DIR/skills/"* "$CLAWK_HOME/skills/" 2>/dev/null || true
-                log_success "Skills copied to $CLAWK_HOME/skills/"
-            fi
-        fi
+    if [ -n "$INSTALL_COMMIT" ] && [ "$pinned" = false ]; then
+        # A rerun over an existing checkout pins here (a fresh clone pinned
+        # before publishing). A pin must come from the branch being installed:
+        # the complete marker records both, and a commit off that branch would
+        # make the next plain rerun "update" onto a different line.
+        git -C "$INSTALL_DIR" merge-base --is-ancestor "$INSTALL_COMMIT" "origin/$BRANCH" 2>/dev/null \
+            || fail "commit $INSTALL_COMMIT is not on branch $BRANCH" commit_not_on_branch
+        run_logged "Pinning $INSTALL_COMMIT" git -C "$INSTALL_DIR" checkout "$INSTALL_COMMIT" \
+            || fail "could not pin commit $INSTALL_COMMIT$(native_detail)" git_checkout_failed
     fi
 }
 
-find_system_browser() {
-    # Prefer a user-specified browser path, then common Linux/macOS Chrome and
-    # Chromium command names.  Arch-family distributions commonly ship plain
-    # `chromium`, while Debian-family systems often use `chromium-browser`.
-    if [ -n "${AGENT_BROWSER_EXECUTABLE_PATH:-}" ]; then
-        if [ -x "$AGENT_BROWSER_EXECUTABLE_PATH" ]; then
-            echo "$AGENT_BROWSER_EXECUTABLE_PATH"
-            return 0
-        fi
-        if command -v "$AGENT_BROWSER_EXECUTABLE_PATH" >/dev/null 2>&1; then
-            command -v "$AGENT_BROWSER_EXECUTABLE_PATH"
-            return 0
-        fi
-    fi
+stage_venv() {
+    # Keep the installer stage protocol; PM alone creates dependency environments.
+    local boot_py
+    bootstrap_python
+    log_success "bootstrap Python ready; PM prepares the dependency environment"
+}
 
-    local candidate
-    for candidate in google-chrome google-chrome-stable chromium chromium-browser chrome; do
-        if command -v "$candidate" >/dev/null 2>&1; then
-            command -v "$candidate"
-            return 0
-        fi
+# Tool-only bootstrap: acquire uv and Python before PM's own dependencies exist.
+# The application dependency graph is never installed in this interpreter.
+bootstrap_python() {
+    ensure_uv
+    local _py
+    # Read packages.python.version by following object names and braces, not
+    # indentation — same pre-Python reader contract as setup-clawk.sh's pin().
+    _py="$(awk -F '"' '
+        /^[[:space:]]*("[^"]+"[[:space:]]*:[[:space:]]*)?\{/ { path[++depth] = $2; next }
+        /^[[:space:]]*\}[[:space:]]*,?[[:space:]]*$/ { delete path[depth--]; next }
+        path[2] == "packages" && path[3] == "python" && $2 == "version" && depth == 3 { print $4; exit }
+    ' "$INSTALL_DIR/pm/lock.json" | cut -d+ -f1 | cut -d. -f1,2)"
+    [ -n "$_py" ] || _py="3.14"
+    # Only base interpreters qualify: an activated app venv must not become
+    # PM's bootstrap parent. Prefer the existing managed Python, then a host
+    # Python of the same supported minor before attempting a download (#10778).
+    # This interpreter only boots PM; PM still owns the exact runtime pin.
+    if ! boot_py="$(UV_SYSTEM_PYTHON=1 UV_NO_PROJECT=1 "$UV_CMD" python find --managed-python "$_py" 2>/dev/null)" \
+        && ! boot_py="$("$UV_CMD" python find --system --no-project "$_py" 2>/dev/null)"; then
+        run_logged "Downloading Python $_py" "$UV_CMD" python install --no-bin --no-registry "$_py" \
+            || fail "bootstrap Python installation failed" python_install_failed
+        boot_py="$(UV_SYSTEM_PYTHON=1 UV_NO_PROJECT=1 "$UV_CMD" python find --managed-python "$_py")" || fail "bootstrap Python lookup failed" python_install_failed
+    fi
+    boot_py="${boot_py%$'\r'}"
+    [ -x "$boot_py" ] && "$boot_py" --version >/dev/null 2>&1 || fail "bootstrap Python is not executable: $boot_py" python_install_failed
+}
+
+# uv exits before PM can replace its tool entry. pm.cli then prepares and
+# enters its independently locked runtime before mutating application deps.
+bootstrap_pm() {
+    local boot_py
+    local pm_args=(install)
+    # PM records the opt-outs, so later installs and `clawk update` keep the
+    # tools off until `clawk pm install <name>` opts back in.
+    [ "$SKIP_BROWSER" = true ] && pm_args+=(--without agent-browser)
+    [ "$SKIP_COMPUTER_USE" = true ] && pm_args+=(--without cua-driver)
+    bootstrap_python
+    # Refresh the sudo ticket cached in prerequisites (never prompts): the
+    # clone and downloads can outlast sudo's timestamp_timeout.
+    if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then sudo -n -v 2>/dev/null || :; fi
+    (cd "$INSTALL_DIR" && run_logged "Installing dependencies (hash-verified via uv.lock)" \
+        "$boot_py" -m pm.cli "${pm_args[@]}") \
+        || fail "pm install failed" deps_install_failed
+    log_success "dependencies installed"
+}
+
+stage_python_deps() {
+    bootstrap_pm
+}
+
+desktop_product_present() {
+    # Does this checkout already carry a built desktop app? A plain repair or
+    # upgrade rerun on a desktop install must REBUILD it rather than leave a
+    # bundle built from the previous code: the app is part of that install, and
+    # the artifacts live inside the tree (gitignored), so an update makes them
+    # stale instead of removing them.
+    # electron-builder suffixes the output dir with the arch on every non-x64
+    # target (linux-arm64-unpacked, mac-arm64, win-arm64-unpacked), so the x64
+    # names alone miss a desktop build on ARM64 Linux/Windows (#94703).
+    local release="$INSTALL_DIR/apps/desktop/release" dir
+    for dir in linux-unpacked linux-arm64-unpacked mac mac-arm64 \
+               win-unpacked win-ia32-unpacked win-arm64-unpacked; do
+        [ -d "$release/$dir" ] && return 0
     done
-
-    if [ "$(uname)" = "Darwin" ]; then
-        for app in \
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-            "/Applications/Chromium.app/Contents/MacOS/Chromium"; do
-            if [ -x "$app" ]; then
-                echo "$app"
-                return 0
-            fi
-        done
-    fi
-
     return 1
 }
 
-run_browser_install_with_timeout() {
-    local timeout_seconds="$1"
-    shift
+# Guarded: a login shell whose ~/.bash_profile sources ~/.bashrc (Fedora, RHEL)
+# reads both files, so an unconditional prepend would put ~/.local/bin on PATH twice.
+SHELL_PATH_LINE='case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac'
+SHELL_PATH_SETUP_RE='^[[:space:]]*([^#[:space:]].*)?PATH=.*\.local/bin'
 
-    if command -v timeout >/dev/null 2>&1; then
-        timeout "$timeout_seconds" "$@"
-    else
-        "$@"
+append_shell_path() {
+    local rc="$1" line="$2" pattern="$3"
+    # Existing user PATH setup wins; never append another line on a repair run.
+    if [ -f "$rc" ] && grep -E "$pattern" "$rc" >/dev/null 2>&1; then
+        return 0
     fi
+    mkdir -p "$(dirname "$rc")"
+    printf '\n# Clawksis command\n%s\n' "$line" >> "$rc" || fail "cannot update PATH in $rc" filesystem_error
+    log_success "added ~/.local/bin to PATH in $rc"
 }
 
-configure_browser_env_from_system_browser() {
-    local env_file="$CLAWK_HOME/.env"
-    local browser_path="${DETECTED_BROWSER_EXECUTABLE:-}"
-
-    if [ -z "$browser_path" ]; then
-        browser_path="$(find_system_browser 2>/dev/null || true)"
-    fi
-
-    if [ -z "$browser_path" ]; then
-        return 0
-    fi
-
-    mkdir -p "$CLAWK_HOME"
-    if [ ! -f "$env_file" ]; then
-        touch "$env_file"
-    fi
-
-    if grep -q '^AGENT_BROWSER_EXECUTABLE_PATH=' "$env_file" 2>/dev/null; then
-        log_info "AGENT_BROWSER_EXECUTABLE_PATH already configured"
-        return 0
-    fi
-
-    {
-        echo ""
-        echo "# Clawksis browser tools — use the system Chrome/Chromium binary."
-        echo "AGENT_BROWSER_EXECUTABLE_PATH=$browser_path"
-    } >> "$env_file"
-    log_success "Configured browser tools to use $browser_path"
-}
-
-install_node_deps() {
-    if [ "$HAS_NODE" = false ]; then
-        log_info "Skipping Node.js dependencies (Node not installed)"
-        return 0
-    fi
-
-    if [ "$DISTRO" = "termux" ]; then
-        log_info "Skipping automatic Node/browser dependency setup on Termux"
-        log_info "Browser automation is not part of the tested Termux install path yet."
-        log_info "If you want to experiment manually later, run: cd $INSTALL_DIR && npm install"
-        return 0
-    fi
-
-    if [ -f "$INSTALL_DIR/package.json" ]; then
-        log_info "Installing Node.js dependencies (browser tools)..."
-        cd "$INSTALL_DIR"
-        npm install --silent 2>/dev/null || {
-            log_warn "npm install failed (browser tools may not work)"
-        }
-        log_success "Node.js dependencies installed"
-        # Build the dashboard web UI (required for `clawk dashboard`)
-        if [ -f "$INSTALL_DIR/web/package.json" ]; then
-            log_info "Building dashboard web UI..."
-            cd "$INSTALL_DIR/web"
-            npm install --silent 2>/dev/null
-            if npm run build --silent 2>/dev/null; then
-                log_success "Dashboard built — run: clawk dashboard"
-            else
-                log_warn "Dashboard build failed — \`clawk dashboard\` may not work. Re-run: cd $INSTALL_DIR/web && npm run build"
-            fi
-            cd "$INSTALL_DIR"
-        fi
-
-        # Install Playwright browser + system dependencies.
-        # Playwright's --with-deps only supports apt-based systems natively.
-        # For Arch/Manjaro we install the system libs via pacman first.
-        # Other systems must install Chromium dependencies manually.
-        if [ "$SKIP_BROWSER" = true ]; then
-            log_info "Skipping Playwright/Chromium install (--skip-browser)"
-            log_info "Browser tools will be unavailable until you run manually:"
-            log_info "  cd $INSTALL_DIR && npx playwright install chromium"
-            log_info "On apt-based systems, an admin also needs to run:"
-            log_info "  sudo npx playwright install-deps chromium"
-        else
-        log_info "Installing browser engine (Playwright Chromium)..."
-        DETECTED_BROWSER_EXECUTABLE="$(find_system_browser 2>/dev/null || true)"
-        if [ -n "$DETECTED_BROWSER_EXECUTABLE" ]; then
-            log_success "Found system Chrome/Chromium at $DETECTED_BROWSER_EXECUTABLE"
-            log_info "Skipping Playwright browser download; Clawksis will use the system browser."
-        else
-            case "$DISTRO" in
-                ubuntu|debian|raspbian|pop|linuxmint|elementary|zorin|kali|parrot)
-                    # Use --with-deps only when sudo is available non-interactively
-                    # (root, or a user with passwordless sudo). Non-sudo users
-                    # — typical for systemd service accounts and unprivileged
-                    # operator users — would otherwise get blocked on an
-                    # interactive sudo prompt that they can't satisfy. Fall back
-                    # to the browser-only install in that case, and print the
-                    # exact command the admin needs to run separately.
-                    if [ "$(id -u)" -eq 0 ] || (command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null); then
-                        log_info "Installing Playwright Chromium with system dependencies..."
-                        cd "$INSTALL_DIR" && run_browser_install_with_timeout 600 npx playwright install --with-deps chromium 2>/dev/null || {
-                            log_warn "Playwright browser installation failed — browser tools will not work."
-                            log_warn "Try running manually: cd $INSTALL_DIR && npx playwright install --with-deps chromium"
-                        }
-                    else
-                        log_warn "No sudo available — skipping system-library install (--with-deps)."
-                        log_info "Ask an administrator to run, one time, as root:"
-                        log_info "  sudo npx playwright install-deps chromium"
-                        log_info "  (from $INSTALL_DIR, after Node.js deps are installed)"
-                        log_info "Installing Chromium binary into this user's Playwright cache..."
-                        cd "$INSTALL_DIR" && run_browser_install_with_timeout 600 npx playwright install chromium 2>/dev/null || {
-                            log_warn "Playwright browser installation failed — browser tools will not work."
-                            log_warn "Try running manually: cd $INSTALL_DIR && npx playwright install chromium"
-                        }
-                    fi
-                    ;;
-                arch|manjaro|cachyos|endeavouros|garuda)
-                    if command -v pacman &> /dev/null; then
-                        log_info "Arch-family distro detected — installing Chromium system dependencies via pacman..."
-                        if command -v sudo &> /dev/null && sudo -n true 2>/dev/null; then
-                            sudo NEEDRESTART_MODE=a pacman -S --noconfirm --needed \
-                                nss atk at-spi2-core cups libdrm libxkbcommon mesa pango cairo alsa-lib >/dev/null 2>&1 || true
-                        elif [ "$(id -u)" -eq 0 ]; then
-                            pacman -S --noconfirm --needed \
-                                nss atk at-spi2-core cups libdrm libxkbcommon mesa pango cairo alsa-lib >/dev/null 2>&1 || true
-                        else
-                            log_warn "Cannot install browser deps without sudo. Run manually:"
-                            log_warn "  sudo pacman -S nss atk at-spi2-core cups libdrm libxkbcommon mesa pango cairo alsa-lib"
-                        fi
-                    fi
-                    cd "$INSTALL_DIR" && run_browser_install_with_timeout 600 npx playwright install chromium 2>/dev/null || {
-                        log_warn "Playwright browser installation failed — browser tools will not work."
-                    }
-                    ;;
-                fedora|rhel|centos|rocky|alma)
-                    log_warn "Playwright does not support automatic dependency installation on RPM-based systems."
-                    log_info "Install Chromium system dependencies manually before using browser tools:"
-                    log_info "  sudo dnf install nss atk at-spi2-core cups-libs libdrm libxkbcommon mesa-libgbm pango cairo alsa-lib"
-                    cd "$INSTALL_DIR" && run_browser_install_with_timeout 600 npx playwright install chromium 2>/dev/null || {
-                        log_warn "Playwright browser installation failed — install dependencies above and retry."
-                    }
-                    ;;
-                opensuse*|sles)
-                    log_warn "Playwright does not support automatic dependency installation on zypper-based systems."
-                    log_info "Install Chromium system dependencies manually before using browser tools:"
-                    log_info "  sudo zypper install mozilla-nss libatk-1_0-0 at-spi2-core cups-libs libdrm2 libxkbcommon0 Mesa-libgbm1 pango cairo libasound2"
-                    cd "$INSTALL_DIR" && run_browser_install_with_timeout 600 npx playwright install chromium 2>/dev/null || {
-                        log_warn "Playwright browser installation failed — install dependencies above and retry."
-                    }
-                    ;;
-                *)
-                    log_warn "Playwright does not support automatic dependency installation on $DISTRO."
-                    log_info "Install Chromium/browser system dependencies for your distribution, then run:"
-                    log_info "  cd $INSTALL_DIR && npx playwright install chromium"
-                    log_info "Browser tools will not work until dependencies are installed."
-                    cd "$INSTALL_DIR" && run_browser_install_with_timeout 600 npx playwright install chromium 2>/dev/null || true
-                    ;;
-            esac
-        fi
-        fi
-        log_success "Browser engine setup complete"
-    fi
-
-    # Install TUI dependencies
-    if [ -f "$INSTALL_DIR/ui-tui/package.json" ]; then
-        log_info "Installing TUI dependencies..."
-        cd "$INSTALL_DIR/ui-tui"
-        npm install --silent 2>/dev/null || {
-            log_warn "TUI npm install failed (clawk --tui may not work)"
-        }
-        log_success "TUI dependencies installed"
-    fi
-
-    # Keep the checkout clean so `clawk update` doesn't autostash every run.
-    restore_dirty_lockfiles "$INSTALL_DIR"
-}
-
-install_thirdparty_clis() {
-    # Optional third-party agent CLIs that Clawksis can drive as tools:
-    #   Claude Code (@anthropic-ai/claude-code) and Codex (@openai/codex).
-    # They let the agent delegate coding tasks using the user's OWN
-    # Claude/ChatGPT subscription (first-party billing). Always pull @latest.
-    # Best-effort: a failure here must NEVER block the Clawksis install.
-    if [ "${SKIP_THIRDPARTY_CLIS:-false}" = "true" ]; then
-        log_info "Skipping agent CLIs (SKIP_THIRDPARTY_CLIS=true)"
-        return 0
-    fi
-    if ! command -v npm >/dev/null 2>&1; then
-        log_warn "npm not available -- skipping Claude Code / Codex CLIs"
-        return 0
-    fi
-    local pkg
-    for pkg in "@anthropic-ai/claude-code@latest" "@openai/codex@latest"; do
-        if npm install -g "$pkg" --silent >/dev/null 2>&1; then
-            log_success "Installed/updated $pkg"
-        else
-            log_warn "Could not install $pkg (optional -- later: npm i -g ${pkg%@latest})"
-        fi
-    done
-}
-
-
-run_setup_wizard() {
-    if [ "$RUN_SETUP" = false ]; then
-        log_info "Skipping setup wizard (--skip-setup)"
-        return 0
-    fi
-
-    # The setup wizard reads from /dev/tty, so it works even when the
-    # install script itself is piped (curl | bash). Only skip if no
-    # terminal is available at all (e.g. Docker build, CI).
-    #
-    # Probe by actually opening /dev/tty: a bare existence test passes
-    # in Docker builds where the device node is in the mount namespace
-    # but opening fails with ENXIO, so the wizard would proceed and
-    # then crash on `< /dev/tty` below.
-    if ! (: </dev/tty) 2>/dev/null; then
-        log_info "Setup wizard skipped (no terminal available). Run 'clawk setup' (or 'clawk model') after install to choose your model."
-        return 0
-    fi
-
-    echo ""
-    log_info "Starting setup wizard..."
-    echo ""
-
-    cd "$INSTALL_DIR"
-
-    # Run clawk setup using the venv Python directly (no activation needed).
-    # Redirect stdin from /dev/tty so interactive prompts work when piped from curl.
-    if [ "$USE_VENV" = true ]; then
-        "$INSTALL_DIR/venv/bin/python" -m clawk_cli.main setup < /dev/tty
-    else
-        python -m clawk_cli.main setup < /dev/tty
-    fi
-}
-
-maybe_start_gateway() {
-    # Check if any messaging platform tokens were configured
-    ENV_FILE="$CLAWK_HOME/.env"
-    if [ ! -f "$ENV_FILE" ]; then
-        return 0
-    fi
-
-    HAS_MESSAGING=false
-    for VAR in TELEGRAM_BOT_TOKEN DISCORD_BOT_TOKEN SLACK_BOT_TOKEN SLACK_APP_TOKEN WHATSAPP_ENABLED; do
-        VAL=$(grep "^${VAR}=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2-)
-        if [ -n "$VAL" ] && [ "$VAL" != "your-token-here" ]; then
-            HAS_MESSAGING=true
-            break
-        fi
-    done
-
-    if [ "$HAS_MESSAGING" = false ]; then
-        return 0
-    fi
-
-    echo ""
-    log_info "Messaging platform token detected!"
-    log_info "The gateway needs to be running for Clawksis to send/receive messages."
-
-    # If WhatsApp is enabled and no session exists yet, run foreground first for QR scan
-    WHATSAPP_VAL=$(grep "^WHATSAPP_ENABLED=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2-)
-    WHATSAPP_SESSION="$CLAWK_HOME/whatsapp/session/creds.json"
-    if [ "$WHATSAPP_VAL" = "true" ] && [ ! -f "$WHATSAPP_SESSION" ]; then
-        if [ "$IS_INTERACTIVE" = true ]; then
-            echo ""
-            log_info "WhatsApp is enabled but not yet paired."
-            log_info "Running 'clawk whatsapp' to pair via QR code..."
-            echo ""
-            if prompt_yes_no "Pair WhatsApp now?" "yes"; then
-                CLAWK_CMD="$(get_clawk_command_path)"
-                $CLAWK_CMD whatsapp || true
-            fi
-        else
-            log_info "WhatsApp pairing skipped (non-interactive). Run 'clawk whatsapp' to pair."
-        fi
-    fi
-
-    # Probe by actually opening /dev/tty: a bare existence test passes
-    # in Docker builds where the device node is in the mount namespace
-    # but opening fails with ENXIO. See #16746.
-    if ! (: </dev/tty) 2>/dev/null; then
-        log_info "Gateway setup skipped (no terminal available). Run 'clawk gateway install' later."
-        return 0
-    fi
-
-    echo ""
-    local should_install_gateway=false
-    if [ "$DISTRO" = "termux" ]; then
-        if prompt_yes_no "Would you like to start the gateway in the background?" "yes"; then
-            should_install_gateway=true
-        fi
-    else
-        if prompt_yes_no "Would you like to install the gateway as a background service?" "yes"; then
-            should_install_gateway=true
-        fi
-    fi
-
-    if [ "$should_install_gateway" = true ]; then
-        CLAWK_CMD="$(get_clawk_command_path)"
-
-        if [ "$DISTRO" != "termux" ] && command -v systemctl &> /dev/null; then
-            log_info "Installing systemd service..."
-            if $CLAWK_CMD gateway install 2>/dev/null; then
-                log_success "Gateway service installed"
-                if $CLAWK_CMD gateway start 2>/dev/null; then
-                    log_success "Gateway started! Your bot is now online."
-                else
-                    log_warn "Service installed but failed to start. Try: clawk gateway start"
+wire_shell_path() {
+    # The launcher is published by source_completion; shell rc files belong to
+    # the installer, not to PM (updates must not modify a user's shell setup).
+    # Never use the installer's inherited PATH as a proxy for a *new* shell.
+    local login_shell="${SHELL:-/bin/bash}"
+    case "${login_shell##*/}" in
+        zsh)
+            append_shell_path "$HOME/.zshrc" "$SHELL_PATH_LINE" "$SHELL_PATH_SETUP_RE"
+            append_shell_path "$HOME/.zprofile" "$SHELL_PATH_LINE" "$SHELL_PATH_SETUP_RE"
+            ;;
+        fish)
+            append_shell_path "$HOME/.config/fish/config.fish" 'fish_add_path "$HOME/.local/bin"' '^[[:space:]]*fish_add_path.*\.local/bin'
+            ;;
+        *)
+            append_shell_path "$HOME/.bashrc" "$SHELL_PATH_LINE" "$SHELL_PATH_SETUP_RE"
+            append_shell_path "$HOME/.profile" "$SHELL_PATH_LINE" "$SHELL_PATH_SETUP_RE"
+            # A login bash reads only the first of .bash_profile, .bash_login, .profile,
+            # so an existing earlier file hides the .profile line above.
+            local rc
+            for rc in "$HOME/.bash_profile" "$HOME/.bash_login"; do
+                if [ -f "$rc" ]; then
+                    append_shell_path "$rc" "$SHELL_PATH_LINE" "$SHELL_PATH_SETUP_RE"
                 fi
-            else
-                log_warn "Systemd install failed. You can start manually: clawk gateway"
-            fi
-        else
-            if [ "$DISTRO" = "termux" ]; then
-                log_info "Termux detected — starting gateway in best-effort background mode..."
-            else
-                log_info "systemd not available — starting gateway in background..."
-            fi
-            nohup $CLAWK_CMD gateway > "$CLAWK_HOME/logs/gateway.log" 2>&1 &
-            GATEWAY_PID=$!
-            log_success "Gateway started (PID $GATEWAY_PID). Logs: $CLAWK_HOME/logs/gateway.log"
-            log_info "To stop: kill $GATEWAY_PID"
-            log_info "To restart later: clawk gateway"
-            if [ "$DISTRO" = "termux" ]; then
-                log_warn "Android may stop background processes when Termux is suspended or the system reclaims resources."
-            fi
-        fi
-    else
-        log_info "Skipped. Start the gateway later with: clawk gateway"
+            done
+            ;;
+    esac
+}
+
+stage_products() {
+    # The whole tail in one place, by calling the completion an update calls:
+    # publish the commands, build the products (tui/web, plus the desktop app),
+    # then run the post-build maintenance that syncs bundled skills and migrates
+    # config. Node, browsers and the frontend build tools arrive through pm as
+    # the build asks for them; the bootstrap interpreter itself only re-enters
+    # the tree on PM's selected Python.
+    local boot_py
+    local args=(--source "$INSTALL_DIR")
+    bootstrap_python
+    if [ "$INCLUDE_DESKTOP" = true ] || desktop_product_present; then
+        args+=(--desktop)
+    fi
+    (cd "$INSTALL_DIR" && run_logged "Building the clawk command and apps" \
+        "$boot_py" -I -B -X utf8 clawk_cli/source_completion.py "${args[@]}") \
+        || fail "app products or command publication failed" products_build_failed
+    wire_shell_path
+    log_success "app products and clawk command ready"
+    # Full installs only (the fork's ladder step); the --stage protocol stays upstream's.
+    if [ "$INSTALL_LADDER" = true ]; then
+        install_agent_clis
     fi
 }
 
-print_success() {
-    # Bug #16 fix: verificar que el binario clawk realmente quedó instalado
-    # antes de decir "Installation Complete". El installer reportaba éxito
-    # incluso cuando el entry point no se creaba (caso de instalaciones en
-    # CLAWK_INSTALL_DIR custom donde el venv quedaba en otro path).
-    local _clawk_bin=""
-    for _candidate in \
-        "$INSTALL_DIR/venv/bin/clawk" \
-        "$INSTALL_DIR/.venv/bin/clawk" \
-        "$HOME/.local/bin/clawk" \
-        "/usr/local/bin/clawk"; do
-        if [ -x "$_candidate" ]; then
-            _clawk_bin="$_candidate"
-            break
+# Clawksis: optional coding-agent CLIs the agent can drive as tools -- Claude Code
+# (@anthropic-ai/claude-code) and Codex (@openai/codex) -- so it can delegate coding
+# work on the user's OWN subscription. Always @latest. Best effort: a failure never
+# fails the install. Opt out with SKIP_THIRDPARTY_CLIS=true.
+install_agent_clis() {
+    if [ "${SKIP_THIRDPARTY_CLIS:-false}" = true ]; then
+        log "Skipping agent CLIs (SKIP_THIRDPARTY_CLIS=true)"
+        return 0
+    fi
+    local boot_py pm_path="" pkg
+    local prefix=()
+    if ! command -v npm >/dev/null 2>&1; then
+        # No host Node: PM's npm (the products stage acquired it) installs into
+        # ~/.local, so PM's verified store entry stays untouched and the commands
+        # land on the PATH this installer wires.
+        bootstrap_python
+        pm_path="$(cd "$INSTALL_DIR" && "$boot_py" -c \
+            'from pm.install import env_for; print(env_for("npm", base_env={}).get("PATH", ""))' 2>/dev/null)" || pm_path=""
+        if [ -z "$pm_path" ] || ! PATH="$pm_path:$PATH" command -v npm >/dev/null 2>&1; then
+            log_warn "npm not available; skipping Claude Code / Codex CLIs (later: npm i -g @anthropic-ai/claude-code @openai/codex)"
+            return 0
+        fi
+        prefix=(--prefix "$HOME/.local")
+    fi
+    for pkg in "@anthropic-ai/claude-code@latest" "@openai/codex@latest"; do
+        if run_logged --may-fail "Installing $pkg" \
+            env ${pm_path:+PATH="$pm_path:$PATH"} npm install -g ${prefix[@]+"${prefix[@]}"} "$pkg"; then
+            log_success "installed/updated $pkg"
+        else
+            log_warn "could not install $pkg (optional; later: npm i -g ${pkg%@latest})"
         fi
     done
-
-    if [ -z "$_clawk_bin" ]; then
-        echo ""
-        echo -e "${YELLOW}${BOLD}"
-        echo "┌─────────────────────────────────────────────────────────┐"
-        echo "│     ⚠  Installation completed with warnings             │"
-        echo "└─────────────────────────────────────────────────────────┘"
-        echo -e "${NC}"
-        log_warn "The 'clawk' command was not found in the expected locations."
-        log_warn "Dependencies installed, but the entry point is missing."
-        log_info "Look for the binary under: $INSTALL_DIR/venv/bin/  or  $INSTALL_DIR/.venv/bin/"
-        log_info "Then re-run the installer or report this as a bug."
-        echo ""
-        return 0
-    fi
-
-    echo ""
-    echo -e "${GREEN}${BOLD}"
-    echo "┌─────────────────────────────────────────────────────────┐"
-    echo "│              ✓ Installation Complete!                   │"
-    echo "└─────────────────────────────────────────────────────────┘"
-    echo -e "${NC}"
-    echo ""
-
-    # Show file locations
-    echo -e "${CYAN}${BOLD}📁 Your files:${NC}"
-    echo ""
-    echo -e "   ${YELLOW}Config:${NC}    $CLAWK_HOME/config.yaml"
-    echo -e "   ${YELLOW}API Keys:${NC}  $CLAWK_HOME/.env"
-    echo -e "   ${YELLOW}Data:${NC}      $CLAWK_HOME/cron/, sessions/, logs/"
-    echo -e "   ${YELLOW}Code:${NC}      $INSTALL_DIR"
-    echo ""
-
-    echo -e "${CYAN}─────────────────────────────────────────────────────────${NC}"
-    echo ""
-    echo -e "${CYAN}${BOLD}🚀 Commands:${NC}"
-    echo ""
-    echo -e "   ${GREEN}clawk${NC}              Start chatting"
-    echo -e "   ${GREEN}clawk setup${NC}        Configure API keys & settings"
-    echo -e "   ${GREEN}clawk config${NC}       View/edit configuration"
-    echo -e "   ${GREEN}clawk config edit${NC}  Open config in editor"
-    echo -e "   ${GREEN}clawk gateway install${NC} Install gateway service (messaging + cron)"
-    echo -e "   ${GREEN}clawk update${NC}       Update to latest version"
-    echo ""
-
-    echo -e "${CYAN}─────────────────────────────────────────────────────────${NC}"
-    echo ""
-    if [ "$DISTRO" = "termux" ]; then
-        echo -e "${YELLOW}⚡ 'clawk' was linked into $(get_command_link_display_dir), which is already on PATH in Termux.${NC}"
-        echo ""
-    elif [ "$ROOT_FHS_LAYOUT" = true ]; then
-        echo -e "${YELLOW}⚡ 'clawk' was linked into /usr/local/bin and is ready to use.${NC}"
-        # /usr/local/bin is on PATH, so a NEW shell always finds clawk. But two things
-        # can make the CURRENT shell fail with "No such file or directory":
-        #   1) another 'clawk' earlier on PATH (e.g. a leftover ~/.local/bin/clawk from
-        #      an older install) shadows ours — a new shell would fail too; or
-        #   2) the running shell cached (hashed) clawk's old location from a prior install.
-        # Detect (1) and always offer the one-liner fix for (2).
-        _clawk_resolved="$(command -v clawk 2>/dev/null || true)"
-        if [ -n "$_clawk_resolved" ] && [ "$_clawk_resolved" != "/usr/local/bin/clawk" ]; then
-            echo -e "${YELLOW}   ⚠ Another 'clawk' is earlier on your PATH: ${_clawk_resolved}${NC}"
-            echo -e "${YELLOW}     Remove it (or fix PATH order) so /usr/local/bin/clawk wins.${NC}"
-        fi
-        echo -e "${YELLOW}   If 'clawk' still says \"No such file or directory\", your shell cached an old path — run:${NC}"
-        echo -e "${GREEN}     hash -r${NC}${YELLOW}   (bash/zsh) — then 'clawk' works without reopening the shell.${NC}"
-        echo ""
-    else
-        echo -e "${YELLOW}⚡ Reload your shell to use 'clawk' command:${NC}"
-        echo ""
-        LOGIN_SHELL="$(basename "${SHELL:-/bin/bash}")"
-        if [ "$LOGIN_SHELL" = "zsh" ]; then
-            echo "   source ~/.zshrc"
-        elif [ "$LOGIN_SHELL" = "bash" ]; then
-            echo "   source ~/.bashrc"
-        elif [ "$LOGIN_SHELL" = "fish" ]; then
-            echo "   source ~/.config/fish/config.fish"
-        else
-            echo "   source ~/.bashrc   # or ~/.zshrc"
-        fi
-        echo ""
-    fi
-
-    # Show Node.js warning if auto-install failed
-    if [ "$HAS_NODE" = false ]; then
-        echo -e "${YELLOW}"
-        echo "Note: Node.js could not be installed automatically."
-        echo "Browser tools need Node.js. Install manually:"
-        if [ "$DISTRO" = "termux" ]; then
-            echo "  pkg install nodejs"
-        else
-            echo "  https://nodejs.org/en/download/"
-        fi
-        echo -e "${NC}"
-    fi
-
-    # Show ripgrep note if not installed
-    if [ "$HAS_RIPGREP" = false ]; then
-        echo -e "${YELLOW}"
-        echo "Note: ripgrep (rg) was not found. File search will use"
-        echo "grep as a fallback. For faster search in large codebases,"
-        if [ "$DISTRO" = "termux" ]; then
-            echo "install ripgrep: pkg install ripgrep"
-        else
-            echo "install ripgrep: sudo apt install ripgrep (or brew install ripgrep)"
-        fi
-        echo -e "${NC}"
-    fi
-}
-
-ensure_browser() {
-    if ! command -v node >/dev/null 2>&1; then
-        local node_bin="$CLAWK_HOME/node/bin/node"
-        if [ -x "$node_bin" ]; then
-            export PATH="$CLAWK_HOME/node/bin:$PATH"
-        else
-            log_error "Node.js not found. Run with --ensure node first."
-            return 1
-        fi
-    fi
-
-    local npm_bin
-    npm_bin="$(command -v npm 2>/dev/null || echo "$CLAWK_HOME/node/bin/npm")"
-    if [ ! -x "$npm_bin" ]; then
-        log_error "npm not found"
-        return 1
-    fi
-
-    log_info "Installing agent-browser..."
-    local log_file
-    log_file="$(mktemp)"
-    if ! "$npm_bin" install -g --prefix "$CLAWK_HOME/node" --silent --ignore-scripts \
-        "agent-browser@^0.26.0" \
-        "@askjo/camofox-browser@^1.5.2" \
-        >"$log_file" 2>&1; then
-        log_error "npm install failed:"
-        cat "$log_file" >&2
-        rm -f "$log_file"
-        return 1
-    fi
-    rm -f "$log_file"
-    export PATH="$CLAWK_HOME/node/bin:$PATH"
-
-    local sys_browser
-    sys_browser="$(find_system_browser 2>/dev/null || true)"
-    if [ -n "$sys_browser" ]; then
-        configure_browser_env_from_system_browser "$sys_browser"
-        log_info "System browser detected -- skipping Chromium download"
-        return 0
-    fi
-
-    log_info "Installing Chromium via agent-browser install..."
-    local ab_bin="$CLAWK_HOME/node/bin/agent-browser"
-    if [ -x "$ab_bin" ]; then
-        "$ab_bin" install 2>/dev/null || {
-            log_warn "Chromium install failed. Browser tools may not work without a system browser."
-
-            # OS-specific hints (detect_os sets $DISTRO)
-            case "${DISTRO:-unknown}" in
-                ubuntu|debian)
-                    log_info "Try: sudo apt-get install -y chromium-browser"
-                    ;;
-                arch)
-                    log_info "Try: sudo pacman -S chromium"
-                    ;;
-                fedora|rhel|centos)
-                    log_info "Try: sudo dnf install -y chromium"
-                    ;;
-            esac
-        }
-    else
-        log_warn "agent-browser not found at $ab_bin"
-    fi
-
     return 0
 }
 
-ensure_mode() {
-    detect_os
-    detect_sudo_capability
-
-    IFS=',' read -ra DEPS <<< "$ENSURE_DEPS"
-    for dep in "${DEPS[@]}"; do
-        dep="$(echo "$dep" | tr -d '[:space:]')"
-        case "$dep" in
-            node)
-                check_node
-                ;;
-            browser)
-                check_node
-                if [ "$HAS_NODE" = true ]; then
-                    ensure_browser
-                fi
-                ;;
-            ripgrep)
-                if ! command -v rg &>/dev/null; then
-                    HAS_RIPGREP=false
-                    HAS_FFMPEG=true
-                    install_system_packages
-                fi
-                ;;
-            ffmpeg)
-                if ! command -v ffmpeg &>/dev/null; then
-                    HAS_FFMPEG=false
-                    HAS_RIPGREP=true
-                    install_system_packages
-                fi
-                ;;
-            *)
-                log_warn "Unknown dependency: $dep"
-                ;;
-        esac
-    done
+stage_desktop() {
+    # External-caller contract: `--stage desktop` stays dispatchable on its own
+    # (the manifest never lists it now -- --include-desktop selects the desktop
+    # product inside `products`). Same completion call, desktop selected.
+    INCLUDE_DESKTOP=true
+    stage_products
 }
 
-postinstall_mode() {
-    print_banner
-    detect_os
-    detect_sudo_capability
-
-    log_info "Post-install mode: setting up Clawksis for pip install"
-
-    check_node
-    check_network_prerequisites
-    install_system_packages
-
-    if [ "$HAS_NODE" = true ] && [ "$SKIP_BROWSER" = false ]; then
-        ensure_browser
+stage_config() {
+    mkdir -p "$CLAWK_HOME"/cron "$CLAWK_HOME"/sessions "$CLAWK_HOME"/logs \
+        "$CLAWK_HOME"/pairing "$CLAWK_HOME"/hooks "$CLAWK_HOME"/image_cache \
+        "$CLAWK_HOME"/audio_cache "$CLAWK_HOME"/memories "$CLAWK_HOME"/skills
+    if [ ! -f "$CLAWK_HOME/.env" ]; then
+        cp "$INSTALL_DIR/.env.example" "$CLAWK_HOME/.env" 2>/dev/null || touch "$CLAWK_HOME/.env"
     fi
-
-    CLAWK_CMD="$(command -v clawk 2>/dev/null || echo "")"
-    if [ -n "$CLAWK_CMD" ]; then
-        log_info "Running clawk setup..."
-        "$CLAWK_CMD" setup
-    else
-        log_warn "clawk command not found on PATH"
-        log_info "Try: python -m clawk_cli.main setup"
+    chmod 600 "$CLAWK_HOME/.env"
+    if [ ! -f "$CLAWK_HOME/config.yaml" ] && [ -f "$INSTALL_DIR/cli-config.yaml.example" ]; then
+        cp "$INSTALL_DIR/cli-config.yaml.example" "$CLAWK_HOME/config.yaml"
     fi
+    log_success "config prepared in $CLAWK_HOME"
 }
 
-# Build apps/desktop into a launchable native app. Mirrors install.ps1's
-# Install-Desktop: a root-level npm install so the apps/* workspace resolves
-# the desktop's own deps (Electron ~150MB), then `npm run pack`
-# (electron-builder --dir) which emits an unpacked app for the current OS. Only invoked
-# via the 'desktop' stage / --include-desktop, which the Electron app's own
-# first-launch bootstrap never requests (it must not rebuild itself).
-install_desktop() {
-    local desktop_dir="$INSTALL_DIR/apps/desktop"
+# Interactive stages read the terminal, not stdin: under `curl | bash` stdin
+# IS the script. Probe by opening /dev/tty -- a Docker build has the device
+# node in its mount namespace but opening it fails (ENXIO).
+has_terminal() { (: </dev/tty) 2>/dev/null; }
 
-    # The desktop stage only runs when a build is explicitly requested
-    # (--include-desktop / 'desktop' stage), so a missing toolchain is a hard
-    # failure, not a silent skip — a silent skip yields a "complete" install
-    # with no app and a confusing "couldn't find a built desktop" at launch.
-    # Always re-resolve Node here. Stages run in separate processes, so we can't
-    # trust an earlier check; more importantly check_node now enforces the build
-    # floor (^20.19 || >=22.12) and prepends the Clawksis-managed Node to PATH, so
-    # the build never runs on a too-old system Node — the cause of the opaque
-    # "Build desktop app … exit code 1" failure (Vite crashes on old Node).
-    check_node
-    if ! command -v npm >/dev/null 2>&1; then
-        log_error "Cannot build desktop app: Node.js / npm unavailable"
-        log_info "Install Node.js and retry: cd $desktop_dir && npm run pack"
-        return 1
-    fi
-    if [ ! -f "$desktop_dir/package.json" ]; then
-        log_warn "Skipping desktop build (apps/desktop not present in checkout)"
+stage_setup() {
+    if [ "$NON_INTERACTIVE" = true ]; then return 0; fi
+    if ! has_terminal; then
+        log "setup skipped (no terminal); run 'clawk setup' (or 'clawk model') after install to choose your model"
         return 0
     fi
-
-    # 1. Root workspace install so apps/desktop's deps (Electron, Vite,
-    #    node-pty prebuilds) resolve. The browser-tools install runs in the
-    #    repo-root package workspace, which does not pull apps/* deps.
-    #
-    #    Prefer `npm ci`: it deletes node_modules and reinstalls from the
-    #    lockfile, so it always produces a complete tree. Bare `npm install`
-    #    can report "up to date" against a stale node_modules/.package-lock.json
-    #    marker while node_modules is actually empty (Windows workspace-hoisting
-    #    flake) — leaving tsc/typescript unresolved and `npm run pack`'s
-    #    `tsc -b` failing with no obvious cause. Fall back to `npm install`
-    #    only if `npm ci` is unavailable or the lockfile is out of sync.
-    log_info "Installing desktop workspace dependencies (includes Electron ~150MB, 1-3min)..."
-    ( cd "$INSTALL_DIR" && npm ci ) || ( cd "$INSTALL_DIR" && npm install ) || {
-        log_error "Desktop workspace npm install failed"
-        return 1
-    }
-    log_success "Desktop workspace dependencies installed"
-
-    # 2. Build. `npm run pack` = tsc + vite build + electron-builder --dir,
-    #    producing an unpacked app for the current OS. We disable signing
-    #    auto-discovery so electron-builder falls back to an ad-hoc signature
-    #    instead of grabbing an unrelated Developer ID from the keychain; a
-    #    real signed/notarized .dmg needs Apple credentials and is a separate
-    #    release concern.
-    log_info "Building desktop app (this takes 1-3 minutes)..."
-    ( cd "$desktop_dir" && CSC_IDENTITY_AUTO_DISCOVERY=false npm run pack ) || {
-        log_error "Desktop app build failed"
-        log_info "Run manually: cd $desktop_dir && npm run pack"
-        return 1
-    }
-
-    local app=""
-    if [ "$OS" = "linux" ]; then
-        if [ -x "$desktop_dir/release/linux-unpacked/Clawksis" ]; then
-            app="$desktop_dir/release/linux-unpacked/Clawksis"
-        elif [ -x "$desktop_dir/release/linux-unpacked/clawk" ]; then
-            app="$desktop_dir/release/linux-unpacked/clawk"
-        fi
-    else
-        local cand
-        for cand in \
-            "$desktop_dir/release/mac-arm64/Clawksis.app" \
-            "$desktop_dir/release/mac/Clawksis.app"; do
-            if [ -d "$cand" ]; then
-                app="$cand"
-                break
-            fi
-        done
-    fi
-    if [ -z "$app" ]; then
-        log_error "Desktop build completed but no app was found under $desktop_dir/release/"
-        return 1
-    fi
-    log_success "Desktop app built: $app"
-
-    # Linux: Electron's chrome-sandbox helper needs root:root 4755 or the
-    # sandboxed renderer will abort on startup.  Check the file is a regular
-    # file (not a symlink) before chown/chmod so we don't follow an
-    # attacker-controlled link to an arbitrary path.
-    if [ "$OS" = "linux" ]; then
-        local sandbox="$desktop_dir/release/linux-unpacked/chrome-sandbox"
-        if [ -f "$sandbox" ] && [ ! -L "$sandbox" ]; then
-            if [ "$(id -u)" -eq 0 ]; then
-                chown root:root "$sandbox" && chmod 4755 "$sandbox" || {
-                    log_error "Cannot configure Electron sandbox helper: $sandbox"
-                    return 1
-                }
-            elif command -v sudo >/dev/null 2>&1; then
-                sudo chown root:root "$sandbox" && sudo chmod 4755 "$sandbox" || {
-                    log_error "Cannot configure Electron sandbox helper (sudo failed): $sandbox"
-                    return 1
-                }
-            else
-                log_error "Cannot configure Electron sandbox helper without sudo: $sandbox"
-                return 1
-            fi
-        fi
-    fi
-
-    # macOS: make the locally-built (ad-hoc) app relaunchable after an in-place
-    # self-update. An ad-hoc bundle has no stable Designated Requirement, so a
-    # later in-place rebuild (new cdhash) plus the inherited quarantine flag
-    # trips Gatekeeper's tamper check ("Clawksis is damaged and can't be opened").
-    # Strip quarantine + re-apply a clean deep ad-hoc signature (no
-    # hardened-runtime flag, which an ad-hoc build can't satisfy). Skipped when a
-    # real signing identity is configured so a signed build isn't clobbered.
-    if [ "$OS" = "macos" ] && [ -z "${CSC_LINK:-}" ] && [ -z "${APPLE_SIGNING_IDENTITY:-}" ] && command -v codesign >/dev/null 2>&1; then
-        xattr -cr "$app" 2>/dev/null || true
-        codesign --force --deep --sign - "$app" >/dev/null 2>&1 || true
-    fi
-
-    # `npm install` + `npm run pack` rewrite lockfiles; restore them so the
-    # checkout stays clean for the next `clawk update`.
-    restore_dirty_lockfiles "$INSTALL_DIR"
+    "$INSTALL_DIR/.clawk/bin/clawk" setup </dev/tty || fail "setup failed" setup_failed
 }
 
-# Each --stage runs in its own process, so (unlike the monolithic main() where
-# clone_repo cd's once and later steps inherit it) a stage that operates on the
-# checkout must cd into it explicitly. Without this, install_deps/setup_path run
-# from the desktop app's cwd and resolve `.` / the venv against the wrong tree.
-require_install_dir() {
-    if [ -z "$INSTALL_DIR" ] || [ ! -d "$INSTALL_DIR" ]; then
-        log_error "Install directory not found: ${INSTALL_DIR:-<unset>}"
-        log_info "The 'repository' stage must run before this one."
-        return 1
+stage_gateway() {
+    if [ "$NON_INTERACTIVE" = true ]; then return 0; fi
+    if ! has_terminal; then
+        log "gateway setup skipped (no terminal); run 'clawk gateway install' after install"
+        return 0
     fi
-    cd "$INSTALL_DIR"
+    # Setup installs the service when it handles the gateway; ask only if it did not.
+    "$INSTALL_DIR/.clawk/bin/clawk" gateway install --if-missing </dev/tty || fail "gateway installation failed" gateway_failed
 }
 
-# Desktop bootstrap stage protocol. Mirrors the Windows install.ps1 surface
-# closely enough for the Electron bootstrap runner to show structured progress.
-run_stage_body() {
-    local stage="$1"
+stage_complete() {
+    local commit
+    commit="$INSTALL_COMMIT"
+    [ -n "$commit" ] || commit=$(git -C "$INSTALL_DIR" rev-parse HEAD 2>/dev/null) || commit=""
+    if [ -n "$commit" ]; then
+        printf '{\n  "schemaVersion": 1,\n  "pinnedCommit": "%s",\n  "pinnedBranch": "%s",\n  "completedAt": "%s"\n}\n' \
+            "$commit" "$BRANCH" "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" > "$INSTALL_DIR/.clawk-bootstrap-complete.tmp"
+        mv -f "$INSTALL_DIR/.clawk-bootstrap-complete.tmp" "$INSTALL_DIR/.clawk-bootstrap-complete"
+    fi
+    if [ -n "$CHANNEL" ]; then
+        "$INSTALL_DIR/.clawk/bin/clawk" update --set-channel "$CHANNEL" \
+            || fail "could not save the $CHANNEL update channel" other
+    fi
+    log_success "Clawksis install complete. Run: clawk"
+}
 
-    case "$stage" in
-        prerequisites)
-            print_banner
-            detect_os
-            detect_sudo_capability
-            resolve_install_layout
-            install_uv
-            check_python
-            check_git
-            check_node
-            check_network_prerequisites
-            install_system_packages
-            ;;
-        repository)
-            detect_os
-            detect_sudo_capability
-            resolve_install_layout
-            check_git
-            clone_repo
-            ;;
-        venv)
-            detect_os
-            detect_sudo_capability
-            resolve_install_layout
-            require_install_dir
-            install_uv
-            check_python
-            setup_venv
-            ;;
-        python-deps)
-            detect_os
-            resolve_install_layout
-            require_install_dir
-            install_uv
-            check_python
-            install_deps
-            ;;
-        node-deps)
-            detect_os
-            resolve_install_layout
-            require_install_dir
-            check_node
-            install_node_deps
-            ;;
-        path)
-            detect_os
-            resolve_install_layout
-            require_install_dir
-            setup_path
-            ;;
-        config)
-            detect_os
-            resolve_install_layout
-            require_install_dir
-            copy_config_templates
-            ;;
-        setup)
-            detect_os
-            resolve_install_layout
-            require_install_dir
-            run_setup_wizard
-            ;;
-        gateway)
-            detect_os
-            resolve_install_layout
-            require_install_dir
-            maybe_start_gateway
-            ;;
-        desktop)
-            detect_os
-            resolve_install_layout
-            require_install_dir
-            # Each stage runs in its own process, so the Clawksis-managed Node
-            # provisioned during prerequisites/node-deps (at $CLAWK_HOME/node/bin)
-            # isn't on PATH here. check_node re-adds it (or installs if missing)
-            # so install_desktop can find npm instead of silently skipping.
-            check_node
-            install_desktop
-            ;;
-        complete)
-            detect_os
-            resolve_install_layout
-            print_success
-            echo "git" > "$CLAWK_HOME/.install_method"
-            ;;
-        *)
-            log_error "Unknown stage: $stage"
-            return 2
-            ;;
+# Clawksis: `curl ... | sudo bash` trap. SUDO_USER set means a normal user escalated:
+# the install lands in root's home (/root/.clawksis) and that user's own account
+# gets no config, no sessions and no `clawk`. Warn and require an explicit yes
+# from the terminal; anything else (no terminal, --non-interactive) aborts.
+confirm_sudo_install() {
+    [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] || return 0
+    log_warn "Running under sudo (invoked by user '$SUDO_USER')."
+    log_warn "Clawksis installs per user, WITHOUT sudo: data and config live in ~/.clawksis"
+    log_warn "of the installing user. As root they land in $CLAWK_HOME, which"
+    log_warn "'$SUDO_USER' will NOT see."
+    log "Recommended: exit and re-run as your normal user:"
+    log "  curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash"
+    local answer=""
+    if [ "$NON_INTERACTIVE" != true ] && has_terminal; then
+        printf 'Continue installing as root anyway? [y/N] ' > /dev/tty
+        IFS= read -r answer < /dev/tty || answer=""
+    fi
+    case "$answer" in
+        [yY]|[yY][eE][sS]) log_warn "proceeding with the root install" ;;
+        *) fail "install aborted; re-run without sudo as '$SUDO_USER'" other ;;
     esac
 }
 
-run_stage_protocol() {
-    local stage="$1"
-    if [ -z "$stage" ]; then
-        log_error "--stage requires a stage name"
-        if [ "$JSON_OUTPUT" = true ]; then
-            emit_stage_json "" false false "missing stage name"
-        fi
-        return 2
-    fi
+print_path_reload_hint() {
+    # The rc files only reach shells started later, and this installer is
+    # always a child (`curl | bash`, `bash install.sh`) that cannot change its
+    # parent's PATH. The inherited PATH is the parent's, so it says whether
+    # the user can run `clawk` right away.
+    case ":$PATH:" in *":$HOME/.local/bin:"*|*":$HOME/.local/bin/:"*) return 0 ;; esac
+    local rc
+    local login_shell="${SHELL:-}"
+    case "${login_shell##*/}" in
+        zsh) rc="source ~/.zshrc" ;;
+        fish) rc="source ~/.config/fish/config.fish" ;;
+        bash|"") rc="source ~/.bashrc" ;;
+        *) rc=". ~/.profile" ;;
+    esac
+    log "Reload your shell to use clawk: open a new terminal, or run: $rc"
+}
 
-    if [ "$NON_INTERACTIVE" = true ] && stage_needs_user_input "$stage"; then
-        log_info "Skipping $stage (non-interactive bootstrap)"
-        if [ "$JSON_OUTPUT" = true ]; then
-            emit_stage_json "$stage" true true
-        fi
-        return 0
-    fi
-
-    # Run the stage body in a subshell so a stage helper that calls `exit 1`
-    # on failure (clone_repo, install_deps, etc. were written for the monolithic
-    # flow) only exits the subshell — the parent still reaches the JSON result
-    # frame below. Without this, a failed --stage would terminate the process
-    # before emitting the frame and the Rust/Electron parser would see "no
-    # result frame" instead of a clean {ok:false} contract response.
-    set +e
-    ( run_stage_body "$stage" )
-    local code=$?
+run_stage() (
+    # Keep failure handling out of conditional calls, which disable errexit.
     set -e
-
-    if [ "$JSON_OUTPUT" = true ]; then
-        if [ "$code" -eq 0 ]; then
-            emit_stage_json "$stage" true false
-        else
-            emit_stage_json "$stage" false false "exit code $code"
-        fi
+    STAGE="$1"
+    STAGE_REASON=""
+    FAILURE_CLASS=""
+    STAGE_INTERRUPTED=false
+    STAGE_SKIPPED=false
+    trap 'stage_result "$?"' EXIT
+    if [ "$INSTALL_LADDER" = true ]; then
+        trap 'stage_signal "$?" 130' INT
+        trap 'stage_signal "$?" 143' TERM
+        trap 'stage_signal "$?" 129' HUP
     fi
-    return "$code"
-}
+    if [ "$NON_INTERACTIVE" = true ] && { [ "$STAGE" = setup ] || [ "$STAGE" = gateway ]; }; then
+        STAGE_SKIPPED=true
+        STAGE_REASON="needs user input"
+        exit 0
+    fi
+    case "$1" in
+        prerequisites) stage_prerequisites ;;
+        repository) stage_repository ;;
+        venv) stage_venv ;;
+        python-deps) stage_python_deps ;;
+        config) stage_config ;;
+        products) stage_products ;;
+        setup) stage_setup ;;
+        gateway) stage_gateway ;;
+        desktop) stage_desktop ;;
+        complete) stage_complete ;;
+        *) STAGE_REASON="unknown stage: $1"; printf '%s\n' "$STAGE_REASON" >&2; exit 2 ;;
+    esac
+)
 
-# ============================================================================
-# Main
-# ============================================================================
+# Main. Guarded so the script can be SOURCED for its functions (the
+# installer-test harness sources it with --manifest, which must define
+# the functions and stop before main). Under `curl | bash` BASH_SOURCE is
+# empty, and `set -u` would abort on the bare expansion.
+if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
+    if [ "$WANT_MANIFEST" = true ]; then
+        emit_manifest
+        exit 0
+    fi
 
-# EXIT handler armed only during the quiet install phases: if anything fails
-# while output is routed to the log, surface the tail so the error isn't lost.
-_on_exit() {
-    local rc=$?
+    if [ -n "$STAGE" ] && [ "$JSON" = true ]; then
+        trap 'stage_result "$?"' EXIT
+    elif [ -z "$STAGE" ]; then
+        INSTALL_LADDER=true
+        INSTALL_STARTED="$(date +%s 2>/dev/null)"
+        INSTALL_RUN_ID="$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')" || INSTALL_RUN_ID=""
+        [ "${#INSTALL_RUN_ID}" -eq 32 ] || INSTALL_RUN_ID="$(printf '%08x%08x%08x%08x' "$(( RANDOM * 32768 + RANDOM ))" "$$" "${INSTALL_STARTED:-0}" "$RANDOM")"
+        # No clock, no receipt: the reader drops a receipt without both timestamps anyway.
+        case "$INSTALL_STARTED" in ''|*[!0-9]*) INSTALL_RUN_ID="" ;; esac
+        trap '[ "$?" -eq 0 ] || write_install_receipt failed prerequisites "${FAILURE_CLASS:-other}"' EXIT
+        # Ctrl-C, SIGTERM or a closed terminal (SIGHUP) anywhere in the run: one `interrupted` receipt.
+        trap 'install_signal INT' INT
+        trap 'install_signal TERM' TERM
+        trap 'install_signal HUP' HUP
+    fi
+    check_platform
     trap - EXIT
-    if [ "${_QUIET:-0}" = "1" ] && [ "$rc" -ne 0 ]; then
-        {
-            echo ""
-            printf "%b\n" "${RED}✗ La instalación falló (código $rc).${NC}"
-            if [ -n "$_INSTALL_LOG" ] && [ -s "$_INSTALL_LOG" ]; then
-                echo "Últimas líneas del log:"
-                echo "────────────────────────────────────────────────────────────"
-                tail -n 40 "$_INSTALL_LOG" 2>/dev/null
-                echo "────────────────────────────────────────────────────────────"
-                echo "Log completo en: $_INSTALL_LOG"
-            fi
-        } >&3 2>/dev/null
-    fi
-}
 
-main() {
+    if [ -n "$STAGE" ]; then
+        run_stage "$STAGE"
+        exit "$?"
+    fi
+
+    # No --stage: run the whole ladder — the same authoritative list the
+    # manifest prints, so --include-desktop inserts desktop here too.
     print_banner
-
-    # Quiet install: route the verbose phase output (uv/pip/npm/git/playwright,
-    # apt/brew, …) to a log file and show ONLY the purple progress bars on the
-    # real terminal (fd 3). On failure _on_exit surfaces the log so nothing is
-    # lost. Interactive prompts use /dev/tty directly, so they still work.
-    _INSTALL_LOG="$(mktemp "${TMPDIR:-/tmp}/clawksis-install.XXXXXX.log" 2>/dev/null || echo "${TMPDIR:-/tmp}/clawksis-install.log")"
-    trap '_on_exit' EXIT
-    _QUIET=1
-    exec >>"$_INSTALL_LOG" 2>&1
-
-    progress_bar "Detectando sistema operativo..."
-    detect_os
-    resolve_install_layout
-
-    progress_bar "Verificando gestor de paquetes (uv)..."
-    install_uv
-
-    progress_bar "Verificando Python, Git y Node.js..."
-    check_python
-    check_git
-    check_node
-    check_network_prerequisites
-    install_system_packages
-
-    progress_bar "Descargando Clawksis..."
-    clone_repo
-
-    progress_bar "Creando entorno virtual Python..."
-    setup_venv
-
-    progress_bar "Instalando dependencias Python..."
-    log_info "  (esto puede tardar 2-5 minutos en la primera instalación)"
-    install_deps
-
-    progress_bar "Instalando dependencias Node (browser tools)..."
-    log_info "  (esto puede tardar 1-3 minutos)"
-    install_node_deps
-
-    progress_bar "Instalando CLIs de agentes (Claude Code + Codex, ultimas versiones)..."
-    install_thirdparty_clis
-
-    progress_bar "Enlazando el comando clawk..."
-    setup_path
-
-    progress_bar "Preparando configuracion y skills..."
-    copy_config_templates
-
-    # Restore normal terminal output for the interactive wizard + final summary.
-    exec 1>&3 2>&4
-    _QUIET=0
-
-    progress_bar "Listo. Iniciando asistente de configuracion..."
-    run_setup_wizard
-    maybe_start_gateway
-
-    if [ "$INCLUDE_DESKTOP" = true ]; then
-        install_desktop
-    fi
-
-    print_success
-
-    echo "git" > "$CLAWK_HOME/.install_method"
-}
-
-if [ "$MANIFEST_MODE" = true ]; then
-    emit_manifest
-elif [ -n "$STAGE_NAME" ]; then
-    run_stage_protocol "$STAGE_NAME"
-elif [ -n "$ENSURE_DEPS" ]; then
-    ensure_mode
-elif [ "$POSTINSTALL_MODE" = true ]; then
-    postinstall_mode
-else
-    main
+    confirm_sudo_install
+    INSTALL_TOTAL="$(stage_names | wc -l | tr -d ' ')"
+    for s in $(stage_names); do
+        # A TERM/HUP noted while the previous stage ran stops the run before this one.
+        [ -z "$INSTALL_SIGNAL" ] || install_interrupted
+        progress_bar "$(stage_progress_label "$s")"
+        # Unattended stages run quiet on a terminal; the wizard, the gateway
+        # prompt and the final summary talk to the user normally again.
+        case "$s" in
+            setup|gateway|complete) QUIET_LADDER=false ;;
+            *) if quiet_output; then QUIET_LADDER=true; else QUIET_LADDER=false; fi ;;
+        esac
+        INSTALL_IN_STAGE=true
+        run_stage "$s"
+        rc=$?
+        INSTALL_IN_STAGE=false
+        if [ "$rc" -eq 0 ]; then
+            # The stage succeeded, so a Ctrl-C it saw was handled there: carry on.
+            [ "$INSTALL_SIGNAL" != INT ] || INSTALL_SIGNAL=""
+            continue
+        fi
+        case "$rc" in
+            129) INSTALL_SIGNAL="${INSTALL_SIGNAL:-HUP}" ;;
+            130) INSTALL_SIGNAL="${INSTALL_SIGNAL:-INT}" ;;
+            143) INSTALL_SIGNAL="${INSTALL_SIGNAL:-TERM}" ;;
+        esac
+        [ -z "$INSTALL_SIGNAL" ] || install_interrupted
+        # The stage normally wrote its receipt; one killed outright (SIGKILL, OOM) did not.
+        write_install_receipt failed "${s//-/_}" other
+        exit "$rc"
+    done
+    write_install_receipt success none none
+    # Every stage finished: the receipt says success, and a pending TERM/HUP still ends the run.
+    [ -z "$INSTALL_SIGNAL" ] || install_interrupted
+    trap - INT TERM HUP
+    print_path_reload_hint
 fi

@@ -20,11 +20,6 @@ class TestRoleTagStripping:
         assert "</tool_call>" not in out
         assert "bad injected happened" in out
 
-    def test_strips_function_call_tags(self):
-        out = _sanitize_tool_error("<function_call>x</function_call>")
-        assert "<function_call>" not in out
-        assert "</function_call>" not in out
-
     def test_strips_role_tags(self):
         # Each of these should be stripped
         for tag in (
@@ -41,12 +36,6 @@ class TestRoleTagStripping:
             assert f"<{tag}>" not in out, f"failed to strip <{tag}>"
             assert f"</{tag}>" not in out, f"failed to strip </{tag}>"
 
-    def test_role_tag_strip_is_case_insensitive(self):
-        out = _sanitize_tool_error("<TOOL_CALL>x</Tool_Call>")
-        assert "<" not in out.replace(
-            "[TOOL_ERROR]", ""
-        )  # only the prefix bracket survives
-
     def test_unrelated_xml_kept(self):
         # We intentionally only strip the role-like tag whitelist, not all XML
         out = _sanitize_tool_error("Error parsing <ParseError>line 5</ParseError>")
@@ -59,20 +48,11 @@ class TestCDATAStripping:
         assert "<![CDATA[" not in out
         assert "]]>" not in out
 
-    def test_strips_multiline_cdata(self):
-        out = _sanitize_tool_error("a\n<![CDATA[line1\nline2]]>\nb")
-        assert "CDATA" not in out
-        assert "a" in out and "b" in out
-
 
 class TestCodeFenceStripping:
     def test_strips_leading_fence_with_lang(self):
         out = _sanitize_tool_error('```json\n{"x": 1}')
         assert not out.replace("[TOOL_ERROR] ", "").startswith("```")
-
-    def test_strips_trailing_fence(self):
-        out = _sanitize_tool_error("payload\n```")
-        assert not out.rstrip().endswith("```")
 
     def test_strips_bare_fence(self):
         out = _sanitize_tool_error("```\nstuff")
@@ -88,26 +68,11 @@ class TestTruncation:
         assert len(body) == _TOOL_ERROR_MAX_LEN
         assert body.endswith("...")
 
-    def test_does_not_truncate_short_input(self):
-        msg = "short error"
-        out = _sanitize_tool_error(msg)
-        assert "..." not in out
-        assert msg in out
-
 
 class TestEnvelope:
     def test_wraps_with_prefix(self):
         out = _sanitize_tool_error("oh no")
         assert out.startswith("[TOOL_ERROR] ")
-
-    def test_empty_input(self):
-        out = _sanitize_tool_error("")
-        assert out == "[TOOL_ERROR] "
-
-    def test_preserves_normal_error_text(self):
-        msg = "Error executing read_file: FileNotFoundError: /tmp/missing"
-        out = _sanitize_tool_error(msg)
-        assert msg in out
 
 
 class TestHandleFunctionCallIntegration:

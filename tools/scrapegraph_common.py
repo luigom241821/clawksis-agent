@@ -9,8 +9,8 @@ pages, scrapegraphai's headless Chromium loader runs locally; no third-party
 scraping service is involved. This is deliberate: keep scraping on our own
 infrastructure and minimise dependence on Firecrawl/Browserbase/Apify et al.
 
-Heavy deps (the langchain stack) are lazy-installed on first use via
-``tools.lazy_deps`` so they never bloat the base install.
+Heavy deps (the langchain stack) live in the opt-in ``scrapegraph`` extra and
+install on first use via ``pm.ensure_import`` so they never bloat the base install.
 """
 
 from __future__ import annotations
@@ -21,14 +21,14 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# Lazy-deps feature key (registered in tools/lazy_deps.py LAZY_DEPS).
-LAZY_FEATURE = "scrape.scrapegraph"
+# pm extra (pyproject [project.optional-dependencies] / pm.extras.ANCHORS).
+LAZY_FEATURE = "scrapegraph"
 
 _INSTALL_HINT = (
     "ScrapeGraphAI is not installed. It auto-installs on first use, but if that "
-    "is disabled run once: pip install scrapegraphai && python -m playwright "
-    "install chromium (the Chromium download is only needed for JavaScript "
-    "pages)."
+    "is disabled run once: clawk pm install --extra scrapegraph && python -m "
+    "playwright install chromium (the Chromium download is only needed for "
+    "JavaScript pages)."
 )
 
 
@@ -72,13 +72,13 @@ def ensure_installed(*, prompt: bool = False) -> None:
     if is_available():
         _patch_langchain_community()
         return
+    # pm never prompts mid-session (prompt_toolkit owns stdin); installs are gated by
+    # security.allow_lazy_installs inside pm. ``prompt`` is kept for caller compatibility.
     try:
-        from tools.lazy_deps import FeatureUnavailable, ensure
-    except ImportError as exc:
-        raise ScrapegraphUnavailable(_INSTALL_HINT) from exc
-    try:
-        ensure(LAZY_FEATURE, prompt=prompt)
-    except FeatureUnavailable as exc:
+        from pm import ensure_import
+
+        ensure_import(LAZY_FEATURE)
+    except Exception as exc:  # InstallError (disabled/declined/failed), pm missing
         raise ScrapegraphUnavailable(f"{_INSTALL_HINT} ({exc})") from exc
     if not is_available():
         raise ScrapegraphUnavailable(_INSTALL_HINT)
@@ -208,43 +208,45 @@ def clamp_timeout(raw_timeout: Any) -> int | None:
 # structurally parse a page. It rarely raises — it answers with a sentinel
 # like ``"NA"`` / ``"N/A"`` or ``{"content": "NA"}`` instead, which callers
 # must recognise or the agent burns a turn reading garbage.
-_EMPTY_RESULT_SENTINELS = frozenset({
-    "",
-    "na",
-    "n/a",
-    "n.a.",
-    "none",
-    "null",
-    "nan",
-    "{}",
-    # Common LLM "I couldn't extract anything" phrasings (v1.9).
-    "no content",
-    "no data",
-    "no result",
-    "no results",
-    "no text",
-    "nothing",
-    "not found",
-    "empty",
-    "nil",
-    "undefined",
-    # v1.10: placeholder family — LLMs answer with a dash/dot/ellipsis or a
-    # "not available" phrasing when they could not find the field at all
-    # (common in table/listing extractions: {"price": "-"}). A whole result
-    # made of these carries no usable content; partial extractions that mix
-    # them with real values are still kept (see looks_like_empty_result).
-    "-",
-    "–",
-    "—",
-    ".",
-    "..",
-    "...",
-    "…",
-    "not available",
-    "no info",
-    "no information",
-    "no value",
-})
+_EMPTY_RESULT_SENTINELS = frozenset(
+    {
+        "",
+        "na",
+        "n/a",
+        "n.a.",
+        "none",
+        "null",
+        "nan",
+        "{}",
+        # Common LLM "I couldn't extract anything" phrasings (v1.9).
+        "no content",
+        "no data",
+        "no result",
+        "no results",
+        "no text",
+        "nothing",
+        "not found",
+        "empty",
+        "nil",
+        "undefined",
+        # v1.10: placeholder family — LLMs answer with a dash/dot/ellipsis or a
+        # "not available" phrasing when they could not find the field at all
+        # (common in table/listing extractions: {"price": "-"}). A whole result
+        # made of these carries no usable content; partial extractions that mix
+        # them with real values are still kept (see looks_like_empty_result).
+        "-",
+        "–",
+        "—",
+        ".",
+        "..",
+        "...",
+        "…",
+        "not available",
+        "no info",
+        "no information",
+        "no value",
+    }
+)
 
 
 def looks_like_empty_result(data: Any) -> bool:

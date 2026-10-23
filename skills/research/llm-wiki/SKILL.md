@@ -324,7 +324,6 @@ When the user asks to lint, health-check, or audit the wiki:
 # Use execute_code for this — programmatic scan across all wiki pages
 import os, re
 from collections import defaultdict
-
 wiki = "<WIKI_PATH>"
 # Scan all .md files in entities/, concepts/, comparisons/, queries/
 # Extract all [[wikilinks]] — build inbound link map
@@ -457,7 +456,7 @@ Wants=network-online.target
 
 [Service]
 ExecStart=/path/to/ob sync --continuous
-WorkingDirectory=/home/user/wiki
+WorkingDirectory=%h/wiki
 Restart=on-failure
 RestartSec=10
 

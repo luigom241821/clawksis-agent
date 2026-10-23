@@ -21,11 +21,13 @@ def brave_search(
     api_key: str,
     count: int = 5,
 ) -> tuple[list[dict], dict]:
-    url = "https://api.search.brave.com/res/v1/web/search?" + urllib.parse.urlencode({
-        "q": query,
-        "count": count,
-        "freshness": f"{date_range[0]}to{date_range[1]}",
-    })
+    url = "https://api.search.brave.com/res/v1/web/search?" + urllib.parse.urlencode(
+        {
+            "q": query,
+            "count": count,
+            "freshness": f"{date_range[0]}to{date_range[1]}",
+        }
+    )
     data = http.request(
         "GET", url, headers={"X-Subscription-Token": api_key}, timeout=15
     )
@@ -35,16 +37,18 @@ def brave_search(
         pub_date = _normalize_date(raw_date[:10]) if raw_date else None
         if not _in_date_range(pub_date, date_range):
             continue
-        items.append({
-            "id": f"WB{i + 1}",
-            "title": r.get("title", ""),
-            "url": r.get("url", ""),
-            "source_domain": _domain(r.get("url", "")),
-            "snippet": r.get("description", ""),
-            "date": pub_date,
-            "relevance": 0.8,
-            "why_relevant": "Brave web search",
-        })
+        items.append(
+            {
+                "id": f"WB{i + 1}",
+                "title": r.get("title", ""),
+                "url": r.get("url", ""),
+                "source_domain": _domain(r.get("url", "")),
+                "snippet": r.get("description", ""),
+                "date": pub_date,
+                "relevance": 0.8,
+                "why_relevant": "Brave web search",
+            }
+        )
     artifact = {
         "label": "brave",
         "webSearchQueries": [query],
@@ -95,16 +99,18 @@ def exa_search(
         )
         if not _in_date_range(pub_date, date_range):
             continue
-        items.append({
-            "id": f"WE{i + 1}",
-            "title": r.get("title", ""),
-            "url": url,
-            "source_domain": _domain(url),
-            "snippet": (r.get("text") or "")[:500],
-            "date": pub_date,
-            "relevance": 0.8,
-            "why_relevant": "Exa web search",
-        })
+        items.append(
+            {
+                "id": f"WE{i + 1}",
+                "title": r.get("title", ""),
+                "url": url,
+                "source_domain": _domain(url),
+                "snippet": (r.get("text") or "")[:500],
+                "date": pub_date,
+                "relevance": 0.8,
+                "why_relevant": "Exa web search",
+            }
+        )
     artifact = {"label": "exa", "webSearchQueries": [query], "resultCount": len(items)}
     return items, artifact
 
@@ -137,16 +143,18 @@ def serper_search(
         pub_date = _parse_serper_date(raw_date)
         if not _in_date_range(pub_date, date_range):
             continue
-        items.append({
-            "id": f"WS{i + 1}",
-            "title": r.get("title", ""),
-            "url": r.get("link", ""),
-            "source_domain": _domain(r.get("link", "")),
-            "snippet": r.get("snippet", ""),
-            "date": pub_date,
-            "relevance": 0.8,
-            "why_relevant": "Serper web search",
-        })
+        items.append(
+            {
+                "id": f"WS{i + 1}",
+                "title": r.get("title", ""),
+                "url": r.get("link", ""),
+                "source_domain": _domain(r.get("link", "")),
+                "snippet": r.get("snippet", ""),
+                "date": pub_date,
+                "relevance": 0.8,
+                "why_relevant": "Serper web search",
+            }
+        )
     artifact = {
         "label": "serper",
         "webSearchQueries": [query],
@@ -190,16 +198,18 @@ def parallel_search(
         pub_date = _normalize_date(raw_date[:10]) if raw_date else None
         if not _in_date_range(pub_date, date_range):
             continue
-        items.append({
-            "id": f"WP{i + 1}",
-            "title": r.get("title", ""),
-            "url": url,
-            "source_domain": _domain(url),
-            "snippet": ((r.get("excerpts") or [""])[0] or "")[:500],
-            "date": pub_date,
-            "relevance": 0.8,
-            "why_relevant": "Parallel AI web search",
-        })
+        items.append(
+            {
+                "id": f"WP{i + 1}",
+                "title": r.get("title", ""),
+                "url": url,
+                "source_domain": _domain(url),
+                "snippet": ((r.get("excerpts") or [""])[0] or "")[:500],
+                "date": pub_date,
+                "relevance": 0.8,
+                "why_relevant": "Parallel AI web search",
+            }
+        )
     artifact = {
         "label": "parallel",
         "webSearchQueries": [query],

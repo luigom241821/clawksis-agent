@@ -55,7 +55,7 @@ def _extract_core_subject(topic: str) -> str:
     return topic.strip()
 
 
-def _expand_queries(topic: str) -> List[str]:
+def _expand_queries(topic: str) -> list[str]:
     """Generate search queries to cast a wider net.
 
     Strategy:
@@ -93,154 +93,158 @@ def _expand_queries(topic: str) -> List[str]:
     return unique[:6]
 
 
-_GENERIC_TAGS = frozenset({
-    "sports",
-    "politics",
-    "crypto",
-    "science",
-    "culture",
-    "pop culture",
-})
+_GENERIC_TAGS = frozenset(
+    {
+        "sports",
+        "politics",
+        "crypto",
+        "science",
+        "culture",
+        "pop culture",
+    }
+)
 
 # Words that are too generic to serve as the sole topic-match signal.
 # If ALL core words from the topic are in this set, we skip filtering (can't meaningfully filter).
 # But if some words are informative and some are generic, we require at least one informative word.
-_NOISE_WORDS = frozenset({
-    # Articles, prepositions, conjunctions
-    "the",
-    "a",
-    "an",
-    "in",
-    "on",
-    "at",
-    "of",
-    "for",
-    "and",
-    "or",
-    "to",
-    "is",
-    "are",
-    "was",
-    "were",
-    "will",
-    "be",
-    "by",
-    "with",
-    "from",
-    "as",
-    "it",
-    "its",
-    "not",
-    "no",
-    "but",
-    "if",
-    "so",
-    "do",
-    "has",
-    "had",
-    "have",
-    "this",
-    "that",
-    "what",
-    "who",
-    # Directional / geographic terms that cause false matches
-    "west",
-    "east",
-    "north",
-    "south",
-    "central",
-    "southern",
-    "northern",
-    "eastern",
-    "western",
-    # Common sports / category terms
-    "champion",
-    "championship",
-    "league",
-    "division",
-    "conference",
-    "cup",
-    "series",
-    "team",
-    "game",
-    "match",
-    "season",
-    "win",
-    "winner",
-    "finals",
-    # Common geographic / place nouns that cause false matches
-    # "club" -> Athletic Club, Racing Club; "island" -> Epstein's Island, Rhode Island
-    "club",
-    "island",
-    "city",
-    "park",
-    "hill",
-    "lake",
-    "bay",
-    "beach",
-    "valley",
-    "river",
-    "mountain",
-    "county",
-    "state",
-    "village",
-    "town",
-    "point",
-    "creek",
-    "springs",
-    "heights",
-    "ridge",
-    "bridge",
-    "harbor",
-    "port",
-    "station",
-    "center",
-    "square",
-    "field",
-    "forest",
-    "garden",
-    "tower",
-    "school",
-    "church",
-    "camp",
-    "ranch",
-    "crossing",
-    "shore",
-    "rock",
-    "summit",
-    "falls",
-    "grove",
-    "haven",
-    # Generic tech terms that match too broadly on Polymarket
-    # "cli" -> any CLI tool market; "mcp" -> protocol markets; "ai" -> every AI market
-    "cli",
-    "mcp",
-    "protocol",
-    "tool",
-    "app",
-    "code",
-    "model",
-    "ai",
-    "api",
-    "software",
-    "plugin",
-    "skill",
-    "agent",
-    "bot",
-    "search",
-    "research",
-    # Generic prediction market terms
-    "market",
-    "odds",
-    "prediction",
-    "forecast",
-    "chance",
-    "probability",
-    # Comparison-query conjunctions — should not count as informative filter tokens
-    # when the topic is "X vs Y vs Z"
-    "vs",
-    "versus",
-})
+_NOISE_WORDS = frozenset(
+    {
+        # Articles, prepositions, conjunctions
+        "the",
+        "a",
+        "an",
+        "in",
+        "on",
+        "at",
+        "of",
+        "for",
+        "and",
+        "or",
+        "to",
+        "is",
+        "are",
+        "was",
+        "were",
+        "will",
+        "be",
+        "by",
+        "with",
+        "from",
+        "as",
+        "it",
+        "its",
+        "not",
+        "no",
+        "but",
+        "if",
+        "so",
+        "do",
+        "has",
+        "had",
+        "have",
+        "this",
+        "that",
+        "what",
+        "who",
+        # Directional / geographic terms that cause false matches
+        "west",
+        "east",
+        "north",
+        "south",
+        "central",
+        "southern",
+        "northern",
+        "eastern",
+        "western",
+        # Common sports / category terms
+        "champion",
+        "championship",
+        "league",
+        "division",
+        "conference",
+        "cup",
+        "series",
+        "team",
+        "game",
+        "match",
+        "season",
+        "win",
+        "winner",
+        "finals",
+        # Common geographic / place nouns that cause false matches
+        # "club" -> Athletic Club, Racing Club; "island" -> Epstein's Island, Rhode Island
+        "club",
+        "island",
+        "city",
+        "park",
+        "hill",
+        "lake",
+        "bay",
+        "beach",
+        "valley",
+        "river",
+        "mountain",
+        "county",
+        "state",
+        "village",
+        "town",
+        "point",
+        "creek",
+        "springs",
+        "heights",
+        "ridge",
+        "bridge",
+        "harbor",
+        "port",
+        "station",
+        "center",
+        "square",
+        "field",
+        "forest",
+        "garden",
+        "tower",
+        "school",
+        "church",
+        "camp",
+        "ranch",
+        "crossing",
+        "shore",
+        "rock",
+        "summit",
+        "falls",
+        "grove",
+        "haven",
+        # Generic tech terms that match too broadly on Polymarket
+        # "cli" -> any CLI tool market; "mcp" -> protocol markets; "ai" -> every AI market
+        "cli",
+        "mcp",
+        "protocol",
+        "tool",
+        "app",
+        "code",
+        "model",
+        "ai",
+        "api",
+        "software",
+        "plugin",
+        "skill",
+        "agent",
+        "bot",
+        "search",
+        "research",
+        # Generic prediction market terms
+        "market",
+        "odds",
+        "prediction",
+        "forecast",
+        "chance",
+        "probability",
+        # Comparison-query conjunctions — should not count as informative filter tokens
+        # when the topic is "X vs Y vs Z"
+        "vs",
+        "versus",
+    }
+)
 
 
 def _passes_topic_filter(topic: str, event_title: str) -> bool:
@@ -317,7 +321,7 @@ def _passes_any_informative_word(topic: str, event_title: str) -> bool:
     return False
 
 
-def filter_items_against_topic(topic: str, items: List[Any]) -> List[Any]:
+def filter_items_against_topic(topic: str, items: list[Any]) -> list[Any]:
     """Drop items whose title shares no informative word with the original topic.
 
     Called post-merge from pipeline.py so per-entity subquery results for
@@ -354,7 +358,7 @@ def filter_items_against_topic(topic: str, items: List[Any]) -> List[Any]:
     return filtered
 
 
-def filter_items_against_keywords(items: List[Any], keywords: List[str]) -> List[Any]:
+def filter_items_against_keywords(items: list[Any], keywords: list[str]) -> list[Any]:
     """Keep only items whose title contains at least one keyword (case-insensitive).
 
     Intended for disambiguating ambiguous single-token topics like 'Warriors'
@@ -387,7 +391,7 @@ def filter_items_against_keywords(items: List[Any], keywords: List[str]) -> List
     return filtered
 
 
-def _extract_domain_queries(topic: str, events: List[Dict]) -> List[str]:
+def _extract_domain_queries(topic: str, events: list[dict]) -> list[str]:
     """Extract domain-indicator search terms from first-pass event tags.
 
     Uses structured tag metadata from Gamma API events to discover broader
@@ -397,7 +401,7 @@ def _extract_domain_queries(topic: str, events: List[Dict]) -> List[str]:
     query_words = set(_extract_core_subject(topic).lower().split())
 
     # Collect tag labels from all first-pass events, count occurrences
-    tag_counts: Dict[str, int] = {}
+    tag_counts: dict[str, int] = {}
     for event in events:
         tags = event.get("tags") or []
         for tag in tags:
@@ -432,7 +436,7 @@ def _infer_query_intent(topic: str) -> str:
     return "breaking_news"
 
 
-def _search_single_query(query: str, page: int = 1) -> Dict[str, Any]:
+def _search_single_query(query: str, page: int = 1) -> dict[str, Any]:
     """Run a single search query against Gamma API."""
     params = {
         "q": query,
@@ -454,10 +458,10 @@ def _search_single_query(query: str, page: int = 1) -> Dict[str, Any]:
 
 
 def _run_queries_parallel(
-    queries: List[str],
+    queries: list[str],
     pages: int,
-    all_events: Dict,
-    errors: List,
+    all_events: dict,
+    errors: list,
     start_idx: int = 0,
 ) -> None:
     """Run (query, page) combinations in parallel, merging into all_events."""
@@ -480,9 +484,10 @@ def _run_queries_parallel(
                     event_id = event.get("id", "")
                     if not event_id:
                         continue
-                    if event_id not in all_events:
-                        all_events[event_id] = (event, query_idx)
-                    elif query_idx < all_events[event_id][1]:
+                    if (
+                        event_id not in all_events
+                        or query_idx < all_events[event_id][1]
+                    ):
                         all_events[event_id] = (event, query_idx)
             except Exception as e:
                 errors.append(str(e))
@@ -493,7 +498,7 @@ def search_polymarket(
     from_date: str,
     to_date: str,
     depth: str = "default",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search Polymarket via Gamma API with two-pass query expansion.
 
     Pass 1: Run expanded queries in parallel, merge and dedupe by event ID.
@@ -515,8 +520,8 @@ def search_polymarket(
     _log(f"Searching for '{topic}' with queries: {queries} (pages={pages})")
 
     # Pass 1: run expanded queries in parallel
-    all_events: Dict[str, tuple] = {}
-    errors: List[str] = []
+    all_events: dict[str, tuple] = {}
+    errors: list[str] = []
     _run_queries_parallel(queries, pages, all_events, errors)
 
     # Pass 2: extract domain-indicator terms from first-pass titles and search
@@ -542,7 +547,7 @@ def search_polymarket(
     return result
 
 
-def _format_price_movement(market: Dict[str, Any]) -> Optional[str]:
+def _format_price_movement(market: dict[str, Any]) -> Optional[str]:
     """Pick the most significant price change and format it.
 
     Returns string like 'down 11.7% this month' or None if no significant change.
@@ -578,7 +583,7 @@ def _format_price_movement(market: Dict[str, Any]) -> Optional[str]:
     return f"{direction} {pct:.1f}% {period}"
 
 
-def _parse_outcome_prices(market: Dict[str, Any]) -> List[tuple]:
+def _parse_outcome_prices(market: dict[str, Any]) -> list[tuple]:
     """Parse outcomePrices JSON string into list of (outcome_name, price) tuples."""
     outcomes_raw = market.get("outcomes") or []
     prices_raw = market.get("outcomePrices")
@@ -638,7 +643,7 @@ def _shorten_question(question: str) -> str:
 
 
 def _compute_text_similarity(
-    topic: str, title: str, outcomes: List[str] = None
+    topic: str, title: str, outcomes: list[str] | None = None
 ) -> float:
     """Score how well the event title (or outcome names) match the search topic.
 
@@ -708,8 +713,8 @@ def _safe_float(val, default=0.0) -> float:
 
 
 def parse_polymarket_response(
-    response: Dict[str, Any], topic: str = ""
-) -> List[Dict[str, Any]]:
+    response: dict[str, Any], topic: str = ""
+) -> list[dict[str, Any]]:
     """Parse Gamma API response into normalized item dicts.
 
     Each event becomes one item showing its title and top markets.
@@ -906,25 +911,26 @@ def parse_polymarket_response(
         # Top 3 outcomes for multi-outcome markets
         top_outcomes = outcome_prices[:3]
         remaining = len(outcome_prices) - 3
-        if remaining < 0:
-            remaining = 0
+        remaining = max(remaining, 0)
 
-        items.append({
-            "event_id": event_id,
-            "title": title,
-            "question": top_market.get("question", title),
-            "url": url,
-            "outcome_prices": top_outcomes,
-            "outcomes_remaining": remaining,
-            "price_movement": price_movement,
-            "volume24hr": volume24hr,
-            "volume1mo": event_volume1mo,
-            "liquidity": liquidity,
-            "date": date_str,
-            "end_date": end_date,
-            "relevance": round(relevance, 2),
-            "why_relevant": f"Prediction market: {title[:60]}",
-        })
+        items.append(
+            {
+                "event_id": event_id,
+                "title": title,
+                "question": top_market.get("question", title),
+                "url": url,
+                "outcome_prices": top_outcomes,
+                "outcomes_remaining": remaining,
+                "price_movement": price_movement,
+                "volume24hr": volume24hr,
+                "volume1mo": event_volume1mo,
+                "liquidity": liquidity,
+                "date": date_str,
+                "end_date": end_date,
+                "relevance": round(relevance, 2),
+                "why_relevant": f"Prediction market: {title[:60]}",
+            }
+        )
 
     if filtered_count:
         _log(f"Filtered {filtered_count} noise events (topic: '{topic}')")

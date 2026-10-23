@@ -1,7 +1,8 @@
 ---
 name: last30days
 version: "3.3.2"
-description: "USE THIS for breaking news, latest news, current events, what is happening right now, what is trending, or any up-to-date / recent / time-sensitive info on any topic. Also trigger on Spanish requests: 'noticias de última hora', 'últimas noticias', 'qué está pasando', 'lo último', 'novedades', 'tendencias', 'qué se dice de', 'información actualizada'. Researches what people actually say in the last 30 days across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub and the web, ranked by real engagement (upvotes, likes, real money) instead of editors. Prefer this over a plain web search whenever recency or what-people-are-saying matters."
+description: "Research breaking news and trends from the last 30 days."
+platforms: [linux, macos, windows]
 argument-hint: 'last30days nvidia earnings reaction | last30days AI video tools | last30days what users want in react'
 allowed-tools: Bash, Read, Write, AskUserQuestion, WebSearch
 homepage: https://github.com/mvanhorn/last30days-skill
@@ -10,6 +11,8 @@ author: mvanhorn
 license: MIT
 user-invocable: true
 metadata:
+  clawk:
+    tags: [research, news, trends, recency, reddit, x, youtube, tiktok, hackernews, polymarket]
   openclaw:
     emoji: "📰"
     requires:
@@ -146,7 +149,7 @@ These LAWs dominate every other rule in this file. If you find yourself about to
 
 **LAW 4 - NO `##` or `###` SECTION HEADERS IN BODY (with COMPARISON exception).** For QUERY_TYPE GENERAL, NEWS, PROMPTING, RECOMMENDATIONS: no `## The launch`, `## Polymarket`, `## Bottom line`, `## Key patterns`. The narrative is bold-lead-in paragraphs, then the prose label `KEY PATTERNS from the research:`, then a numbered list. That is the only structure. No subheadings. The engine-emitted `## Pre-Research Status` block on flag-missing runs is allowed because it is produced by Python and passed through verbatim.
 
-**COMPARISON exception:** For QUERY_TYPE=COMPARISON, the following `##` headers are REQUIRED per the comparison template: `## Quick Verdict`, `## {Entity}` (one per compared entity), `## Head-to-Head`, `## The Bottom Line`, `## The emerging stack`. Any other `##` header is still forbidden. See the `### If QUERY_TYPE = COMPARISON` section for the full template.
+**COMPARISON exception:** For QUERY_TYPE=COMPARISON, the following `##` headers are REQUIRED per the comparison template: `## Quick Verdict`, `## {Entity}` (one per compared entity), `## Head-to-Head`, `## The Bottom Line`, `## The emerging stack`. Any other `##` header is still forbidden. See the `### If QUERY_TYPE = COMPARISON` section of `references/synthesis.md` for the full template.
 
 **Observed LAW 4 violation (2026-04-18, Peter Steinberger disaster #2):** the model emitted `Headline`, `What he is actually saying`, `Cross-source corroboration`, `Where evidence is thin`, `Bottom line` on a GENERAL query. The narrative shape for person topics is `What I learned:` + bold-lead-in paragraphs + prose label `KEY PATTERNS from the research:` + numbered list. No blog-post subheadings.
 
@@ -248,6 +251,15 @@ If your Bash call to `last30days.py` does NOT include the FULL pre-flight checkl
 > **Permissions overview:** Reads public web/platform data and optionally saves research briefings to `LAST30DAYS_MEMORY_DIR` (defaults to `~/Documents/Last30Days`). X/Twitter search uses optional user-provided tokens (AUTH_TOKEN/CT0 env vars). Bluesky search uses optional app password (BSKY_HANDLE/BSKY_APP_PASSWORD env vars - create at bsky.app/settings/app-passwords). All credential usage and data writes are documented in the [Security & Permissions](#security--permissions) section.
 
 Research ANY topic across Reddit, X, YouTube, and other sources. Surface what people are actually discussing, recommending, betting on, and debating right now.
+
+## When to Use
+
+Breaking news, latest news, current events, what is happening right now, what is trending, or
+any up-to-date / recent / time-sensitive info on any topic. Spanish requests too: 'noticias de
+última hora', 'últimas noticias', 'qué está pasando', 'lo último', 'novedades', 'tendencias',
+'qué se dice de', 'información actualizada'. Results are ranked by real engagement (upvotes,
+likes, real money) instead of editors; prefer this over a plain web search whenever recency or
+what-people-are-saying matters.
 
 ## Runtime Preflight
 
@@ -580,95 +592,11 @@ Generated: {date} | Sources: Reddit, X, Bluesky, YouTube, TikTok, HN, Polymarket
 
 ## If QUERY_TYPE = COMPARISON
 
-When the user asks "X vs Y" (or "X vs Y vs Z"), the engine fans out N full `pipeline.run()` calls in parallel — one per entity — each with its own Step 0.55-grade targeting. This restored the old N-pass architecture (reverted the one-pass latency optimization that removed per-entity depth); parallel execution keeps wall clock ≈ a single pass.
-
-**MANDATORY per-entity resolution.** For each entity, resolve the full Step 0.55 stack (X handle, subreddits, GitHub user/repos, news context). Then assemble a `--competitors-plan` JSON mapping each entity to its targeting, and invoke the engine ONCE with the vs-topic string.
-
-**Output shape per run:**
-- Main topic saves to `{main-slug}-raw.md`.
-- Each peer saves to `{peer-slug}-raw.md`.
-- Stdout shows a merged comparison with the `## Head-to-Head` scaffold + per-entity Resolved Entities block.
-
-**Invocation:**
-```bash
-# SKILL_DIR = absolute path of the directory containing THIS SKILL.md you just Read.
-# Substitute the actual path below — your harness told you where this file lives via
-# the Read tool result. Examples:
-#   Read ~/.claude/skills/last30days/SKILL.md      → SKILL_DIR=$HOME/.claude/skills/last30days
-#   Read ~/.codex/skills/last30days/SKILL.md       → SKILL_DIR=$HOME/.codex/skills/last30days
-#   Read ~/.claude/plugins/cache/last30days-skill/last30days/3.3.2/skills/last30days/SKILL.md
-#     → SKILL_DIR=$HOME/.claude/plugins/cache/last30days-skill/last30days/3.3.2/skills/last30days
-# scripts/last30days.py is always a direct child of SKILL_DIR (every install layout
-# packages SKILL.md and scripts/ as siblings).
-SKILL_DIR="<absolute path of the directory containing the SKILL.md you Read>"
-
-if [ ! -f "$SKILL_DIR/scripts/last30days.py" ]; then
-  echo "ERROR: scripts/last30days.py not found under SKILL_DIR=$SKILL_DIR" >&2
-  echo "Re-check the directory of the SKILL.md you Read and substitute it as SKILL_DIR above." >&2
-  exit 1
-fi
-
-# Write the per-entity plan to a tmpfile and pass the path to the engine.
-# The engine's parse_competitors_plan() reads file paths transparently. This
-# avoids the inline-single-quoted-JSON apostrophe trap (resolved context
-# strings like "people's choice" or "McDonald's" otherwise close the outer
-# single-quote and break shell parsing before the engine is even invoked).
-# Trailing XXXXXX (no .json suffix) so BSD/macOS mktemp works the same as
-# GNU; BSD only substitutes X's at the end of the template.
-COMPETITORS_PLAN_FILE=$(mktemp "${TMPDIR:-/tmp}/last30days-competitors.XXXXXX")
-trap 'rm -f "$COMPETITORS_PLAN_FILE"' EXIT
-cat > "$COMPETITORS_PLAN_FILE" <<'PLAN_EOF'
-{
-  "{TOPIC_B}": {"x_handle":"{TOPIC_B_HANDLE}","subreddits":["{TOPIC_B_SUB_1}","{TOPIC_B_SUB_2}"],"github_user":"{TOPIC_B_GH}","context":"{TOPIC_B_CONTEXT}"},
-  "{TOPIC_C}": {"x_handle":"{TOPIC_C_HANDLE}","subreddits":["{TOPIC_C_SUB_1}"],"github_user":"{TOPIC_C_GH}","context":"{TOPIC_C_CONTEXT}"}
-}
-PLAN_EOF
-
-"${LAST30DAYS_PYTHON}" "${SKILL_DIR}/scripts/last30days.py" "{TOPIC_A} vs {TOPIC_B} vs {TOPIC_C}" \
-  --emit=compact \
-  --save-dir="${LAST30DAYS_MEMORY_DIR}" \
-  --save-suffix=v3 \
-  --x-handle={TOPIC_A_HANDLE} \
-  --subreddits={TOPIC_A_SUBS} \
-  --competitors-plan "$COMPETITORS_PLAN_FILE"
-```
-
-**The quoted heredoc marker `'PLAN_EOF'` is load-bearing** — quoting suppresses shell interpolation so apostrophes, `$`, backticks, etc. pass through verbatim. If you ever switch to an unquoted `<<PLAN_EOF`, every variable reference and apostrophe inside the JSON becomes a parse hazard.
-
-Topic A (the main topic, first in the vs-string) uses outer `--x-handle`, `--x-related`, `--subreddits`, `--github-user`, `--github-repo`, `--tiktok-*`, `--ig-creators` as usual. Topics B and C get their targeting from `--competitors-plan` entries (keyed by entity name, case-insensitive).
-
-**Step 0.55 for N entities.** The same pre-research protocol that applies to a single-entity topic applies to EACH entity in a vs-run. For N=3, that means 3 WebSearches for X handles, 3 for subreddits, 3 for GitHub, 3 for news context — or equivalent batched queries. A `## Resolved Entities` block with dashes for any entity means you skipped Step 0.55 for that one. Re-run with a corrected plan.
-
-**Then do WebSearch supplements** for: `{TOPIC_A} vs {TOPIC_B} comparison {YEAR}` and `{TOPIC_A} vs {TOPIC_B} which is better` — these catch rivalry articles that per-entity passes might not surface.
-
-**Use `RESOLVED_POSITIONING` per entity (Step 0.55 item 6) in two ways.** First, ground each entity's `What it is` cell in its CURRENT fetched pitch - describe the entity as it pitches itself today, never from memory. Second, if an entity's month of evidence directly bears on its pitch - SUPPORTS a specific claim, CUTS AGAINST one, or the conversation is squarely ABOUT the pitched ground - say so in ONE prose sentence inside that entity's section of the comparison synthesis (right after the Community Sentiment line - the template marks the slot), anchored to the real item with its engagement. When the pulse is orthogonal to the pitch (on-entity but about something the pitch doesn't speak to), say NOTHING about the pitch: omission is the correct output, and a manufactured connection is worse than silence. Match altitude: test SPECIFIC claims ("zero-config", "fastest", an uptime number) against specific threads; never grade a broad tagline ("financial infrastructure") against an individual thread - it is too broad to hit or miss. Keep claims windowed - "this month's conversation" - never trend verbs like "losing the narrative" that one 30-day window cannot support. If positioning was not actually fetched this run for an entity, skip both uses for that entity - never supply a pitch from memory.
-
-**Skip the normal Step 1 below** - go directly to the comparison synthesis format (see "If QUERY_TYPE = COMPARISON" in the synthesis section).
-
-**COMPARISON TABLE SCAFFOLD (engine-emitted, pass through verbatim):** For comparison topics, the engine's compact output includes a `## Head-to-Head` block with an empty markdown table (columns = entities, rows = axes like "What it is", "Philosophy", "Best for"). Your synthesis MUST include this block verbatim with filled cells, positioned between the narrative and the emoji-tree footer. Keep each cell to 5-15 words. Use ' - ' (hyphen with spaces) not em-dashes inside cells.
-
-### Competitor mode (`--competitors`)
-
-`--competitors` is a SKILL.md-level shortcut for vs-mode with auto-discovery. The engine flag itself just signals intent; YOU (the hosting reasoning model) do the discovery and Step 0.55 via your own WebSearch tool, then invoke the vs-topic path above.
-
-**The four-step protocol:**
-1. **Discover peers** via WebSearch: `"{topic} competitors"` / `"{topic} alternatives"`. Pick N=2 by default (match the flag's default), N=argument value if the user passed `--competitors=N`.
-2. **Run Step 0.55 for the main topic AND each peer** — same protocol you use for a single-entity topic, just N times. X handle, subreddits, GitHub, news context, per entity.
-3. **Build the vs-topic string**: `"{main} vs {peer1} vs {peer2}"`.
-4. **Invoke the engine** with the vs-topic, `--competitors-plan` JSON covering both peers (and the main topic if you want to override the outer flags), and the outer `--x-handle`/`--subreddits`/`--github-*` for the main topic.
-
-**Flag surface (engine):**
-- `--competitors` (bare) - signals the hosting model to discover 2 peers (3-way total).
-- `--competitors=N` - N peers (1..6; out-of-range clamps with stderr warning).
-- `--competitors-list="A,B,C"` - minimum escape hatch; names only, no per-entity targeting. Peer sub-runs fall back to planner defaults (visibly thinner data).
-- `--competitors-plan '{entity: {x_handle, subreddits, github_user, github_repos, context}}'` - full per-entity targeting; implies vs-mode; preferred.
-- `--polymarket-keywords "kw1,kw2"` - disambiguate Polymarket for ambiguous single-token topics ("Warriors" → `nba,gsw,golden-state`).
-
-**Why --competitors-plan over --competitors-list:** without per-entity handles/subs, peer sub-runs run with deterministic single-word planner queries and produce visibly thinner evidence than the main topic. The Resolved Entities block in stdout makes the gap visible — dashes for a peer = you skipped its Step 0.55.
-
-**Engine-internal auto-resolve (headless fallback):** if the engine detects BRAVE_API_KEY / EXA_API_KEY / SERPER_API_KEY / PARALLEL_API_KEY / OPENROUTER_API_KEY, it runs its own per-entity `resolve.auto_resolve()` before each sub-run. The hosting-model path does NOT need those keys — you are the WebSearch. The engine's auto-resolve is the cron/CI fallback for when no reasoning model is driving.
-
-**Output:** one `{slug}-raw.md` per entity in `--save-dir` plus the merged comparison on stdout. Synthesis contract identical to the vs-mode protocol above.
+When the user asks "X vs Y" (or "X vs Y vs Z"), **read `references/comparison-mode.md` in full
+before invoking the engine** (`skill_view(name="last30days", file_path="references/comparison-mode.md")`)
+and follow it: mandatory per-entity Step 0.55 resolution, the `--competitors-plan` JSON, a single
+engine invocation with the vs-topic string, the `## Head-to-Head` table scaffold, and the
+`--competitors` auto-discovery shortcut. Skip it for every other QUERY_TYPE.
 
 ---
 
@@ -1074,472 +1002,17 @@ This ensures anyone reviewing the raw file sees ALL data that fed into the synth
 
 ## Judge Agent: Synthesize All Sources
 
-### v3 Cluster-First Output
-
-**v3 returns results grouped by STORY/THEME (clusters), not by source.** Each cluster represents one narrative thread found across multiple platforms.
-
-**How to read v3 output:**
-- `### 1. Cluster Title (score N, M items, sources: X, Reddit, TikTok)` - a story found across multiple platforms
-- `Uncertainty: single-source` - only one platform found this story (lower confidence)
-- `Uncertainty: thin-evidence` - all items scored below 55 (unconfirmed)
-- Items within a cluster show: source label, title, date, score, URL, and evidence snippet
-
-**Synthesis strategy for cluster-first output:**
-1. **Synthesize per-cluster first.** Each cluster = one story. Summarize what each story is about.
-2. **Multi-source clusters are highest confidence.** A cluster with items from Reddit + X + YouTube is much stronger than single-source.
-3. **Check uncertainty tags.** "single-source" means treat with caution. "thin-evidence" means mention but caveat.
-4. **Cross-cluster synthesis second.** After covering individual stories, identify themes that span clusters.
-5. **Engagement signals still matter.** Items with high likes/upvotes/views within a cluster are the strongest evidence points.
-6. **Quote directly from evidence snippets.** The snippets are pre-extracted best passages - use them.
-7. Extract the top 3-5 actionable insights across all clusters.
-8. **Disambiguation: trust your resolved entity.** When Step 0.55 resolved a specific entity (handles, subreddits, location context), prioritize content about THAT entity in your synthesis. If search results contain a different entity with the same name (e.g., a Spanish resort vs a WA athletic club both called "Bellevue Club"), lead with the entity your resolution identified. Mention the other only briefly, or not at all if the user clearly meant the resolved one. The resolved handles are the strongest signal for user intent.
-
-### Source-Specific Guidance (still applies within clusters)
-
-The Judge Agent must:
-1. Weight Reddit/X sources HIGHER (they have engagement signals: upvotes, likes)
-2. Weight YouTube sources HIGH (they have views, likes, and transcript content)
-3. Weight TikTok sources HIGH (they have views, likes, and caption content - viral signal)
-4. Weight WebSearch sources LOWER (no engagement data)
-5. **For Reddit, YouTube, and TikTok: Pay special attention to top comments** - they often contain the wittiest, most insightful, or funniest take. Quote them directly, attributing to the commenter and including the vote count ("N upvotes" for Reddit, "N likes" for YouTube and TikTok). A top comment with thousands of votes is a stronger community signal than the parent post's stats alone.
-6. **For YouTube: Quote transcript highlights AND top comments.** Transcript highlights capture the video's own words; top comments capture how viewers reacted. Both add value - use them together. Attribute transcript quotes to the channel name.
-7. Identify patterns that appear across ALL sources (strongest signals)
-8. Note any contradictions between sources
-9. **Multi-source clusters (items from 3+ platforms) are the strongest signals.** Lead with these.
-10. **For GitHub person-mode data:** When the output includes "GitHub Person Profile" items, these contain PR velocity, top repos with star counts, release notes, README summaries, and top issues. Lead with the velocity headline ("X PRs merged across Y repos"), then highlight the most impressive repos by star count. Weave release notes into the narrative to show what actually shipped. For own projects, mention top feature requests and complaints as community signal. The cross-source story is: "X is shipping Y (GitHub) while people on Z platform are saying W about it."
-11. **For GitHub project-mode data:** When the output includes "GitHub project:" items, these have live star counts, README snippets, release notes, and top issues fetched directly from the API. Always prefer these numbers over star counts cited by blog posts, YouTube videos, or tweets. Live API data is authoritative. When items include "(live: NNK stars)" annotations, use those numbers.
-12. **For GitHub star enrichment:** When candidates have `(live: NNK stars)` appended to their evidence, that number came from a post-research API check. It overrides whatever the original source claimed.
-
-### Prediction Markets (Polymarket)
-
-**CRITICAL: When Polymarket returns relevant markets, prediction market odds are among the highest-signal data points in your research.** Real money on outcomes cuts through opinion. Treat them as strong evidence, not an afterthought.
-
-**How to interpret and synthesize Polymarket data:**
-
-1. **Prefer structural/long-term markets over near-term deadlines.** Championship odds > regular season title. Regime change > near-term strike deadline. IPO/major milestone > incremental update. Presidency > individual state primary. When multiple markets exist, the bigger question is more interesting to the user.
-
-2. **When the topic is an outcome in a multi-outcome market, call out that specific outcome's odds and movement.** Don't just say "Polymarket has a #1 seed market" - say "Arizona has a 28% chance of being the #1 overall seed, up 10% this month." The user cares about THEIR topic's position in the market.
-
-3. **Weave odds into the narrative as supporting evidence.** Don't isolate Polymarket data in its own paragraph. Instead: "Final Four buzz is building - Polymarket gives Arizona a 12% chance to win the championship (up 3% this week), and 28% to earn a #1 seed."
-
-4. **Citation format: show ONLY % odds. NEVER mention dollar volumes, liquidity, or betting amounts.** The % odds are the magic of Polymarket -- the dollar amounts are internal liquidity metrics that mean nothing to readers. Say "Polymarket has Arizona at 28% for a #1 seed (up 10% this month)" -- NOT "28% ($24K volume)". The dollar figure adds zero value and clutters the insight.
-
-5. **When multiple relevant markets exist, highlight 3-5 of the most interesting ones** in your synthesis, ordered by importance (structural > near-term). Don't just pick the highest-volume one.
-
-**Domain examples of market importance ranking:**
-- **Sports:** Championship/tournament odds > conference title > regular season > weekly matchup
-- **Geopolitics:** Regime change/structural outcomes > near-term strike deadlines > sanctions
-- **Tech/Business:** IPO, major product launch, company milestones > incremental updates
-- **Elections:** Presidency > primary > individual state
-
-**Do NOT display stats here - they come at the end, right before the invitation.**
-
-6. **Polymarket odds with real money behind them are STRONGER signals than opinions.** A $66K volume market with 96% odds is more reliable than 100 tweets. Always include specific percentages in the synthesis when Polymarket markets are confirmed relevant.
-
-### X Reply Cluster Weighting
-
-When you see a cluster of replies to a recommendation-request tweet (someone asking "what's the best X?" and getting multiple independent responses), call this out prominently. This is the strongest form of community endorsement - real people independently making the same recommendation without coordination. Example: "In a thread where @ecom_cork asked for Loom alternatives, every reply said Tella."
-
-### WebSearch Supplement Weighting for Comparisons
-
-For product comparison queries, WebSearch supplements (blog comparisons, review articles) should be weighted equally with social data. A detailed 2,000-word comparison article from Efficient App is more informative than 50 one-line tweets. Feature it in the synthesis.
-
----
-
-## FIRST: Internalize the Research
-
-**CRITICAL: Ground your synthesis in the ACTUAL research content, not your pre-existing knowledge.**
-
-Read the research output carefully. Pay attention to:
-- **Exact product/tool names** mentioned (e.g., if research mentions "ClawdBot" or "@clawdbot", that's a DIFFERENT product than "Claude Code" - don't conflate them)
-- **Specific quotes and insights** from the sources - use THESE, not generic knowledge
-- **What the sources actually say**, not what you assume the topic is about
-
-**ANTI-PATTERN TO AVOID**: If user asks about "clawdbot skills" and research returns ClawdBot content (self-hosted AI agent), do NOT synthesize this as "Claude Code skills" just because both involve "skills". Read what the research actually says.
-
-**FUN CONTENT: If the research output includes a "## Best Takes" section or items tagged with `fun:` scores, weave at least 2-3 of the funniest/cleverest quotes into your synthesis.** Reddit comments and X posts with high fun scores are the voice of the people. A 1,338-upvote comment that says "Where's the limewire link" tells you more about the cultural moment than a news article. Quote the actual text. Don't put fun content in a separate section - mix it into the narrative where it fits naturally. This is what makes the report feel alive rather than like a news summary.
-
-**ELI5 MODE: If ELI5_MODE is true for this run, apply these writing guidelines to your ENTIRE synthesis. If ELI5_MODE is false, skip this block completely and write normally.**
-
-ELI5 Mode: Explain it to me like I'm 5 years old.
-
-- Assume I know nothing about this topic. Zero context.
-- No jargon without a quick explanation in parentheses
-- Short sentences. One idea per sentence.
-- Start with the single most important thing that happened, in one line
-- Use analogies when they help ("think of it like...")
-- Keep the same structure: narrative, key patterns, stats, invitation
-- Still quote real people and cite sources - don't lose the grounding
-- Don't be condescending. Simple is not stupid. ELI5 means accessible, not childish.
-
-Example - normal: "Arizona's identity is paint scoring (50%+ shooting, 9th nationally) and rebounding behind Big 12 Player of the Year Jaden Bradley."
-Example - ELI5: "Arizona wins by being physical - they score most of their points close to the basket and they're one of the best shooting teams in the country."
-
-Same data. Same sources. Just clearer.
-
-### If QUERY_TYPE = RECOMMENDATIONS — Signal-weighted picks, not mention counts
-
-**The failure mode for RECOMMENDATIONS queries is "counting when you should have judged."** Mention count rewards whatever is already popular, which is rarely what is actually recommended. Rank by signal quality instead.
-
-**Signal weights (highest to lowest):**
-1. **Practitioner testimony** (weight 5) - first-person "I use X and here's why" with specific reasoning, version numbers, or workflow details
-2. **Expert defection / authority move** (weight 4) - a domain insider publicly switching, endorsing, or picking (e.g., Flask creator switching from Python to Go)
-3. **Measurable claim** (weight 4) - specific number, benchmark, production adoption proof (e.g., "43.7% latency win", "LinkedIn and Uber running it in prod")
-4. **Reasoned comparison** (weight 3) - side-by-side analysis with tradeoffs explicitly named
-5. **Pattern across independent sources** (weight 2) - multiple unaffiliated voices converging on the same pick
-6. **Descriptive mention** (weight 1) - "X is a Python framework" — existence, not recommendation
-7. **Promotional / bootcamp / course-caption** (weight 0) - "comment CODE for my course" — skip entirely, do not count
-
-**Before ranking, separate "what EXISTS" from "what is RECOMMENDED":**
-- EXISTS = descriptive mentions, promotional content, training-data inertia, bootcamp curriculum, "learn X first" posts with no stakes attached
-- RECOMMENDED = reasoned picks from voices with stakes in the outcome (practitioners, experts, case studies, people who switched)
-- Only RECOMMENDED items drive the top of the ranking. Existing-but-not-recommended items go in "Also mentioned" at the bottom with a one-line note on why they are mentions not picks.
-
-**Lead with the 30-day DELTA, not the status-quo baseline.** What is the interesting movement? Who is switching? What is the contrarian signal? A status-quo leader with no movement is a footer item, not the headline. "Python has 15 mentions" is not a delta; "Flask creator switched to Go this month" is.
-
-**Output shape:**
-
-```
-🏆 Top recommendations (ranked by signal quality, not mention count):
-
-**[Pick 1]** - [one-line why it is the top recommendation based on the strongest signal in the research]
-- Evidence: [specific practitioner testimony, benchmark number, or expert pick - quote the actual signal]
-- Best for: [specific use case]
-- Voices: [real @handles, publications, or r/subreddits with stakes in the outcome]
-
-**[Pick 2]** - [same shape]
-
-**[Pick 3]** - [same shape]
-
-Also mentioned (exists, not recommended): [comma-separated list with one-line note on WHY each is a mention rather than a pick - e.g., "Python (status-quo default across bootcamp content; @javitm: 'agents have a strong bias for Python despite it probably not being the best')"]
-```
-
-**Anti-patterns to avoid:**
-- Leading with the most-mentioned option because it appears most frequently ("Python has 15 mentions so it is #1"). That is counting, not judging.
-- Treating every mention equally. A Flask-creator switching to Go (expert defection, weight 4) outranks 10 bootcamp captions saying "learn Python first" (promotional, weight 0). The bootcamp captions do not belong in the ranking at all.
-- Collapsing "best for what?" into one leaderboard. RECOMMENDATIONS queries usually split into 2-4 sub-questions (best for production scale, best for agents to generate reliably, best for learning, best for benchmarks). Separate them if the research supports it.
-- Ignoring anti-signal quotes. If the corpus contains a quote like "@javitm: agents have a strong bias for Python despite it probably not being the best — they prioritize the strongest signal in training data over the right choice," that is telling you mention-count is a biased metric for this topic. Read it; surface it; do not ignore it.
-- Stress-test your top pick before emitting. Ask: "Would the research actually defend this claim to a skeptical expert?" If the answer is no, re-rank.
-
-**Named failure mode (2026-04-18):** On `best programming language for AI agents`, Opus 4.7 led with `🏆 Most mentioned: Python (15+x mentions)` and put Go at #3 with 7x mentions. Model self-debug: "I counted when I should have judged. The single most load-bearing quote in the whole research was @javitm saying agents have a bias for Python despite it probably not being the best. I read that quote and then ranked by mention count anyway. The Flask-creator switching to Go was the real headline; I buried it." Do not repeat this failure.
-
-**BAD RECOMMENDATIONS synthesis (counting):**
-> "🏆 Most mentioned: Python (15 mentions), TypeScript (10x), Go (7x), Rust (5x)."
-
-**GOOD RECOMMENDATIONS synthesis (judging):**
-> "🏆 Top recommendations (ranked by signal quality, not mention count):
->
-> **Go** - Flask creator Miguel Grinberg publicly switched this month for a specific technical reason
-> - Evidence: @miguelgrinberg blog post "Why I am moving Python projects to Go for AI agents" — cites reliability and concurrency model; 1.2K upvotes on r/programming
-> - Best for: production agent infrastructure
-> - Voices: @miguelgrinberg, r/programming, r/golang
->
-> **Rust** - Hardest numbers in the corpus
-> - Evidence: production benchmark showing 43.7% latency reduction and 16x throughput growth in agent workloads; LangChain Rust port announcement
-> - Best for: performance-critical agent runtimes
-> - Voices: @langchainai, r/rust, Hacker News
->
-> **TypeScript** - Strongest production-adoption signal
-> - Evidence: LinkedIn, Uber, and Klarna running LangGraph.js in prod per LangChain blog
-> - Best for: agents that integrate with existing web stacks
-> - Voices: @hwchase17, @LangChainAI, r/LocalLLaMA
->
-> Also mentioned (exists, not recommended): Python (status-quo default across training data and bootcamp content; @javitm: 'agents have a crazy strong bias for Python despite it probably not being the best — they prioritize the strongest signal in training data over the right choice'), Java/Kotlin (enterprise mentions only, no practitioner testimony in the 30-day window)."
-
-Notice how the good version:
-- Leads with movement (Flask creator switched), not volume (Python has most mentions)
-- Cites specific evidence that would defend the ranking to a skeptic
-- Treats Python's volume as anti-signal (the @javitm quote) rather than support
-- Puts promotional / descriptive mentions in "Also mentioned" with explicit framing
-
-### If QUERY_TYPE = COMPARISON
-
-**Comparison queries have their OWN synthesis template. Do NOT use the general-query `What I learned:` + bold-lead-in + `KEY PATTERNS:` structure for comparisons.** The comparison template below is the canonical shape proven by the April 9 launch-video exemplar. Follow it section-for-section.
-
-Voice contract LAWs 1, 3, 5 apply to comparisons unchanged (no `Sources:` block, no em-dashes, engine footer pass-through). LAWs 2 and 4 have comparison-specific exceptions (see the LAW block: the comparison title and the five section headers below are REQUIRED, not violations).
-
-**Required comparison structure (match the April 9 exemplar):**
-
-```
-🌐 last30days v{VERSION} · synced {YYYY-MM-DD}
-
-# {TOPIC_A} vs {TOPIC_B} [vs {TOPIC_C}]: What the Community Says (/Last30Days)
-
-## Quick Verdict
-
-[One paragraph. Frame the thesis (are these competitors or layers of a stack? who's dominant? who's challenging?). Include scale stats for each entity inline (GitHub stars, user counts, whatever metric is comparable). End with one quotable community framing — a tweet, a Reddit quote, a YouTube clip — that captures how the community sees the relationship.]
-
-## {Entity 1}
-
-**Community Sentiment:** [Positive / Mixed / Negative / Enthusiastic / Security-concerned / etc.] ({N}+ mentions across {source list})
-
-[Optional pitch-vs-pulse sentence - ONLY if `RESOLVED_POSITIONING` was captured for this entity AND the month's evidence directly supports a specific claim, cuts against one, or is squarely about the pitched ground: one windowed prose sentence anchored to a real item with engagement. Otherwise omit entirely - silence, not a placeholder.]
-
-**Strengths (what people love)**
-- [Specific strength with `per <source>` attribution]
-- [Specific strength with `per <source>` attribution]
-- [Specific strength with `per <source>` attribution]
-
-**Weaknesses (common complaints)**
-- [Specific complaint with `per <source>` attribution]
-- [Specific complaint with `per <source>` attribution]
-
-## {Entity 2}
-
-[Same structure: Community Sentiment, Strengths bullets, Weaknesses bullets]
-
-## {Entity 3}
-
-[Same structure]
-
-## Head-to-Head
-
-| Dimension | {Entity 1} | {Entity 2} | {Entity 3} |
-|---|---|---|---|
-| What it is | ... | ... | ... |
-| GitHub stars | ... | ... | ... |
-| Philosophy | ... | ... | ... |
-| Skills | ... | ... | ... |
-| Memory | ... | ... | ... |
-| Models | ... | ... | ... |
-| Security | ... | ... | ... |
-| Best for | ... | ... | ... |
-| Install | ... | ... | ... |
-
-(Engine emits this scaffold; fill the cells with 5-15 words each. If an axis does not apply to the topic class, write "N/A" or a topic-appropriate substitute rather than inventing data. Ground the `What it is` row in `RESOLVED_POSITIONING` when captured - each entity described as it pitches itself today, fetched this run, never from memory.)
-
-## The Bottom Line
-
-**Choose {Entity 1} if** [specific use case, comfort profile, tradeoff]. [One supporting sentence with attribution.]
-
-**Choose {Entity 2} if** [specific use case, comfort profile, tradeoff]. [One supporting sentence with attribution.]
-
-**Choose {Entity 3} if** [specific use case, comfort profile, tradeoff]. [One supporting sentence with attribution.]
-
-## The emerging stack
-
-[One paragraph. Name the combination pattern the community is converging on. Cite specific sources (`per @handle`, `per r/sub`, `per {channel} on YouTube`). This is the synthesis moment of the piece. If the data does not support an emerging-stack observation, write "No emerging stack pattern has crystallized in the research window yet" rather than fabricating one.]
-
----
-✅ All agents reported back!
-├─ 🟠 Reddit: ...
-├─ 🔵 X: ...
-(engine footer passed through verbatim, LAW 5)
-└─ 📎 Raw results saved to ...
-
-I've compared {TOPIC_A} vs {TOPIC_B} [vs ...] using the latest community data. Some things you could ask:
-- [follow-up referencing comparison specifics, e.g. "Deep dive into {Entity} alone with /last30days {Entity}"]
-- [follow-up referencing a specific claim from the Strengths/Weaknesses block]
-- [follow-up on a specific dimension from the Head-to-Head table]
-- [follow-up on the emerging-stack combination pattern]
-```
-
-**Do NOT:**
-- Use `What I learned:` prose label (that is general-query voice)
-- Use bold-lead-in paragraphs with ` - ` separators for the body (that is general-query voice)
-- Use a `KEY PATTERNS from the research:` numbered list (replaced by per-entity Strengths/Weaknesses bullets and the emerging-stack paragraph)
-- Fabricate a `## Notable Stats` block (the engine footer IS the stats block, LAW 5)
-- Produce section headers outside the six listed above (`## Quick Verdict`, `## {Entity}` per entity, `## Head-to-Head`, `## The Bottom Line`, `## The emerging stack` are the only allowed `##` headers per LAW 4 comparison exception)
-
-**Reference exemplar:** `$LAST30DAYS_MEMORY_DIR/openclaw-vs-hermes-vs-paperclip-LAUNCH-VIDEO-april9-exemplar.md` preserves the April 9 canonical output with full structural analysis. Match this shape section-for-section.
-
-### For all QUERY_TYPEs
-
-Identify from the ACTUAL RESEARCH OUTPUT:
-- **PROMPT FORMAT** - Does research recommend JSON, structured params, natural language, keywords?
-- The top 3-5 patterns/techniques that appeared across multiple sources
-- Specific keywords, structures, or approaches mentioned BY THE SOURCES
-- Common pitfalls mentioned BY THE SOURCES
-
----
-
-## THEN: Show Summary + Invite Vision
-
-**Display in this EXACT sequence:**
-
-**Reminder:** the BADGE MANDATORY block and VOICE CONTRACT LAW 1-5 are at the TOP of this file (under OUTPUT CONTRACT). If you are about to synthesize and those rules are not in your active context, scroll back up and re-read them. Every canonical-compliance failure in v3.0.6 and v3.0.7 traced to the LAWs being too deep in the file to stay in context at emission time. They are no longer deep.
-
----
-
-**FIRST - What I learned (based on QUERY_TYPE):**
-
-**If RECOMMENDATIONS** - Show specific things mentioned with sources:
-```
-🏆 Most mentioned:
-
-[Tool Name] - {n}x mentions
-Use Case: [what it does]
-Sources: @handle1, @handle2, r/sub, blog.com
-
-[Tool Name] - {n}x mentions
-Use Case: [what it does]
-Sources: @handle3, r/sub2, Complex
-
-Notable mentions: [other specific things with 1-2 mentions]
-```
-
-**CRITICAL for RECOMMENDATIONS:**
-- Each item MUST have a "Sources:" line with actual @handles from X posts (e.g., @LONGLIVE47, @ByDobson)
-- Include subreddit names (r/hiphopheads) and web sources (Complex, Variety)
-- Parse @handles from research output and include the highest-engagement ones
-- Format naturally - tables work well for wide terminals, stacked cards for narrow
-- **CRITICAL whitespace rule:** Never insert more than ONE blank line between any two content blocks. Comparison tables should immediately follow the preceding paragraph with exactly one blank line. Do NOT pad with 3-6 empty lines before tables.
-
-**If PROMPTING/NEWS/GENERAL** - Show synthesis and patterns:
-
-CITATION RULE: Cite sources sparingly to prove research is real.
-- In the "What I learned" intro: cite 1-2 top sources total, not every sentence
-- In KEY PATTERNS: cite 1 source per pattern, short format: "per @handle" or "per r/sub"
-- Do NOT include engagement metrics in citations (likes, upvotes) - save those for stats box
-- Do NOT chain multiple citations: "per @x, @y, @z" is too much. Pick the strongest one.
-
-**URL formatting is governed by LAW 8** in the VOICE CONTRACT block above. Every citation in the narrative body is an inline markdown link `[name](url)`; raw URL strings are forbidden; plain-text fallback only when the raw data has no URL for that specific source. Re-read LAW 8 now if you skipped it. The stats footer is engine-emitted per LAW 5 and passes through verbatim.
-
-CITATION PRIORITY (most to least preferred), with each example showing the LAW 8 inline-link shape:
-1. @handles from X - `per [@handle](https://x.com/handle)` (these prove the tool's unique value)
-2. r/subreddits from Reddit - `per [r/subreddit](https://reddit.com/r/subreddit)` (when citing Reddit, YouTube, or TikTok, prefer quoting top comments over just the thread title)
-3. YouTube channels - `per [channel name](https://youtube.com/@channel) on YouTube` (transcript-backed insights)
-4. TikTok creators - `per [@creator](https://tiktok.com/@creator) on TikTok` (viral/trending signal)
-5. Instagram creators - `per [@creator](https://instagram.com/creator) on Instagram` (influencer/creator signal)
-6. HN discussions - `per [HN](https://news.ycombinator.com/item?id=N)` or `per [hn/username](https://news.ycombinator.com/user?id=username)` (developer community signal)
-7. Polymarket - `[Polymarket](https://polymarket.com/event/...) has X at Y% (up/down Z%)` with specific odds and movement
-8. Web sources - ONLY when Reddit/X/YouTube/TikTok/Instagram/HN/Polymarket don't cover that specific fact; link the publication: `per [Rolling Stone](https://rollingstone.com/...)`
-
-The tool's value is surfacing what PEOPLE are saying, not what journalists wrote.
-When both a web article and an X post cover the same fact, cite the X post.
-
-(These narrative examples illustrate LAW 8 from the VOICE CONTRACT.)
-
-**BAD:** "His album is set for March 20 (per Rolling Stone; Billboard; Complex)."
-**GOOD:** "His album BULLY drops March 20 - fans on X are split on the tracklist, per [@honest30bgfan_](https://x.com/honest30bgfan_)"
-**GOOD:** "Ye's apology got massive traction on [r/hiphopheads](https://reddit.com/r/hiphopheads)"
-**OK** (web, only when Reddit/X don't have it): "The Hellwatt Festival runs July 4-18 at RCF Arena, per [Billboard](https://www.billboard.com/music/music-news/hellwatt-festival-2026-lineup-...)"
-
-**Lead with people, not publications.** Start each topic with what Reddit/X
-users are saying/feeling, then add web context only if needed. The user came
-here for the conversation, not the press release.
-
-**MANDATORY - bold headline per narrative paragraph.** Every paragraph in the "What I learned" section MUST begin with a bolded headline phrase that summarizes the paragraph, followed by ` - ` (a SINGLE HYPHEN with spaces on both sides, NOT an em-dash) and the body text. Pattern: `**Headline phrase** - body text describing what people are saying...`. Without the bold headline, the output is unscannable slop.
-
-**NEVER use em-dashes (`—`) or en-dashes (`–`) anywhere in your response.** Use ` - ` (single hyphen with spaces) instead. Em-dashes are the most reliable AI-slop tell; a response with em-dashes reads as generated. This applies to synthesis body, headline separators, KEY PATTERNS list, and the invitation section. The only exception is quoted content where the source used an em-dash.
-
-**NEVER use `##` or `###` markdown section headers in your response body.** No `## The launch`, no `## Where it disappoints`, no `## Polymarket`, no `## Best quotes`, no `## Stats snapshot`. Those read as AI-slop news-article structure. The narrative is a short block of bold-lead-in paragraphs followed by a prose label `KEY PATTERNS from the research:` followed by a numbered list. That is the only structure.
-
-**NEVER write a title line at the top of your response.** No `Kanye West: last 30 days`, no `Claude Opus 4.7 - what people are actually saying`, no `{Topic} news`. Your response begins with the MANDATORY badge on line 1, one blank line, then the prose label `What I learned:` on line 3, and goes straight into the narrative.
-
-```
-🌐 last30days v{VERSION} · synced {YYYY-MM-DD}
-
-What I learned:
-
-**{Headline summarizing topic 1}** - [1-2 sentences about what people are saying, per [@handle](https://x.com/handle) or [r/sub](https://reddit.com/r/sub)]
-
-**{Headline summarizing topic 2}** - [1-2 sentences, per [@handle](https://x.com/handle) or [r/sub](https://reddit.com/r/sub)]
-
-**{Headline summarizing topic 3}** - [1-2 sentences, per [@handle](https://x.com/handle) or [r/sub](https://reddit.com/r/sub)]
-
-KEY PATTERNS from the research:
-1. [Pattern] - per [@handle](https://x.com/handle)
-2. [Pattern] - per [r/sub](https://reddit.com/r/sub)
-3. [Pattern] - per [@handle](https://x.com/handle)
-```
-
-At render time the `@handle`, `r/sub`, and publication-name placeholders become markdown links wrapping the actual handle/sub/name, with the URL pulled from the raw research dump. Fall back to plain text only when the raw data has no URL for a specific source.
-
-Headlines should be specific and newsy ("BULLY dropped and it's dominating", "Europe is banning him one country at a time"), not generic ("Album release", "Tour updates").
-
-**Pitch-vs-pulse beat (company / product / service topics).** If you captured `RESOLVED_POSITIONING` in Step 0.55 AND the month's evidence directly bears on it, work in ONE bold-lead-in paragraph saying how. Three cases qualify: the pulse SUPPORTS a specific claim (e.g. `**"Zero-config" is holding up** - this month's top deploy thread is devs praising the no-setup flow, 800 upvotes`), CUTS AGAINST one (e.g. `**Stripe's fraud-fighting pitch took a direct hit** - the loudest thread this month argues it is friendly to "friendly fraud", 323pt HN`), or the conversation is squarely ABOUT the pitched ground. Always anchor to the real top item with its engagement, and keep claims windowed - "this month's conversation" - never trend verbs like "losing the narrative" that one 30-day window cannot support. If the month's conversation is orthogonal to the pitch - on-entity but about something the pitch doesn't speak to - write NOTHING about the pitch: omission is the correct output, and a manufactured connection is worse than silence. Match altitude: test SPECIFIC claims ("zero-config", "fastest", an uptime number) against specific threads; never grade a broad tagline against an individual thread. Keep it a normal newsy bold-lead-in paragraph, NOT a new `##` section (LAW 4 still holds). Skip silently for people (always - the beat can cover MrBeast the company, never Jimmy Donaldson the person), events, abstract concepts, and ownerless topics (Bitcoin), and whenever positioning was not actually fetched this run - never supply a pitch from memory.
-
-**THEN - Quality Nudge (if present in the output):**
-
-If the research output contains a `**🔍 Research Coverage:**` block, render it verbatim right before the stats block. This tells the user which core sources are missing and how to unlock them. Do NOT render this block if it is absent from the output (100% coverage = no nudge).
-
-**Just-in-time X unlock:** If X returned 0 results because no X auth is configured (no AUTH_TOKEN/CT0, no XAI_API_KEY, no FROM_BROWSER), offer to set it up right there:
-
-**Call AskUserQuestion:**
-Question: "X/Twitter wasn't searched. Want to unlock it?"
-Options:
-- "Scan my browser cookies (free)" - Get consent, run cookie scan, write BROWSER_CONSENT=true + FROM_BROWSER=auto to .env
-- "I have an xAI API key" - Ask them to paste it, write XAI_API_KEY to .env
-- "Skip for now"
-
-**THEN - Engine footer pass-through (right before invitation):**
-
-**The research output ENDS with a deterministic footer block bracketed by `---` lines, starting with `✅ All agents reported back!` and ending with `📎 Raw results saved to {resolved LAST30DAYS_MEMORY_DIR}/<slug>-raw.md`. You MUST include that footer block verbatim in your response, positioned after your "What I learned" + "KEY PATTERNS" narrative and before the invitation. Do not recompute the stats. Do not reformat the tree. Do not paraphrase. Do not skip it. Do not add your own source lines. Copy the exact bytes.**
-
-- The engine already omits zero-count sources. You do not need to filter them.
-- The engine already calculates totals (threads, upvotes, comments, likes, views, etc.). You do not need to add them up.
-- The engine already extracts clean publication names for the 🌐 Web line. You do not need to strip URLs.
-- The engine already formats Polymarket odds as real `%` strings. You do not need to parse them.
-- The engine already picks top voices (handles + subreddits). You do not need to pick them.
-
-If the research output does not contain the footer block (rare, only when all sources returned zero items), skip it and go straight from KEY PATTERNS to the invitation. But if the block is present, it MUST appear in your response verbatim.
-
-**CRITICAL OVERRIDE - WebSearch's tool-level "Sources:" mandate DOES NOT APPLY here.** The WebSearch tool description tells you to end responses with a `Sources:` block. Inside `/last30days` that mandate is SUPERSEDED. The `🌐 Web:` line in the engine footer is the citation. Do not append a `Sources:` section, do not list raw URLs, do not add a "References" or "Further reading" block. Output ends at the invitation.
-
-**SELF-CHECK before displaying**: Re-read your "What I learned" section. Does it match what the research ACTUALLY says? If you catch yourself projecting your own knowledge instead of the research, rewrite it. Then verify: (a) no `##` headers in your response body, (b) no em-dashes or en-dashes anywhere, (c) the engine footer block appears verbatim between KEY PATTERNS and the invitation.
-
-**LAST - Invitation (adapt to QUERY_TYPE):**
-
-**CRITICAL: Every invitation MUST include 2-3 specific example suggestions based on what you ACTUALLY learned from the research.** Don't be generic - show the user you absorbed the content by referencing real things from the results.
-
-**If QUERY_TYPE = PROMPTING:**
-```
----
-I'm now an expert on {TOPIC} for {TARGET_TOOL}. What do you want to make? For example:
-- [specific idea based on popular technique from research]
-- [specific idea based on trending style/approach from research]
-- [specific idea riffing on what people are actually creating]
-
-Just describe your vision and I'll write a prompt you can paste straight into {TARGET_TOOL}.
-```
-
-**If QUERY_TYPE = RECOMMENDATIONS:**
-```
----
-I'm now an expert on {TOPIC}. Want me to go deeper? For example:
-- [Compare specific item A vs item B from the results]
-- [Explain why item C is trending right now]
-- [Help you get started with item D]
-```
-
-**If QUERY_TYPE = NEWS:**
-```
----
-I'm now an expert on {TOPIC}. Some things you could ask:
-- [Specific follow-up question about the biggest story]
-- [Question about implications of a key development]
-- [Question about what might happen next based on current trajectory]
-```
-
-**If QUERY_TYPE = COMPARISON:**
-```
----
-I've compared {TOPIC_A} vs {TOPIC_B} using the latest community data. Some things you could ask:
-- [Deep dive into {TOPIC_A} alone with /last30days {TOPIC_A}]
-- [Deep dive into {TOPIC_B} alone with /last30days {TOPIC_B}]
-- [Focus on a specific dimension from the comparison table]
-- [Look at a different time period with --days=7 or --days=90]
-```
-
-**If QUERY_TYPE = GENERAL:**
-```
----
-I'm now an expert on {TOPIC}. Some things I can help with:
-- [Specific question based on the most discussed aspect]
-- [Specific creative/practical application of what you learned]
-- [Deeper dive into a pattern or debate from the research]
-```
-
-**Example invitation (quality bar reference):**
-
-For `/last30days kanye west` (GENERAL):
-> I'm now an expert on Kanye West. Some things I can help with:
-> - What's the real story behind the apology letter - genuine or PR move?
-> - Break down the BULLY tracklist reactions and what fans are expecting
-> - Compare how Reddit vs X are reacting to the Bianca narrative
-
-Close with `I have all the links to the {N} {source list} I pulled from. Just ask.` where `{source list}` names only sources that returned results (e.g. "14 Reddit threads, 22 X posts, and 6 YouTube videos"). Never mention a source with 0 results.
+**Before writing anything to the user, read `references/synthesis.md` in full**
+(`skill_view(name="last30days", file_path="references/synthesis.md")`) and follow it in order:
+
+1. **Judge Agent: Synthesize All Sources** — how to read the v3 cluster-first output and weight
+   sources (WebSearch supplements count for comparisons).
+2. **FIRST: Internalize the Research** — ground the synthesis in the ACTUAL research content, not
+   prior knowledge; includes the per-QUERY_TYPE output templates (incl. the COMPARISON template).
+3. **THEN: Show Summary + Invite Vision** — the EXACT display sequence, follow-up suggestions and
+   the closing "I have all the links…" line.
+
+Then continue with PRE-PRESENT SELF-CHECK below.
 
 ---
 

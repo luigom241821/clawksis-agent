@@ -31,14 +31,16 @@ def search_vectors(subject_dossier: dict, broker: dict) -> list[dict]:
         if locations:
             for name in names:
                 for loc in locations:
-                    vectors.append({
-                        "by": "name",
-                        "query": {
-                            "full_name": name,
-                            "city": loc.get("city"),
-                            "state": loc.get("state"),
-                        },
-                    })
+                    vectors.append(
+                        {
+                            "by": "name",
+                            "query": {
+                                "full_name": name,
+                                "city": loc.get("city"),
+                                "state": loc.get("state"),
+                            },
+                        }
+                    )
         else:
             for name in names:
                 vectors.append({"by": "name", "query": {"full_name": name}})
@@ -54,11 +56,13 @@ def search_vectors(subject_dossier: dict, broker: dict) -> list[dict]:
     if "address" in by:
         for a in dossier_mod.all_addresses(subject_dossier):
             if a.get("line1"):
-                vectors.append({
-                    "by": "address",
-                    "query": {
-                        k: a.get(k) for k in ("line1", "city", "state", "postal")
-                    },
-                })
+                vectors.append(
+                    {
+                        "by": "address",
+                        "query": {
+                            k: a.get(k) for k in ("line1", "city", "state", "postal")
+                        },
+                    }
+                )
 
     return vectors

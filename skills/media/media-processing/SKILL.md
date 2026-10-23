@@ -1,6 +1,10 @@
 ---
 name: media-processing
-description: "Video and audio processing with ffmpeg — plus YouTube transcripts, GIF search, audio spectrograms, and music generation tools. Umbrella for all media-related tools."
+description: "Process video and audio with ffmpeg and media tools."
+version: 1.0.0
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 tags: [media, video, audio, ffmpeg, youtube, gif, spectrogram, music]
 ---
 

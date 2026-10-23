@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# ============================================================================
+# venv-style activation of the Clawksis dev environment for an interactive shell.
+#
+#   source ./activate       (bash / zsh, repo root)
+#   source ./activate.fish  (fish)
+#   .\activate.ps1          (PowerShell)
+#
+# Applies the composed pm env (PATH + tool vars) to the CURRENT shell, with
+# save/restore: `deactivate` undoes exactly what activation changed.
+#
+# `clawk` becomes a shell function for this checkout. It runs only while the
+# shell is inside this worktree and refuses outside it, so a sibling worktree
+# keeps its own command. A prompt prefix names the worktree.
+#
+# Scripts and other processes do not source this: they run under
+# `scripts/run-in-clawk-env`. Both build on scripts/_activation.sh.
+#
+# Sync through setup before selecting the environment. PM owns freshness;
+# activation does not maintain a second dependency stamp. It trusts the
+# recorded tool digest instead of re-hashing every entry. `clawk pm
+# install` and `clawk update` keep that check.
+# ============================================================================
+_CLAWK_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Options: `--test-extras a,b` selects the test environment's runtime extras
+# (default: [all]); `--` ends options.
+# A bare `source ./activate` inherits the caller's positional parameters.
+# Ignore unrelated words so scripts with their own arguments can source it.
+_clawk_test_env="--test-environment"
+_clawk_expect_extras=""
+for _clawk_arg in "$@"; do
+    if [ -n "$_clawk_expect_extras" ]; then
+        _clawk_test_env="--test-environment=$_clawk_arg"
+        _clawk_expect_extras=""
+        continue
+    fi
+    case "$_clawk_arg" in
+        --) break ;;
+        --test-extras) _clawk_expect_extras=1 ;;
+        --test-extras=*) _clawk_test_env="--test-environment=${_clawk_arg#--test-extras=}" ;;
+        *) : ;;
+    esac
+done
+if [ -n "$_clawk_expect_extras" ]; then
+    printf '%s\n' 'activate: --test-extras needs a comma-separated list' >&2
+    unset _clawk_arg _clawk_test_env _clawk_expect_extras
+    return 2 2>/dev/null || exit 2
+fi
+unset _clawk_arg _clawk_expect_extras
+
+# shellcheck source=scripts/_activation.sh
+. "$_CLAWK_REPO/scripts/_activation.sh"
+
+if ! clawk_sync "$_CLAWK_REPO" "$_clawk_test_env"; then
+    printf '%s\n' 'activate: setup failed; shell environment unchanged' >&2
+    unset _clawk_test_env
+    return 1 2>/dev/null || exit 1
+fi
+unset _clawk_test_env
+
+# Guard against double-sourcing: venv activate precedent (re-activating is a
+# no-op re-save; we keep it idempotent by deactivating first). Key on the
+# function, not the sentinel: child shells inherit __CLAWK_ACTIVATED from an
+# activated parent but never the function, and there is nothing to undo there.
+if [ "$(type -t deactivate 2>/dev/null)" = "function" ]; then
+    deactivate
+fi
+
+_clawk_script="$(clawk_compose_env "$_CLAWK_REPO" sh)" || {
+    echo "activate: could not compose the environment (see above)" >&2
+    unset _clawk_script
+    return 1 2>/dev/null || exit 1
+}
+_clawk_keys="$(printf '%s\n' "$_clawk_script" | sed -n 's/^export \([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | tr '\n' ' ')"
+
+# --- snapshot what we are about to change (deactivate restores this) ---
+# __CLAWK_ACTIVATED is part of the composed env below (it carries the
+# installed-state path this environment was built from), so it is snapshotted
+# and exported with every other key — no separate assignment here.
+__CLAWK_SAVED_PATH="$PATH"
+for _clawk_k in $_clawk_keys; do
+    eval "__CLAWK_SAVED_$_clawk_k=\"\${$_clawk_k+set}\""
+    eval "__CLAWK_PRIOR_$_clawk_k=\${$_clawk_k-__CLAWK_UNSET__}"
+done
+clawk_apply_env "$_clawk_script"
+
+# This checkout, not whichever `clawk` PATH finds. A function beats PATH, an
+# alias, and a hashed command, including the MSIX execution alias.
+__CLAWK_WORKTREE="$_CLAWK_REPO"
+# The branch names the worktree. A checkout cannot share a branch with another.
+__CLAWK_WORKTREE_NAME="$(git -C "$_CLAWK_REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || :)"
+if [ -z "$__CLAWK_WORKTREE_NAME" ] || [ "$__CLAWK_WORKTREE_NAME" = HEAD ]; then
+    __CLAWK_WORKTREE_NAME="$(basename "$_CLAWK_REPO")"
+fi
+__CLAWK_SAVED_PS1="${PS1-__CLAWK_UNSET__}"
+__CLAWK_SAVED_PROMPT_COMMAND="${PROMPT_COMMAND-__CLAWK_UNSET__}"
+
+_clawk_worktree_here() {
+    _clawk_top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+    [ "$(cd "$_clawk_top" && pwd -P)" = "$(cd "$__CLAWK_WORKTREE" && pwd -P)" ]
+}
+
+clawk() {
+    _clawk_worktree_here || {
+        printf '%s\n' "clawk: $(pwd) is outside $__CLAWK_WORKTREE; refusing (the installed command is hidden while this checkout is active)" >&2
+        return 1
+    }
+    (
+        cd "$__CLAWK_WORKTREE" || exit 1
+        if [ -n "${PYTHON-}" ]; then
+            exec "$PYTHON" clawk "$@"
+        elif [ -x .venv/Scripts/python.exe ]; then
+            exec .venv/Scripts/python.exe clawk "$@"
+        elif [ -x .venv/bin/python ]; then
+            exec .venv/bin/python clawk "$@"
+        elif [ -x venv/Scripts/python.exe ]; then
+            exec venv/Scripts/python.exe clawk "$@"
+        elif [ -x venv/bin/python ]; then
+            exec venv/bin/python clawk "$@"
+        else
+            exec python clawk "$@"
+        fi
+    )
+}
+
+_clawk_prompt() {
+    if [ "$__CLAWK_SAVED_PS1" = "__CLAWK_UNSET__" ]; then
+        _clawk_base_ps1=""
+    else
+        _clawk_base_ps1="$__CLAWK_SAVED_PS1"
+    fi
+    if _clawk_worktree_here; then
+        PS1="($__CLAWK_WORKTREE_NAME) $_clawk_base_ps1"
+    else
+        PS1="$_clawk_base_ps1"
+    fi
+}
+
+if [ -n "${PROMPT_COMMAND-}" ]; then
+    PROMPT_COMMAND="_clawk_prompt; ${PROMPT_COMMAND}"
+else
+    PROMPT_COMMAND=_clawk_prompt
+fi
+_clawk_prompt
+
+deactivate() {
+    export PATH="$__CLAWK_SAVED_PATH"
+    for _clawk_k in $__CLAWK_KEY_LIST; do
+        eval "_clawk_was=\"\$__CLAWK_SAVED_$_clawk_k\""
+        eval "_clawk_old=\"\$__CLAWK_PRIOR_$_clawk_k\""
+        if [ "$_clawk_was" != "set" ]; then
+            unset "$_clawk_k"
+        else
+            export "$_clawk_k=$_clawk_old"
+        fi
+        unset "__CLAWK_SAVED_$_clawk_k" "__CLAWK_PRIOR_$_clawk_k"
+    done
+    if [ "$__CLAWK_SAVED_PS1" = "__CLAWK_UNSET__" ]; then
+        unset PS1
+    else
+        PS1="$__CLAWK_SAVED_PS1"
+    fi
+    if [ "$__CLAWK_SAVED_PROMPT_COMMAND" = "__CLAWK_UNSET__" ]; then
+        unset PROMPT_COMMAND
+    else
+        PROMPT_COMMAND="$__CLAWK_SAVED_PROMPT_COMMAND"
+    fi
+    unset __CLAWK_SAVED_PATH __CLAWK_KEY_LIST __CLAWK_ACTIVATED \
+          __CLAWK_WORKTREE __CLAWK_WORKTREE_NAME \
+          __CLAWK_SAVED_PS1 __CLAWK_SAVED_PROMPT_COMMAND
+    unset -f deactivate clawk _clawk_worktree_here _clawk_prompt
+    unset _clawk_k _clawk_was _clawk_old _clawk_top
+}
+
+# remember the key list for deactivate (kept out of the loop vars above)
+__CLAWK_KEY_LIST="$_clawk_keys"
+
+# The composition library is not part of the user's shell.
+unset -f clawk_sync clawk_bootstrap_python clawk_compose_env clawk_apply_env \
+         clawk_activation_current clawk_ensure_env
+unset _CLAWK_REPO _clawk_script _clawk_keys _clawk_k _clawk_top

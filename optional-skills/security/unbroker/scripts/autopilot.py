@@ -49,7 +49,7 @@ def cache_age_days(now: float | None = None) -> float | None:
 
 
 def _now_iso() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _min_future_recheck(ledger: dict, at: str) -> str | None:
@@ -297,13 +297,15 @@ def next_actions(
     # 0) keep the broker DB fresh (autonomously)
     age = cache_age_days()
     if age is None or age > CACHE_STALE_DAYS:
-        actions.append({
-            "type": "refresh_brokers",
-            "why": "live broker cache missing"
-            if age is None
-            else f"cache is {age:.0f} days old",
-            "command": "python3 scripts/pdd.py refresh-brokers",
-        })
+        actions.append(
+            {
+                "type": "refresh_brokers",
+                "why": "live broker cache missing"
+                if age is None
+                else f"cache is {age:.0f} days old",
+                "command": "python3 scripts/pdd.py refresh-brokers",
+            }
+        )
 
     # 0b) DROP one-shot: for a CA resident, ONE request deletes from every registered
     # broker (the whole CA Data Broker Registry) -- the highest-leverage removal there is.
@@ -311,37 +313,43 @@ def next_actions(
     residency = (dossier.get("residency_jurisdiction") or "US").upper()
     drop_filed = bool((dossier.get("preferences") or {}).get("drop_filed_at"))
     if registry_recs and residency.startswith("US-CA") and not drop_filed:
-        actions.append({
-            "type": "drop_submit",
-            "one_shot": True,
-            "registry_count": len(registry_recs),
-            "url": registry.DROP_URL,
-            "command": f"python3 scripts/pdd.py drop {subject_id}",
-            "why": f"CA resident: one DROP request deletes from all {len(registry_recs)} registered "
-            "data brokers at once (superset of what commercial services cover).",
-            "after": f"python3 scripts/pdd.py drop {subject_id} --filed",
-        })
+        actions.append(
+            {
+                "type": "drop_submit",
+                "one_shot": True,
+                "registry_count": len(registry_recs),
+                "url": registry.DROP_URL,
+                "command": f"python3 scripts/pdd.py drop {subject_id}",
+                "why": f"CA resident: one DROP request deletes from all {len(registry_recs)} registered "
+                "data brokers at once (superset of what commercial services cover).",
+                "after": f"python3 scripts/pdd.py drop {subject_id} --filed",
+            }
+        )
 
     # 1) Phase 1 crawl: everything unscanned (read-only, parallel-safe)
     unscanned = groups.get("unscanned") or []
     if unscanned:
         ids = [r["broker_id"] for r in unscanned]
         if len(ids) > FANOUT_THRESHOLD:
-            actions.append({
-                "type": "fanout_scan",
-                "broker_ids": ids,
-                "command": f"python3 scripts/pdd.py fanout {subject_id}",
-                "how": "spawn ONE delegate_task subagent per batch IN PARALLEL with each batch's brief; "
-                "parent re-verifies key `found` claims before trusting them",
-            })
+            actions.append(
+                {
+                    "type": "fanout_scan",
+                    "broker_ids": ids,
+                    "command": f"python3 scripts/pdd.py fanout {subject_id}",
+                    "how": "spawn ONE delegate_task subagent per batch IN PARALLEL with each batch's brief; "
+                    "parent re-verifies key `found` claims before trusting them",
+                }
+            )
         else:
-            actions.append({
-                "type": "scan_inline",
-                "broker_ids": ids,
-                "command": f"python3 scripts/pdd.py plan {subject_id}",
-                "how": "run every search_vector per broker via the methods.md ladder "
-                "(web_extract -> site: probe -> browser), record a verdict per broker",
-            })
+            actions.append(
+                {
+                    "type": "scan_inline",
+                    "broker_ids": ids,
+                    "command": f"python3 scripts/pdd.py plan {subject_id}",
+                    "how": "run every search_vector per broker via the methods.md ladder "
+                    "(web_extract -> site: probe -> browser), record a verdict per broker",
+                }
+            )
 
     # 2) in-flight email verifications: poll the inbox (or hand to the human in draft mode)
     for st in ("submitted", "verification_pending"):
@@ -354,24 +362,28 @@ def next_actions(
             ):
                 continue
             if mail["imap"]:
-                actions.append({
-                    "type": "poll_verification",
-                    "via": "imap",
-                    "broker_id": bid,
-                    "command": f"python3 scripts/pdd.py poll-verification {subject_id} --broker {bid}",
-                    "then": "browser_navigate the returned link IN THE SAME AGENT BROWSER (sessions are "
-                    "browser-bound), complete the flow, then record: awaiting_processing",
-                })
+                actions.append(
+                    {
+                        "type": "poll_verification",
+                        "via": "imap",
+                        "broker_id": bid,
+                        "command": f"python3 scripts/pdd.py poll-verification {subject_id} --broker {bid}",
+                        "then": "browser_navigate the returned link IN THE SAME AGENT BROWSER (sessions are "
+                        "browser-bound), complete the flow, then record: awaiting_processing",
+                    }
+                )
             elif email_mode == "browser":
-                actions.append({
-                    "type": "poll_verification",
-                    "via": "browser",
-                    "broker_id": bid,
-                    "how": "open the broker's confirmation email in the operator's logged-in webmail "
-                    f"(browser_*), then `python3 scripts/pdd.py verify-link {subject_id} {bid} "
-                    "--text '<email body>'` to score the link, browser_navigate it in the SAME "
-                    "browser, then record awaiting_processing",
-                })
+                actions.append(
+                    {
+                        "type": "poll_verification",
+                        "via": "browser",
+                        "broker_id": bid,
+                        "how": "open the broker's confirmation email in the operator's logged-in webmail "
+                        f"(browser_*), then `python3 scripts/pdd.py verify-link {subject_id} {bid} "
+                        "--text '<email body>'` to score the link, browser_navigate it in the SAME "
+                        "browser, then record awaiting_processing",
+                    }
+                )
             else:
                 digest.append(
                     _digest(
@@ -389,15 +401,17 @@ def next_actions(
         bid = case.get("broker_id")
         st = case.get("state")
         if st in ("awaiting_processing", "confirmed_removed"):
-            actions.append({
-                "type": "verify_removal",
-                "broker_id": bid,
-                "why": "processing window elapsed"
-                if st == "awaiting_processing"
-                else "periodic reappearance re-scan",
-                "how": "re-run this broker's search_vectors; if gone record confirmed_removed; "
-                "if still listed record reappeared and requeue the opt-out",
-            })
+            actions.append(
+                {
+                    "type": "verify_removal",
+                    "broker_id": bid,
+                    "why": "processing window elapsed"
+                    if st == "awaiting_processing"
+                    else "periodic reappearance re-scan",
+                    "how": "re-run this broker's search_vectors; if gone record confirmed_removed; "
+                    "if still listed record reappeared and requeue the opt-out",
+                }
+            )
         elif st in ("submitted", "verification_pending") and not mail["imap"]:
             pass  # already covered by the digest entry above
 
@@ -420,30 +434,34 @@ def next_actions(
         if not has_email and row.get("optout_url"):
             # No email lane (e.g. ThatsThem is web-form-only): drive the opt-out FORM, submitting
             # ONLY the subject's own identifiers to scrub from the third party's record.
-            actions.append({
-                "type": "indirect_web_form",
-                "broker_id": bid,
-                "confirm_first": confirm_first,
-                "optout_url": row.get("optout_url"),
-                "steps": [
-                    f"browser_navigate {row.get('optout_url')}",
-                    "submit ONLY the subject's own identifiers (the fields the form requires) to "
-                    "remove them from the third party's record; disclose nothing extra",
-                    "confirm the success state, screenshot into evidence/",
-                ],
-                "after": f"python3 scripts/pdd.py record {subject_id} {bid} submitted --channel web_form",
-            })
+            actions.append(
+                {
+                    "type": "indirect_web_form",
+                    "broker_id": bid,
+                    "confirm_first": confirm_first,
+                    "optout_url": row.get("optout_url"),
+                    "steps": [
+                        f"browser_navigate {row.get('optout_url')}",
+                        "submit ONLY the subject's own identifiers (the fields the form requires) to "
+                        "remove them from the third party's record; disclose nothing extra",
+                        "confirm the success state, screenshot into evidence/",
+                    ],
+                    "after": f"python3 scripts/pdd.py record {subject_id} {bid} submitted --channel web_form",
+                }
+            )
         elif (
             email_mode in ("programmatic", "alias") and mail["smtp"]
         ) or email_mode == "browser":
-            actions.append({
-                "type": "indirect_email_send",
-                "broker_id": bid,
-                "confirm_first": confirm_first,
-                "send_via": "browser" if email_mode == "browser" else "smtp",
-                "command": f"python3 scripts/pdd.py send-email {subject_id} {bid} --kind ccpa_indirect "
-                f"--listing <third-party-listing-url>",
-            })
+            actions.append(
+                {
+                    "type": "indirect_email_send",
+                    "broker_id": bid,
+                    "confirm_first": confirm_first,
+                    "send_via": "browser" if email_mode == "browser" else "smtp",
+                    "command": f"python3 scripts/pdd.py send-email {subject_id} {bid} --kind ccpa_indirect "
+                    f"--listing <third-party-listing-url>",
+                }
+            )
         else:
             digest.append(
                 _digest(
@@ -466,11 +484,13 @@ def next_actions(
     if blocked:
         ids = [r["broker_id"] for r in blocked]
         if bool(env.get("BROWSERBASE_API_KEY")):
-            actions.append({
-                "type": "stealth_rescan",
-                "broker_ids": ids,
-                "how": "retry these with the cloud/stealth browser backend, then record real verdicts",
-            })
+            actions.append(
+                {
+                    "type": "stealth_rescan",
+                    "broker_ids": ids,
+                    "how": "retry these with the cloud/stealth browser backend, then record real verdicts",
+                }
+            )
         else:
             for r in blocked:
                 digest.append(

@@ -7,7 +7,7 @@ finds what works, and locks it in by writing config.yaml + prefill.json.
 
 Usage in execute_code:
     exec(open(os.path.expanduser(
-        os.path.join(os.environ.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")), "skills/red-teaming/godmode/scripts/auto_jailbreak.py")
+        os.path.join(os.environ.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")), "skills/security/godmode/scripts/auto_jailbreak.py")
     )).read())
 
     result = auto_jailbreak()  # Uses current model from config
@@ -18,8 +18,15 @@ Usage in execute_code:
 import os
 import json
 import time
-import yaml
+from ruamel.yaml import YAML
 from pathlib import Path
+
+yaml = YAML(typ="safe", pure=True)
+yaml.version = (1, 1)
+yaml.default_flow_style = False
+yaml.allow_unicode = True
+yaml.width = 120
+yaml.sort_base_mapping_type_on_output = False
 
 try:
     from openai import OpenAI
@@ -36,9 +43,9 @@ try:
 except NameError:
     # __file__ not defined when loaded via exec() — search standard paths
     _SKILL_DIR = (
-        Path(os.getenv("CLAWK_HOME", Path.home() / ".clawk"))
+        Path(os.getenv("CLAWK_HOME", Path.home() / ".clawksis"))
         / "skills"
-        / "red-teaming"
+        / "security"
         / "godmode"
     )
 
@@ -68,7 +75,7 @@ if _race_path.exists():
 # Clawksis config paths
 # ═══════════════════════════════════════════════════════════════════
 
-CLAWK_HOME = Path(os.getenv("CLAWK_HOME", Path.home() / ".clawk"))
+CLAWK_HOME = Path(os.getenv("CLAWK_HOME", Path.home() / ".clawksis"))
 CONFIG_PATH = CLAWK_HOME / "config.yaml"
 PREFILL_PATH = CLAWK_HOME / "prefill.json"
 
@@ -347,7 +354,7 @@ def _get_current_model() -> tuple:
         return None, None
     try:
         with open(CONFIG_PATH) as f:
-            cfg = yaml.safe_load(f) or {}
+            cfg = yaml.load(f) or {}
         model_cfg = cfg.get("model", {})
         if isinstance(model_cfg, str):
             return model_cfg, "https://openrouter.ai/api/v1"
@@ -358,7 +365,7 @@ def _get_current_model() -> tuple:
         return None, None
 
 
-def _get_api_key(base_url: str = None) -> str:
+def _get_api_key(base_url: str | None = None) -> str:
     """Get the appropriate API key."""
     if base_url and "openrouter" in base_url:
         return os.getenv("OPENROUTER_API_KEY", "")
@@ -402,13 +409,13 @@ def _build_messages(system_prompt=None, prefill=None, query=None):
     return messages
 
 
-def _write_config(system_prompt: str = None, prefill_file: str = None):
+def _write_config(system_prompt: str | None = None, prefill_file: str | None = None):
     """Write jailbreak settings to config.yaml (merges, doesn't overwrite)."""
     cfg = {}
     if CONFIG_PATH.exists():
         try:
             with open(CONFIG_PATH) as f:
-                cfg = yaml.safe_load(f) or {}
+                cfg = yaml.load(f) or {}
         except Exception:
             cfg = {}
 
@@ -423,14 +430,7 @@ def _write_config(system_prompt: str = None, prefill_file: str = None):
         cfg["agent"].pop("prefill_messages_file", None)
 
     with open(CONFIG_PATH, "w") as f:
-        yaml.dump(
-            cfg,
-            f,
-            default_flow_style=False,
-            allow_unicode=True,
-            width=120,
-            sort_keys=False,
-        )
+        yaml.dump(cfg, f)
 
     return str(CONFIG_PATH)
 
@@ -507,7 +507,7 @@ def auto_jailbreak(
     if verbose:
         print("[BASELINE] Testing without jailbreak...")
     baseline_msgs = _build_messages(query=canary_query)
-    baseline_content, baseline_latency, baseline_error = _test_query(
+    baseline_content, _baseline_latency, baseline_error = _test_query(
         client, model, baseline_msgs
     )
     baseline_score = (
@@ -516,13 +516,15 @@ def auto_jailbreak(
         else {"score": -9999, "is_refusal": True, "hedge_count": 0}
     )
 
-    attempts.append({
-        "strategy": "baseline",
-        "score": baseline_score["score"],
-        "is_refusal": baseline_score["is_refusal"],
-        "hedge_count": baseline_score["hedge_count"],
-        "error": baseline_error,
-    })
+    attempts.append(
+        {
+            "strategy": "baseline",
+            "score": baseline_score["score"],
+            "is_refusal": baseline_score["is_refusal"],
+            "hedge_count": baseline_score["hedge_count"],
+            "error": baseline_error,
+        }
+    )
 
     if verbose:
         status = (
@@ -593,20 +595,22 @@ def auto_jailbreak(
                     prefill=prefill,
                     query=encoded_query,
                 )
-                content, latency, error = _test_query(client, model, msgs)
+                content, _latency, error = _test_query(client, model, msgs)
                 result = (
                     score_response(content, canary_query)
                     if content
                     else {"score": -9999, "is_refusal": True, "hedge_count": 0}
                 )
 
-                attempts.append({
-                    "strategy": f"parseltongue_L{level}_{enc_label}",
-                    "score": result["score"],
-                    "is_refusal": result["is_refusal"],
-                    "hedge_count": result["hedge_count"],
-                    "error": error,
-                })
+                attempts.append(
+                    {
+                        "strategy": f"parseltongue_L{level}_{enc_label}",
+                        "score": result["score"],
+                        "is_refusal": result["is_refusal"],
+                        "hedge_count": result["hedge_count"],
+                        "error": error,
+                    }
+                )
 
                 if not result["is_refusal"] and result["score"] > winning_score:
                     winning_strategy = f"parseltongue_L{level}_{enc_label}"
@@ -638,20 +642,22 @@ def auto_jailbreak(
 
         # Try with system prompt alone
         msgs = _build_messages(system_prompt=system_prompt, query=canary_query)
-        content, latency, error = _test_query(client, model, msgs)
+        content, _latency, error = _test_query(client, model, msgs)
         result = (
             score_response(content, canary_query)
             if content
             else {"score": -9999, "is_refusal": True, "hedge_count": 0}
         )
 
-        attempts.append({
-            "strategy": strategy_name,
-            "score": result["score"],
-            "is_refusal": result["is_refusal"],
-            "hedge_count": result["hedge_count"],
-            "error": error,
-        })
+        attempts.append(
+            {
+                "strategy": strategy_name,
+                "score": result["score"],
+                "is_refusal": result["is_refusal"],
+                "hedge_count": result["hedge_count"],
+                "error": error,
+            }
+        )
 
         if not result["is_refusal"] and result["score"] > winning_score:
             winning_strategy = strategy_name
@@ -679,20 +685,22 @@ def auto_jailbreak(
             prefill=STANDARD_PREFILL,
             query=canary_query,
         )
-        content, latency, error = _test_query(client, model, msgs)
+        content, _latency, error = _test_query(client, model, msgs)
         result = (
             score_response(content, canary_query)
             if content
             else {"score": -9999, "is_refusal": True, "hedge_count": 0}
         )
 
-        attempts.append({
-            "strategy": f"{strategy_name}+prefill",
-            "score": result["score"],
-            "is_refusal": result["is_refusal"],
-            "hedge_count": result["hedge_count"],
-            "error": error,
-        })
+        attempts.append(
+            {
+                "strategy": f"{strategy_name}+prefill",
+                "score": result["score"],
+                "is_refusal": result["is_refusal"],
+                "hedge_count": result["hedge_count"],
+                "error": error,
+            }
+        )
 
         if not result["is_refusal"] and result["score"] > winning_score:
             winning_strategy = f"{strategy_name}+prefill"
@@ -789,20 +797,13 @@ def undo_jailbreak(verbose=True):
     if CONFIG_PATH.exists():
         try:
             with open(CONFIG_PATH) as f:
-                cfg = yaml.safe_load(f) or {}
+                cfg = yaml.load(f) or {}
             if "agent" in cfg:
                 cfg["agent"].pop("system_prompt", None)
                 cfg["agent"].pop("prefill_messages_file", None)
             cfg.pop("prefill_messages_file", None)
             with open(CONFIG_PATH, "w") as f:
-                yaml.dump(
-                    cfg,
-                    f,
-                    default_flow_style=False,
-                    allow_unicode=True,
-                    width=120,
-                    sort_keys=False,
-                )
+                yaml.dump(cfg, f)
             if verbose:
                 print(
                     f"[UNDO] Cleared system_prompt and prefill_messages_file from {CONFIG_PATH}"

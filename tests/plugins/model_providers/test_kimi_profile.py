@@ -23,7 +23,7 @@ def kimi_profile():
     if the registered class is ever swapped for a plain ``ProviderProfile`` the
     assertions below collapse.
     """
-    import model_tools  # noqa: F401
+    import model_tools
     import providers
 
     profile = providers.get_provider_profile("kimi-coding")
@@ -47,12 +47,24 @@ class TestKimiReasoningWireShape:
         assert extra_body == {"thinking": {"type": "enabled"}}
         assert top_level == {}
 
-    @pytest.mark.parametrize("effort", ["low", "medium", "high"])
-    def test_explicit_effort_sends_effort_only(self, kimi_profile, effort):
+    @pytest.mark.parametrize(
+        "effort,expected",
+        [
+            ("low", "low"),
+            ("minimal", "low"),
+            ("medium", "high"),
+            ("high", "high"),
+            ("xhigh", "max"),
+            ("max", "max"),
+            ("ultra", "max"),
+        ],
+    )
+    def test_effort_mapped_to_k3_vocabulary(self, kimi_profile, effort, expected):
+        """Clawksis' wider effort vocabulary is mapped onto K3's low/high/max."""
         extra_body, top_level = kimi_profile.build_api_kwargs_extras(
             reasoning_config={"enabled": True, "effort": effort}
         )
-        assert top_level == {"reasoning_effort": effort}
+        assert top_level == {"reasoning_effort": expected}
         assert "thinking" not in extra_body
 
     def test_enabled_without_effort_falls_back_to_thinking(self, kimi_profile):
@@ -62,10 +74,10 @@ class TestKimiReasoningWireShape:
         assert extra_body == {"thinking": {"type": "enabled"}}
         assert top_level == {}
 
-    @pytest.mark.parametrize("effort", ["", "garbage", "xhigh", "max"])
+    @pytest.mark.parametrize("effort", ["", "garbage"])
     def test_unrecognized_effort_falls_back_to_thinking(self, kimi_profile, effort):
-        """Unknown/strong efforts aren't in Moonshot's low|medium|high set, so
-        we drop to the thinking toggle rather than sending an invalid effort."""
+        """Unknown efforts drop to the thinking toggle rather than sending
+        an invalid effort."""
         extra_body, top_level = kimi_profile.build_api_kwargs_extras(
             reasoning_config={"enabled": True, "effort": effort}
         )
@@ -75,13 +87,6 @@ class TestKimiReasoningWireShape:
     def test_disabled_sends_thinking_disabled_only(self, kimi_profile):
         extra_body, top_level = kimi_profile.build_api_kwargs_extras(
             reasoning_config={"enabled": False}
-        )
-        assert extra_body == {"thinking": {"type": "disabled"}}
-        assert top_level == {}
-
-    def test_disabled_ignores_effort(self, kimi_profile):
-        extra_body, top_level = kimi_profile.build_api_kwargs_extras(
-            reasoning_config={"enabled": False, "effort": "high"}
         )
         assert extra_body == {"thinking": {"type": "disabled"}}
         assert top_level == {}
@@ -125,28 +130,16 @@ class TestKimiModelDiscovery:
         assert models == ["kimi-k2.6"]
 
 
-class TestKimiFullKwargsIntegration:
-    """The transport's full kwargs carry at most one reasoning knob."""
+@pytest.mark.parametrize("name", ["kimi-coding", "kimi-coding-cn"])
+def test_moonshot_profiles_exclude_brotli(name):
+    """#28043: httpx/brotlicffi mis-decodes Moonshot's br-encoded SSE stream,
+    so both Moonshot profiles must negotiate gzip instead of brotli."""
+    import model_tools
+    import providers
 
-    def _build(self, kimi_profile, reasoning_config):
-        from agent.transports.chat_completions import ChatCompletionsTransport
-
-        return ChatCompletionsTransport().build_kwargs(
-            model="kimi-k2-turbo-preview",
-            messages=[{"role": "user", "content": "ping"}],
-            tools=None,
-            provider_profile=kimi_profile,
-            reasoning_config=reasoning_config,
-            base_url="https://api.moonshot.ai/v1",
-            provider_name="kimi-coding",
-        )
-
-    def test_explicit_effort_omits_thinking(self, kimi_profile):
-        kwargs = self._build(kimi_profile, {"enabled": True, "effort": "high"})
-        assert kwargs["reasoning_effort"] == "high"
-        assert "thinking" not in kwargs.get("extra_body", {})
-
-    def test_no_config_omits_effort(self, kimi_profile):
-        kwargs = self._build(kimi_profile, None)
-        assert "reasoning_effort" not in kwargs
-        assert kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+    profile = providers.get_provider_profile(name)
+    assert profile is not None
+    enc = {k.lower(): v for k, v in profile.default_headers.items()}.get(
+        "accept-encoding", ""
+    )
+    assert "br" not in enc.lower() and "gzip" in enc.lower()

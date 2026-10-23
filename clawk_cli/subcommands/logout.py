@@ -1,8 +1,4 @@
-"""``clawk logout`` subcommand parser.
-
-Extracted verbatim from ``clawk_cli/main.py:main()`` (god-file Phase 2).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk logout`` subcommand parser."""
 
 from __future__ import annotations
 
@@ -11,9 +7,6 @@ from typing import Callable
 
 def build_logout_parser(subparsers, *, cmd_logout: Callable) -> None:
     """Attach the ``logout`` subcommand to ``subparsers``."""
-    # =========================================================================
-    # logout command
-    # =========================================================================
     logout_parser = subparsers.add_parser(
         "logout",
         help="Clear authentication for an inference provider",
@@ -21,7 +14,7 @@ def build_logout_parser(subparsers, *, cmd_logout: Callable) -> None:
     )
     logout_parser.add_argument(
         "--provider",
-        choices=["nous", "openai-codex", "xai-oauth", "spotify"],
+        choices=["nous", "openai-codex", "xai-oauth"],
         default=None,
         help="Provider to log out from (default: active provider)",
     )

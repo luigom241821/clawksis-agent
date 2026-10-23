@@ -1,30 +1,24 @@
-"""``clawk security`` subcommand parser.
-
-Extracted verbatim from ``clawk_cli/main.py:main()`` (god-file Phase 2).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk security`` subcommand parser."""
 
 from __future__ import annotations
 
 from typing import Callable
 
+from clawk_cli.subcommands._shared import add_json_flag
+
 
 def build_security_parser(subparsers, *, cmd_security: Callable) -> None:
     """Attach the ``security`` subcommand to ``subparsers``."""
-    # =========================================================================
     security_parser = subparsers.add_parser(
         "security",
         help="Supply-chain audit (OSV.dev) for venv, plugins, and MCP servers",
-        description=(
-            "On-demand vulnerability scan against OSV.dev. Covers the Clawksis "
-            "venv (installed PyPI dists), Python deps declared by plugins under "
-            "~/.clawksis/plugins/, and pinned npx/uvx MCP servers in config.yaml. "
-            "Does NOT scan globally-installed packages or editor/browser extensions."
-        ),
+        description="On-demand vulnerability scan against OSV.dev. Covers the Clawksis "
+        "venv (installed PyPI dists), Python deps declared by plugins under "
+        "~/.clawksis/plugins/, and pinned npx/uvx MCP servers in config.yaml. "
+        "Does NOT scan globally-installed packages or editor/browser extensions.",
     )
     security_subparsers = security_parser.add_subparsers(
-        dest="security_command",
-        metavar="<subcommand>",
+        dest="security_command", metavar="<subcommand>"
     )
 
     audit_parser = security_subparsers.add_parser(
@@ -32,10 +26,8 @@ def build_security_parser(subparsers, *, cmd_security: Callable) -> None:
         help="Run a one-shot supply-chain audit",
         description="Query OSV.dev for known vulnerabilities in installed components.",
     )
-    audit_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Emit machine-readable JSON instead of human-readable text",
+    add_json_flag(
+        audit_parser, "Emit machine-readable JSON instead of human-readable text"
     )
     audit_parser.add_argument(
         "--fail-on",

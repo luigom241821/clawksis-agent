@@ -124,33 +124,37 @@ def search(
 
     # Primary item: the synthesis itself
     snippet = synthesis[:2000]
-    items.append({
-        "id": "PX1",
-        "title": f"Perplexity {'Deep Research' if deep else 'Sonar Pro'}: {query}",
-        "url": "",
-        "source_domain": "perplexity.ai",
-        "snippet": snippet,
-        "date": to_date,
-        "relevance": 0.9,
-        "why_relevant": f"AI synthesis of recent activity for '{query}'",
-        "engagement": {"citations": len(citations)},
-        "metadata": {"citations": citations},
-    })
+    items.append(
+        {
+            "id": "PX1",
+            "title": f"Perplexity {'Deep Research' if deep else 'Sonar Pro'}: {query}",
+            "url": "",
+            "source_domain": "perplexity.ai",
+            "snippet": snippet,
+            "date": to_date,
+            "relevance": 0.9,
+            "why_relevant": f"AI synthesis of recent activity for '{query}'",
+            "engagement": {"citations": len(citations)},
+            "metadata": {"citations": citations},
+        }
+    )
 
     # Individual items for each citation
     for i, cit in enumerate(citations):
-        items.append({
-            "id": f"PX{i + 2}",
-            "title": cit["title"] or _domain(cit["url"]),
-            "url": cit["url"],
-            "source_domain": _domain(cit["url"]),
-            "snippet": "",
-            "date": None,
-            "relevance": 0.7,
-            "why_relevant": f"Cited in Perplexity synthesis for '{query}'",
-            "engagement": {"citations": 1},
-            "metadata": {"citations": [cit]},
-        })
+        items.append(
+            {
+                "id": f"PX{i + 2}",
+                "title": cit["title"] or _domain(cit["url"]),
+                "url": cit["url"],
+                "source_domain": _domain(cit["url"]),
+                "snippet": "",
+                "date": None,
+                "relevance": 0.7,
+                "why_relevant": f"Cited in Perplexity synthesis for '{query}'",
+                "engagement": {"citations": 1},
+                "metadata": {"citations": [cit]},
+            }
+        )
 
     artifact = {
         "label": "perplexity",

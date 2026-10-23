@@ -137,11 +137,11 @@ def compute_quality_score(config: dict, research_results: dict) -> dict:
             "nudge_text": "..." or None if all sources healthy
         }
     """
-    core_active: List[str] = []
-    core_missing: List[str] = []
-    core_errored: List[str] = []
-    core_degraded: List[str] = []
-    bonus_errored: List[str] = []
+    core_active: list[str] = []
+    core_missing: list[str] = []
+    core_errored: list[str] = []
+    core_degraded: list[str] = []
+    bonus_errored: list[str] = []
 
     # HN, Polymarket, and Reddit are always active
     core_active.append("hn")
@@ -218,26 +218,26 @@ def compute_quality_score(config: dict, research_results: dict) -> dict:
 
 
 def _build_nudge_text(
-    core_missing: List[str],
-    core_errored: List[str],
-    core_degraded: List[str] = None,
-    research_results: dict = None,
+    core_missing: list[str],
+    core_errored: list[str],
+    core_degraded: list[str] | None = None,
+    research_results: dict | None = None,
     has_sc: bool = False,
-    active_sources: list = None,
-    bonus_errored: List[str] = None,
+    active_sources: list | None = None,
+    bonus_errored: list[str] | None = None,
 ) -> str:
     """Build human-readable nudge text describing what was missed or degraded.
 
     Prioritizes free suggestions. Optionally mentions bonus sources
     (TikTok, Instagram, Threads, Pinterest) if ScrapeCreators key is configured.
     """
-    lines: List[str] = []
+    lines: list[str] = []
     core_degraded = core_degraded or []
     bonus_errored = bonus_errored or []
     research_results = research_results or {}
 
     # Describe what was missed
-    missed_parts: List[str] = []
+    missed_parts: list[str] = []
     for src in core_missing:
         label = SOURCE_LABELS[src]
         if src in core_errored:
@@ -258,7 +258,7 @@ def _build_nudge_text(
     lines.append("")
 
     # Free suggestions
-    free_suggestions: List[str] = []
+    free_suggestions: list[str] = []
 
     if "x" in core_missing:
         if "x" in core_errored:

@@ -1,67 +1,15 @@
 """Tests for the clean `clawk update` output helpers.
 
-`_quiet_step` hides routine phase output behind a spinner so the run reads as
-"progress + commits", but it must NEVER hide problems: warning/error lines are
-surfaced even on success, and on any exception the whole captured buffer is
-flushed before the exception propagates. `_print_new_commits` renders the
-What's-new list.
+Phase containment (npm, builds, uv) is pm.progress's job (live tail + failure
+tail; ``CLAWK_VERBOSE=1`` streams). `_print_new_commits` renders the What's-new
+list shown after a quiet update.
 """
 
 from __future__ import annotations
 
 import subprocess
 
-import pytest
-
-from clawk_cli.main import _print_new_commits, _quiet_step
-
-
-def test_quiet_step_hides_routine_but_surfaces_warnings(capsys):
-    with _quiet_step("Building dashboard", verbose=False):
-        print("routine progress detail")
-        print("  ⚠ a warning worth seeing")
-        print("✗ an error worth seeing")
-        print("more routine detail")
-
-    out = capsys.readouterr().out
-    # Routine chatter is hidden…
-    assert "routine progress detail" not in out
-    assert "more routine detail" not in out
-    # …but warnings/errors are always surfaced…
-    assert "a warning worth seeing" in out
-    assert "an error worth seeing" in out
-    # …and the spinner label stands in for the phase (non-tty fallback).
-    assert "Building dashboard" in out
-
-
-def test_quiet_step_flushes_everything_on_exception(capsys):
-    with pytest.raises(RuntimeError, match="boom"):
-        with _quiet_step("Installing deps", verbose=False):
-            print("detail that must surface when the phase fails")
-            raise RuntimeError("boom")
-
-    out = capsys.readouterr().out
-    # On failure the captured buffer is flushed so the cause stays visible.
-    assert "detail that must surface when the phase fails" in out
-
-
-def test_quiet_step_does_not_swallow_systemexit(capsys):
-    with pytest.raises(SystemExit):
-        with _quiet_step("Pulling", verbose=False):
-            print("rollback guidance line")
-            raise SystemExit(1)
-
-    out = capsys.readouterr().out
-    assert "rollback guidance line" in out
-
-
-def test_quiet_step_verbose_streams_everything(capsys):
-    with _quiet_step("Phase X", verbose=True):
-        print("verbose detail visible")
-
-    out = capsys.readouterr().out
-    assert "verbose detail visible" in out
-    assert "Phase X" in out
+from clawk_cli.main import _print_new_commits
 
 
 def _init_repo(root):
@@ -77,7 +25,11 @@ def _init_repo(root):
 
 def _head(git, root):
     return subprocess.run(
-        git + ["rev-parse", "HEAD"], cwd=root, capture_output=True, text=True
+        git + ["rev-parse", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
     ).stdout.strip()
 
 

@@ -102,7 +102,7 @@ def fetch(
         }
         try:
             payload = _post(body)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"USAspending error on page {page}: {e}", file=sys.stderr)
             break
         results = payload.get("results", [])
@@ -112,25 +112,27 @@ def fetch(
             set_aside = r.get("Type of Set Aside", "") or ""
             if sole_source_only and "sole" not in set_aside.lower():
                 continue
-            rows.append({
-                "award_id": r.get("Award ID", "") or "",
-                "recipient_name": r.get("Recipient Name", "") or "",
-                "recipient_uei": r.get("Recipient UEI", "") or "",
-                "recipient_duns": r.get("Recipient DUNS Number", "") or "",
-                "recipient_parent_name": r.get("Recipient Parent Name", "") or "",
-                "recipient_state": r.get("Recipient State Code", "") or "",
-                "awarding_agency": r.get("Awarding Agency", "") or "",
-                "awarding_sub_agency": r.get("Awarding Sub Agency", "") or "",
-                "award_type": r.get("Award Type", "") or "",
-                "award_amount": str(r.get("Award Amount", "") or ""),
-                "award_date": r.get("Start Date", "") or "",
-                "period_of_performance_start": r.get("Start Date", "") or "",
-                "period_of_performance_end": r.get("End Date", "") or "",
-                "naics_code": str(r.get("NAICS Code", "") or ""),
-                "psc_code": str(r.get("PSC Code", "") or ""),
-                "competition_extent": set_aside,
-                "description": r.get("Description", "") or "",
-            })
+            rows.append(
+                {
+                    "award_id": r.get("Award ID", "") or "",
+                    "recipient_name": r.get("Recipient Name", "") or "",
+                    "recipient_uei": r.get("Recipient UEI", "") or "",
+                    "recipient_duns": r.get("Recipient DUNS Number", "") or "",
+                    "recipient_parent_name": r.get("Recipient Parent Name", "") or "",
+                    "recipient_state": r.get("Recipient State Code", "") or "",
+                    "awarding_agency": r.get("Awarding Agency", "") or "",
+                    "awarding_sub_agency": r.get("Awarding Sub Agency", "") or "",
+                    "award_type": r.get("Award Type", "") or "",
+                    "award_amount": str(r.get("Award Amount", "") or ""),
+                    "award_date": r.get("Start Date", "") or "",
+                    "period_of_performance_start": r.get("Start Date", "") or "",
+                    "period_of_performance_end": r.get("End Date", "") or "",
+                    "naics_code": str(r.get("NAICS Code", "") or ""),
+                    "psc_code": str(r.get("PSC Code", "") or ""),
+                    "competition_extent": set_aside,
+                    "description": r.get("Description", "") or "",
+                }
+            )
         meta = payload.get("page_metadata", {})
         if not meta.get("hasNext"):
             break

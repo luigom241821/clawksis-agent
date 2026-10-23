@@ -20,7 +20,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # Never recommend disabling these: load-bearing built-ins + this auditor itself.
@@ -94,7 +94,7 @@ def last_activity(rec: dict):
         except (TypeError, ValueError):
             continue
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         if best is None or dt > best:
             best = dt
     return best
@@ -133,7 +133,7 @@ def apply_disable(config_path: Path, names: list[str]) -> list[str]:
         cfg = yaml.safe_load(raw) or {}
         if not isinstance(cfg, dict):
             raise SystemExit("config.yaml is not a YAML mapping; refusing to edit.")
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         config_path.with_name(config_path.name + f".bak-{ts}").write_text(
             raw, encoding="utf-8"
         )
@@ -188,7 +188,7 @@ def main() -> int:
         except SystemExit as exc:
             print(str(exc))
             return 1
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             print(f"apply failed: {exc}")
             return 1
         print(
@@ -202,7 +202,7 @@ def main() -> int:
 
     usage = load_usage(skills_dir)
     disabled = load_disabled(config_path)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     rows = []
     for name, _md, text in iter_skills(skills_dir):
@@ -220,14 +220,16 @@ def main() -> int:
             status = "stale"
         else:
             status = "active"
-        rows.append({
-            "name": name,
-            "tokens": est_tokens(len(text)),
-            "activity": act,
-            "last_used": la.date().isoformat() if la else None,
-            "days_idle": days_idle,
-            "status": status,
-        })
+        rows.append(
+            {
+                "name": name,
+                "tokens": est_tokens(len(text)),
+                "activity": act,
+                "last_used": la.date().isoformat() if la else None,
+                "days_idle": days_idle,
+                "status": status,
+            }
+        )
 
     rows.sort(key=lambda r: -r["tokens"])
     candidates = [r for r in rows if r["status"] in ("never", "stale")]

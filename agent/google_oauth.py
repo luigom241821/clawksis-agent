@@ -126,7 +126,6 @@ logger = logging.getLogger(__name__)
 
 # OAuth client credential resolution.
 
-#
 
 # Resolution order:
 
@@ -394,7 +393,7 @@ def _credentials_lock(timeout_seconds: float = LOCK_TIMEOUT_SECONDS):
 # =============================================================================
 
 
-_scraped_creds_cache: Dict[str, str] = {}
+_scraped_creds_cache: dict[str, str] = {}
 
 
 def _locate_gemini_cli_oauth_js() -> Optional[Path]:
@@ -470,7 +469,7 @@ def _locate_gemini_cli_oauth_js() -> Optional[Path]:
     return None
 
 
-def _scrape_client_credentials() -> Tuple[str, str]:
+def _scrape_client_credentials() -> tuple[str, str]:
     """Extract client_id + client_secret from the local gemini-cli install."""
 
     if _scraped_creds_cache.get("resolved"):
@@ -577,7 +576,7 @@ def _require_client_id() -> str:
 # =============================================================================
 
 
-def _generate_pkce_pair() -> Tuple[str, str]:
+def _generate_pkce_pair() -> tuple[str, str]:
     """Generate a (verifier, challenge) pair using S256."""
 
     verifier = secrets.token_urlsafe(64)
@@ -605,7 +604,7 @@ class RefreshParts:
     managed_project_id: str = ""
 
     @classmethod
-    def parse(cls, packed: str) -> "RefreshParts":
+    def parse(cls, packed: str) -> RefreshParts:
 
         if not packed:
             return cls(refresh_token="")
@@ -650,7 +649,7 @@ class GoogleCredentials:
 
     managed_project_id: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
 
         return {
             "refresh": RefreshParts(
@@ -664,7 +663,7 @@ class GoogleCredentials:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "GoogleCredentials":
+    def from_dict(cls, data: dict[str, Any]) -> GoogleCredentials:
 
         refresh_packed = str(data.get("refresh", "") or "")
 
@@ -712,7 +711,7 @@ def load_credentials() -> Optional[GoogleCredentials]:
 
         data = json.loads(raw)
 
-    except (json.JSONDecodeError, OSError, IOError) as exc:
+    except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Failed to read Google OAuth credentials at %s: %s", path, exc)
 
         return None
@@ -806,7 +805,7 @@ def clear_credentials() -> None:
 # =============================================================================
 
 
-def _post_form(url: str, data: Dict[str, str], timeout: float) -> Dict[str, Any]:
+def _post_form(url: str, data: dict[str, str], timeout: float) -> dict[str, Any]:
     """POST x-www-form-urlencoded and return parsed JSON response."""
 
     body = urllib.parse.urlencode(data).encode("ascii")
@@ -863,7 +862,7 @@ def exchange_code(
     client_id: Optional[str] = None,
     client_secret: Optional[str] = None,
     timeout: float = TOKEN_REQUEST_TIMEOUT_SECONDS,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Exchange authorization code for access + refresh tokens."""
 
     cid = client_id if client_id is not None else _get_client_id()
@@ -890,7 +889,7 @@ def refresh_access_token(
     client_id: Optional[str] = None,
     client_secret: Optional[str] = None,
     timeout: float = TOKEN_REQUEST_TIMEOUT_SECONDS,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Refresh the access token."""
 
     if not refresh_token:
@@ -946,7 +945,7 @@ def _fetch_user_email(
 # =============================================================================
 
 
-_refresh_inflight: Dict[str, threading.Event] = {}
+_refresh_inflight: dict[str, threading.Event] = {}
 
 _refresh_inflight_lock = threading.Lock()
 
@@ -1094,11 +1093,11 @@ class _OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
 
     ready: Optional[threading.Event] = None
 
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002, N802
+    def log_message(self, format: str, *args: Any) -> None:
 
         logger.debug("OAuth callback: " + format, *args)
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
 
         parsed = urllib.parse.urlparse(self.path)
 
@@ -1211,7 +1210,7 @@ h1 {{ color: #b42318; }} p {{ color: #555; }}
 
 def _bind_callback_server(
     preferred_port: int = DEFAULT_REDIRECT_PORT,
-) -> Tuple[http.server.HTTPServer, int]:
+) -> tuple[http.server.HTTPServer, int]:
 
     try:
         server = http.server.HTTPServer(
@@ -1344,7 +1343,7 @@ def start_oauth_flow(
                 )
 
             except Exception:
-                _can_open_gui = lambda: True  # noqa: E731
+                _can_open_gui = lambda: True
 
             if _can_open_gui():
                 webbrowser.open(auth_url, new=1, autoraise=True)
@@ -1494,7 +1493,7 @@ def _prompt_paste_fallback() -> Optional[str]:
 
 
 def _persist_token_response(
-    token_resp: Dict[str, Any],
+    token_resp: dict[str, Any],
     *,
     project_id: str = "",
 ) -> GoogleCredentials:
@@ -1534,7 +1533,7 @@ def _persist_token_response(
 # =============================================================================
 
 
-def run_gemini_oauth_login_pure() -> Dict[str, Any]:
+def run_gemini_oauth_login_pure() -> dict[str, Any]:
     """Run the login flow and return a dict matching the credential pool shape."""
 
     creds = start_oauth_flow(force_relogin=True)

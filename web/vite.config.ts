@@ -1,242 +1,171 @@
 import { defineConfig, type Plugin } from "vite";
+import babel from "@rolldown/plugin-babel";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 
-import react from "@vitejs/plugin-react";
-
+/** React Compiler preset scoped to modules that can actually contain
+ *  components/hooks (JSX syntax or a react-ish import). The preset's default
+ *  code filter matches any PascalCase/use* declaration — effectively every TS
+ *  module — which made the babel pass parse the whole codebase. */
+function compilerPreset() {
+  const preset = reactCompilerPreset();
+  preset.rolldown.filter.code = /\/>|<\/|from\s*['"][^'"]*react/;
+  return preset;
+}
 import tailwindcss from "@tailwindcss/vite";
-
 import path from "path";
+import { fileURLToPath } from "node:url";
 
-
+const configDir: string = fileURLToPath(new URL(".", import.meta.url));
 
 const BACKEND = process.env.CLAWK_DASHBOARD_URL ?? "http://127.0.0.1:9119";
 
-
-
 /**
-
  * In production the Python `clawk dashboard` server injects a one-shot
-
  * session token into `index.html` (see `clawk_cli/web_server.py`). The
-
  * Vite dev server serves its own `index.html`, so unless we forward that
-
  * token, every protected `/api/*` call 401s.
-
  *
-
  * This plugin fetches the running dashboard's `index.html` on each dev page
-
- * load, scrapes the `window.__CLAWK_SESSION_TOKEN__` assignment, and
-
- * re-injects it into the dev HTML. No-op in production builds.
-
+ * load and forwards its runtime bootstrap values into the dev HTML. No-op in
+ * production builds.
  */
-
 function clawkDevToken(): Plugin {
-
   const TOKEN_RE = /window\.__CLAWK_SESSION_TOKEN__\s*=\s*"([^"]+)"/;
-
   const EMBEDDED_RE =
-
     /window\.__CLAWK_DASHBOARD_EMBEDDED_CHAT__\s*=\s*(true|false)/;
-
-
+  const INITIAL_PROFILE_RE =
+    /window\.__CLAWK_INITIAL_PROFILE__\s*=\s*("(?:\\.|[^"\\])*")/;
 
   return {
-
     name: "clawk:dev-session-token",
-
     apply: "serve",
-
     async transformIndexHtml() {
-
       try {
-
         const res = await fetch(BACKEND, { headers: { accept: "text/html" } });
-
         const html = await res.text();
-
         const match = html.match(TOKEN_RE);
-
         if (!match) {
-
           console.warn(
-
             `[clawk] Could not find session token in ${BACKEND} — ` +
-
               `is \`clawk dashboard\` running? /api calls will 401.`,
-
           );
-
           return;
-
         }
-
         const embeddedMatch = html.match(EMBEDDED_RE);
-
         const embeddedJs = embeddedMatch ? embeddedMatch[1] : "true";
-
+        const initialProfileMatch = html.match(INITIAL_PROFILE_RE);
+        const initialProfileJs = initialProfileMatch?.[1] ?? '""';
         return [
-
           {
-
             tag: "script",
-
             injectTo: "head",
-
             children:
-
               `window.__CLAWK_SESSION_TOKEN__="${match[1]}";` +
-
-              `window.__CLAWK_DASHBOARD_EMBEDDED_CHAT__=${embeddedJs};`,
-
+              `window.__CLAWK_DASHBOARD_EMBEDDED_CHAT__=${embeddedJs};` +
+              `window.__CLAWK_INITIAL_PROFILE__=${initialProfileJs};`,
           },
-
         ];
-
       } catch (err) {
-
         console.warn(
-
           `[clawk] Dashboard at ${BACKEND} unreachable — ` +
-
             `start it with \`clawk dashboard\` or set CLAWK_DASHBOARD_URL. ` +
-
             `(${(err as Error).message})`,
-
         );
-
       }
-
     },
-
   };
-
 }
 
-
-
 export default defineConfig({
-
-  plugins: [react(), tailwindcss(), clawkDevToken()],
-
+  plugins: [
+    react(),
+    babel({ presets: [compilerPreset()] }),
+    tailwindcss(),
+    clawkDevToken(),
+  ],
   resolve: {
-
     alias: {
-
-      "@": path.resolve(__dirname, "./src"),
-
+      "@": path.resolve(configDir, "./src"),
+      "@clawk/shared": path.resolve(configDir, "../apps/shared/src"),
     },
-
     // When @nous-research/ui is symlinked via `file:../../design-language`,
-
     // Node's module resolution would pick up shared deps from
-
     // design-language/node_modules/*, giving us two copies + breaking
-
     // hooks (useRef-of-null), webgl contexts, etc. Force everything that
-
     // exists in BOTH places to use the dashboard's copy.
-
     //
-
     // Don't list packages here that only exist in the DS (nanostores,
-
     // @nanostores/react) — Vite dedupe errors out when it can't find
-
     // them at the project root.
-
     dedupe: [
-
       "react",
-
       "react-dom",
-
+      "@react-three/fiber",
+      "@observablehq/plot",
+      "three",
+      "leva",
+      "gsap",
     ],
-
   },
-
   build: {
-
     outDir: "../clawk_cli/web_dist",
-
     emptyOutDir: true,
-
-    // Pages are route-split via React.lazy (see App.tsx). On top of that, pull
-    // the always-loaded vendor libs into their own cacheable chunks so the app
-    // shell stays small and these rarely-changing deps survive redeploys in the
-    // browser cache. We DON'T list lazy-only heavy deps (recharts, xterm) here —
-    // forcing them into a manual chunk would hoist them back into the eager load;
-    // Rollup already keeps them inside their dynamic page chunk.
-
-    chunkSizeWarningLimit: 800,
-
-    rollupOptions: {
-
+    // Shell stays a bit over Vite's 500 kB default after vendor splits;
+    // page/xterm chunks load on demand. Keep a modest ceiling so a true
+    // regression still warns.
+    chunkSizeWarningLimit: 600,
+    // Split heavy vendors so the first dashboard paint does not download
+    // xterm/three/plot/etc. until a route actually needs them. Lazy page
+    // imports in App.tsx create the route boundaries; these groups keep
+    // shared node_modules out of every page chunk.
+    rolldownOptions: {
       output: {
-
-        manualChunks(id) {
-
-          if (
-
-            /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(
-
-              id,
-
-            )
-
-          ) {
-
-            return "vendor-react";
-
-          }
-
-          if (/[\\/]node_modules[\\/]motion[\\/]/.test(id)) {
-
-            return "vendor-motion";
-
-          }
-
-          // The design system + icon set are large and change rarely; keeping
-          // them in their own chunk stops every app-shell edit from busting
-          // ~405KB of cache on each `clawk update`.
-          if (
-            /[\\/]node_modules[\\/](@nous-research[\\/]ui|lucide-react)[\\/]/.test(id)
-          ) {
-            return "vendor-ui";
-          }
-
+        codeSplitting: {
+          minSize: 20_000,
+          groups: [
+            {
+              name: "react-vendor",
+              test: /node_modules[\\/](react|react-dom|scheduler|react-router|react-router)([\\/]|$)/,
+            },
+            {
+              name: "xterm",
+              test: /node_modules[\\/]@xterm[\\/]/,
+            },
+            {
+              name: "three",
+              test: /node_modules[\\/](three|@react-three)([\\/]|$)/,
+            },
+            {
+              name: "plot",
+              test: /node_modules[\\/]@observablehq[\\/]plot([\\/]|$)/,
+            },
+            {
+              name: "motion",
+              test: /node_modules[\\/](motion|framer-motion)([\\/]|$)/,
+            },
+            {
+              name: "ui",
+              test: /node_modules[\\/]@nous-research[\\/]ui([\\/]|$)/,
+            },
+            {
+              name: "vendor",
+              test: /node_modules[\\/]/,
+            },
+          ],
         },
-
       },
-
     },
-
   },
-
   server: {
-
     proxy: {
-
       "/api": {
-
         target: BACKEND,
-
         ws: true,
-
       },
-
       // Same host as `clawk dashboard` must serve these; Vite has no
-
       // dashboard-plugins/* files, so without this, plugin scripts 404
-
       // or receive index.html in dev.
-
       "/dashboard-plugins": BACKEND,
-
     },
-
   },
-
 });
-

@@ -1,35 +1,45 @@
-"""Kimi / Moonshot provider profiles.
-
-Kimi has dual endpoints:
-  - sk-kimi-* keys → api.kimi.com/coding (Anthropic Messages API)
-  - legacy keys → api.moonshot.ai/v1 (OpenAI chat completions)
-
-This module covers the chat_completions path (/v1 endpoint).
-"""
+"""Kimi / Moonshot provider profiles (chat_completions path; sk-kimi-* keys are
+redirected to api.kimi.com/coding by core)."""
 
 from typing import Any
 from urllib.parse import urlparse
 
+from agent.reasoning_effort import (
+    KIMI_K3_EFFORTS,
+    KIMI_K3_OVERRIDES,
+    thinking_toggle_extras,
+)
+from clawk_cli.version_info import get_version_info
 from providers import register_provider
 from providers.base import OMIT_TEMPERATURE, ProviderProfile
 
+_HEADERS = {
+    "HTTP-Referer": "https://github.com/samuelgradientai-sys/clawksis-agent",
+    "X-Title": "Clawksis",
+    "User-Agent": f"ClawksisAgent/{get_version_info().base_version}",
+    # Exclude brotli: httpx's brotlicffi backend has a streaming decode bug on
+    # Moonshot's content-encoding: br SSE responses (#28043, #48428, #59556).
+    # gzip sidesteps it while still compressing the transfer.
+    "Accept-Encoding": "gzip",
+}
+
 
 def _is_confirmed_kimi_coding_url(base_url: str) -> bool:
-    """Return True only for Kimi Code's canonical HTTPS API surfaces."""
+    """True only for Kimi Code's canonical HTTPS API surfaces."""
     try:
-        parsed = urlparse(base_url)
-        port = parsed.port
+        p = urlparse(base_url)
+        port = p.port
     except ValueError:
         return False
     return (
-        parsed.scheme.lower() == "https"
-        and (parsed.hostname or "").lower() == "api.kimi.com"
+        p.scheme.lower() == "https"
+        and (p.hostname or "").lower() == "api.kimi.com"
         and port in (None, 443)
-        and parsed.username is None
-        and parsed.password is None
-        and parsed.path.rstrip("/") in {"/coding", "/coding/v1"}
-        and not parsed.query
-        and not parsed.fragment
+        and p.username is None
+        and p.password is None
+        and p.path.rstrip("/") in {"/coding", "/coding/v1"}
+        and not p.query
+        and not p.fragment
     )
 
 
@@ -43,7 +53,8 @@ class KimiProfile(ProviderProfile):
         base_url: str | None = None,
         timeout: float = 8.0,
     ) -> list[str] | None:
-        """Use Kimi Code's OpenAI-compatible surface for model discovery."""
+        """Use Kimi Code's OpenAI-compatible surface for model discovery; the bare
+        ``k3`` slug is only served there, so it is filtered off other endpoints."""
         effective_base = (base_url or self.base_url or "").rstrip("/")
         confirmed_coding_endpoint = _is_confirmed_kimi_coding_url(effective_base)
         if (
@@ -52,73 +63,60 @@ class KimiProfile(ProviderProfile):
         ):
             effective_base += "/v1"
         models = super().fetch_models(
-            api_key=api_key,
-            base_url=effective_base or None,
-            timeout=timeout,
+            api_key=api_key, base_url=effective_base or None, timeout=timeout
         )
         if models is None or confirmed_coding_endpoint:
             return models
         return [model for model in models if model.strip().lower() != "k3"]
 
     def build_api_kwargs_extras(
-        self, *, reasoning_config: dict | None = None, **context
+        self,
+        *,
+        reasoning_config: dict | None = None,
+        model: str | None = None,
+        **context,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Kimi uses extra_body.thinking + top-level reasoning_effort.
-
-        Moonshot's OpenAI-compat endpoint treats ``extra_body.thinking`` and
-        a top-level ``reasoning_effort`` as mutually exclusive, so we emit at
-        most one of them — never both. A recognized effort
-        (``low|medium|high``) already turns reasoning on, so it is sent on its
-        own; otherwise we fall back to the ``extra_body.thinking`` binary
-        toggle. When reasoning is disabled we send only
-        ``thinking={"type": "disabled"}`` and omit ``reasoning_effort``.
-        Mirrors the OpenCodeGoProfile kimi-k2 branch.
-        """
-        extra_body = {}
-        top_level = {}
-
-        if not reasoning_config or not isinstance(reasoning_config, dict):
-            # No config → thinking on via the binary toggle only.
-            extra_body["thinking"] = {"type": "enabled"}
-            return extra_body, top_level
-
-        enabled = reasoning_config.get("enabled", True)
-        if enabled is False:
-            extra_body["thinking"] = {"type": "disabled"}
-            return extra_body, top_level
-
-        # Enabled: a recognized effort wins (top-level only); any unknown or
-        # strong effort (e.g. ``xhigh``/``max``) is not in Moonshot's
-        # low|medium|high set, so drop to the thinking toggle instead.
-        effort = (reasoning_config.get("effort") or "").strip().lower()
-        if effort in {"low", "medium", "high"}:
-            top_level["reasoning_effort"] = effort
-        else:
-            extra_body["thinking"] = {"type": "enabled"}
-
+        """Moonshot treats extra_body.thinking and reasoning_effort as mutually
+        exclusive (400 on both): send effort when requested, else the toggle. K2.x keeps
+        replayed prior-turn reasoning_content only with ``thinking.keep: "all"`` (default null
+        ignores it; platform.kimi.ai/docs/guide/use-thinking-models); K3 always keeps it."""
+        extra_body, top_level = thinking_toggle_extras(
+            reasoning_config, KIMI_K3_EFFORTS, KIMI_K3_OVERRIDES
+        )
+        thinking = extra_body.get("thinking")
+        if (
+            isinstance(thinking, dict)
+            and thinking.get("type") == "enabled"
+            and "k2" in (model or "").lower()
+        ):
+            extra_body["thinking"] = {**thinking, "keep": "all"}
         return extra_body, top_level
 
 
-kimi = KimiProfile(
-    name="kimi-coding",
-    aliases=("kimi", "moonshot", "kimi-for-coding"),
-    env_vars=("KIMI_API_KEY", "KIMI_CODING_API_KEY"),
-    base_url="https://api.moonshot.ai/v1",
-    fixed_temperature=OMIT_TEMPERATURE,
-    default_max_tokens=32000,
-    default_headers={"User-Agent": "clawksis-agent/1.0"},
-    default_aux_model="kimi-k2-turbo-preview",
-)
+def _kimi(name: str, aliases: tuple, env_vars: tuple, base_url: str) -> KimiProfile:
+    return KimiProfile(
+        name=name,
+        aliases=aliases,
+        env_vars=env_vars,
+        base_url=base_url,
+        fixed_temperature=OMIT_TEMPERATURE,
+        default_max_tokens=32000,
+        default_headers=dict(_HEADERS),
+        default_aux_model="kimi-k2-turbo-preview",
+    )
 
-kimi_cn = KimiProfile(
-    name="kimi-coding-cn",
-    aliases=("kimi-cn", "moonshot-cn"),
-    env_vars=("KIMI_CN_API_KEY",),
-    base_url="https://api.moonshot.cn/v1",
-    fixed_temperature=OMIT_TEMPERATURE,
-    default_max_tokens=32000,
-    default_headers={"User-Agent": "clawksis-agent/1.0"},
-    default_aux_model="kimi-k2-turbo-preview",
+
+kimi = _kimi(
+    "kimi-coding",
+    ("kimi", "moonshot", "kimi-for-coding"),
+    ("KIMI_API_KEY", "KIMI_CODING_API_KEY"),
+    "https://api.moonshot.ai/v1",
+)
+kimi_cn = _kimi(
+    "kimi-coding-cn",
+    ("kimi-cn", "moonshot-cn"),
+    ("KIMI_CN_API_KEY",),
+    "https://api.moonshot.cn/v1",
 )
 
 register_provider(kimi)

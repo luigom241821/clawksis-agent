@@ -53,6 +53,7 @@ def recalc(xlsx_path: str, timeout: int = 60) -> dict:
                     "--outdir",
                     td,
                 ],
+                stdin=subprocess.DEVNULL,
                 check=True,
                 capture_output=True,
                 timeout=timeout,

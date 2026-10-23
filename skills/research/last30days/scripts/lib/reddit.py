@@ -53,50 +53,52 @@ from .query import extract_core_subject as _query_extract
 from .relevance import token_overlap_relevance
 
 # Reddit-specific noise words (preserves original smaller set)
-NOISE_WORDS = frozenset({
-    "best",
-    "top",
-    "good",
-    "great",
-    "awesome",
-    "killer",
-    "latest",
-    "new",
-    "news",
-    "update",
-    "updates",
-    "trending",
-    "hottest",
-    "popular",
-    "practices",
-    "features",
-    "tips",
-    "recommendations",
-    "advice",
-    "prompt",
-    "prompts",
-    "prompting",
-    "methods",
-    "strategies",
-    "approaches",
-    "how",
-    "to",
-    "the",
-    "a",
-    "an",
-    "for",
-    "with",
-    "of",
-    "in",
-    "on",
-    "is",
-    "are",
-    "what",
-    "which",
-    "guide",
-    "tutorial",
-    "using",
-})
+NOISE_WORDS = frozenset(
+    {
+        "best",
+        "top",
+        "good",
+        "great",
+        "awesome",
+        "killer",
+        "latest",
+        "new",
+        "news",
+        "update",
+        "updates",
+        "trending",
+        "hottest",
+        "popular",
+        "practices",
+        "features",
+        "tips",
+        "recommendations",
+        "advice",
+        "prompt",
+        "prompts",
+        "prompting",
+        "methods",
+        "strategies",
+        "approaches",
+        "how",
+        "to",
+        "the",
+        "a",
+        "an",
+        "for",
+        "with",
+        "of",
+        "in",
+        "on",
+        "is",
+        "are",
+        "what",
+        "which",
+        "guide",
+        "tutorial",
+        "using",
+    }
+)
 
 
 def _log(msg: str):
@@ -111,7 +113,7 @@ def _extract_core_subject(topic: str) -> str:
     return _query_extract(topic, noise=NOISE_WORDS)
 
 
-def expand_reddit_queries(topic: str, depth: str) -> List[str]:
+def expand_reddit_queries(topic: str, depth: str) -> list[str]:
     """Generate multiple Reddit search queries from a topic.
 
     Uses local logic (no LLM call needed):
@@ -173,24 +175,26 @@ def _infer_query_intent(topic: str) -> str:
 
 # Known utility/meta subreddits that match queries but aren't discussion subs.
 # These get a 0.3x penalty (not banned) in subreddit discovery scoring.
-UTILITY_SUBS = frozenset({
-    "namethatsong",
-    "findthatsong",
-    "tipofmytongue",
-    "whatisthissong",
-    "helpmefind",
-    "whatisthisthing",
-    "whatsthissong",
-    "findareddit",
-    "subredditdrama",
-})
+UTILITY_SUBS = frozenset(
+    {
+        "namethatsong",
+        "findthatsong",
+        "tipofmytongue",
+        "whatisthissong",
+        "helpmefind",
+        "whatisthisthing",
+        "whatsthissong",
+        "findareddit",
+        "subredditdrama",
+    }
+)
 
 
 def discover_subreddits(
-    results: List[Dict[str, Any]],
+    results: list[dict[str, Any]],
     topic: str = "",
     max_subs: int = 5,
-) -> List[str]:
+) -> list[str]:
     """Extract top subreddits from global search results with relevance weighting.
 
     Uses frequency + topic-word matching + utility-sub penalties + engagement
@@ -261,7 +265,7 @@ def _extract_subreddit_name(value: Any) -> str:
     return str(value).strip()
 
 
-def _extract_score(post: Dict[str, Any]) -> int:
+def _extract_score(post: dict[str, Any]) -> int:
     """Extract post score from either API schema.
 
     Global search uses ``votes``; subreddit search uses ``ups``/``score``.
@@ -269,7 +273,7 @@ def _extract_score(post: Dict[str, Any]) -> int:
     return _first_of(post.get("ups"), post.get("score"), post.get("votes"), default=0)
 
 
-def _extract_date(post: Dict[str, Any]) -> Optional[str]:
+def _extract_date(post: dict[str, Any]) -> Optional[str]:
     """Extract date from either API schema.
 
     Global search uses ``created_at`` (ISO); subreddit search uses ``created_utc`` (Unix).
@@ -282,10 +286,10 @@ def _extract_date(post: Dict[str, Any]) -> Optional[str]:
 def _normalize_reddit_id(raw_id: str) -> str:
     """Strip Reddit fullname prefix (t3_) for consistent dedup."""
     s = str(raw_id or "")
-    return s[3:] if s.startswith("t3_") else s
+    return s.removeprefix("t3_")
 
 
-def _total_engagement(item: Dict[str, Any]) -> int:
+def _total_engagement(item: dict[str, Any]) -> int:
     """Combined engagement score: upvotes + comment count.
 
     Used for selecting which threads to enrich with comments.
@@ -298,8 +302,8 @@ def _total_engagement(item: Dict[str, Any]) -> int:
 
 
 def _normalize_post(
-    post: Dict[str, Any], idx: int, source_label: str = "global", query: str = ""
-) -> Dict[str, Any]:
+    post: dict[str, Any], idx: int, source_label: str = "global", query: str = ""
+) -> dict[str, Any]:
     """Normalize a ScrapeCreators Reddit post to our internal format.
 
     Handles both the global-search schema (``votes``, ``created_at``,
@@ -359,7 +363,7 @@ def _global_search(
     token: str,
     sort: str = "relevance",
     timeframe: str = "month",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Search across all of Reddit via ScrapeCreators global search.
 
     Args:
@@ -396,7 +400,7 @@ def _subreddit_search(
     token: str,
     sort: str = "relevance",
     timeframe: str = "month",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Search within a specific subreddit via ScrapeCreators.
 
     Args:
@@ -436,7 +440,7 @@ def _subreddit_search(
 def fetch_post_comments(
     url: str,
     token: str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Fetch comments for a Reddit post via ScrapeCreators.
 
     Args:
@@ -465,7 +469,7 @@ def fetch_post_comments(
         return []
 
 
-def _dedupe_posts(posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _dedupe_posts(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deduplicate posts by reddit_id, keeping first occurrence."""
     seen_ids = set()
     seen_urls = set()
@@ -490,9 +494,9 @@ def search_reddit(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    token: str = None,
-    subreddits: List[str] | None = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+    subreddits: list[str] | None = None,
+) -> dict[str, Any]:
     """Full Reddit search: multi-query global discovery + subreddit drill-down.
 
     This is the main v3 Reddit entry point.
@@ -523,7 +527,7 @@ def search_reddit(
 
     # === Phase 1.5: Pre-resolved subreddit search (high-signal) ===
     all_raw_posts = []
-    all_items: List[Dict[str, Any]] = []
+    all_items: list[dict[str, Any]] = []
     if subreddits:
         _log(f"Searching pre-resolved subreddits: {subreddits}")
         with ThreadPoolExecutor(max_workers=min(5, len(subreddits))) as executor:
@@ -637,11 +641,11 @@ def search_reddit(
 
 
 def enrich_with_comments(
-    items: List[Dict[str, Any]],
+    items: list[dict[str, Any]],
     token: str,
     depth: str = "default",
     budget_seconds: int = 60,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Enrich top items with comment data from ScrapeCreators.
 
     Args:
@@ -704,13 +708,15 @@ def enrich_with_comments(
                 comment_url = f"https://reddit.com{permalink}" if permalink else ""
 
                 max_excerpt = 400 if ci == 0 else 300
-                top_comments.append({
-                    "score": score,
-                    "date": _parse_date(c.get("created_utc")),
-                    "author": author,
-                    "excerpt": body[:max_excerpt],
-                    "url": comment_url,
-                })
+                top_comments.append(
+                    {
+                        "score": score,
+                        "date": _parse_date(c.get("created_utc")),
+                        "author": author,
+                        "excerpt": body[:max_excerpt],
+                        "url": comment_url,
+                    }
+                )
 
                 if len(body) >= 30 and author not in (
                     "[deleted]",
@@ -750,9 +756,9 @@ def search_and_enrich(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    token: str = None,
-    subreddits: List[str] | None = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+    subreddits: list[str] | None = None,
+) -> dict[str, Any]:
     """Full Reddit pipeline: search + comment enrichment.
 
     This is the convenience function that does everything.
@@ -780,7 +786,7 @@ def search_and_enrich(
     return result
 
 
-def parse_reddit_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_reddit_response(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse ScrapeCreators response to item list.
 
     Parse raw Reddit search output into the generic item shape.

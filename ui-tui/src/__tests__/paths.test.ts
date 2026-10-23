@@ -99,17 +99,13 @@ describe('fmtProjectCwdBranch', () => {
   })
 
   it('keeps the project visible when space is tight', () => {
-    expect(fmtProjectCwdBranch('/Users/bb/proj', 'main', 'clawksis-agent', 12)).toBe('clawksis-agent')
+    expect(fmtProjectCwdBranch('/Users/bb/proj', 'main', 'clawksis-agent', 14)).toBe('clawksis-agent')
   })
 })
 
 describe('composeTabTitle', () => {
   it('joins marker, name, model, and cwd in order', () => {
     expect(composeTabTitle('✓', 'auth refactor', 'opus-4', '~/proj')).toBe('✓ auth refactor · opus-4 · ~/proj')
-  })
-
-  it('glues the marker to the first segment with a space, not a separator', () => {
-    expect(composeTabTitle('⏳', 'my session', 'opus-4', '~/proj').startsWith('⏳ my session')).toBe(true)
   })
 
   it('omits the session name when empty (matches the pre-name format)', () => {

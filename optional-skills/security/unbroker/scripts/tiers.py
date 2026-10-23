@@ -72,33 +72,35 @@ def plan(
                 "date_of_birth: this broker's identity gate requires DOB to match records; "
                 "collect it up front (intake --dob) or expect a mid-flow human pause"
             )
-        actions.append({
-            "broker_id": b.get("id"),
-            "broker_name": b.get("name"),
-            "priority": b.get("priority"),
-            "method": opt.get("method"),
-            "tier": tier,
-            "human_required": tier == "T3",
-            "search_url": search.get("url"),
-            "fetch": search.get("fetch", "web_extract"),
-            "antibot": search.get("antibot"),
-            "search_by": vectors_mod.supported_by(b),
-            "search_vectors": svectors,
-            "optout_url": opt.get("url"),
-            "optout_email": opt.get("email"),
-            "disclosure_fields": sorted(disclosure.keys()),
-            "needs_operator_input": prewarn,
-            "owns": b.get("owns") or [],
-            "notes": opt.get("notes", ""),
-            "optout_quirks": quirks,
-            "optout_requires": req,
-            # The DELETION lane (right-to-delete), distinct from listing suppression. Structured so
-            # the autopilot can route to it: {via: email|in_flow|web_form, email?, url?, kinds?, notes?}
-            "deletion": opt.get("deletion") or {},
-            # Exact ordered opt-out steps maintained IN the broker record (field-verified knowledge
-            # lives with the data, not in code).
-            "optout_playbook": opt.get("playbook") or [],
-        })
+        actions.append(
+            {
+                "broker_id": b.get("id"),
+                "broker_name": b.get("name"),
+                "priority": b.get("priority"),
+                "method": opt.get("method"),
+                "tier": tier,
+                "human_required": tier == "T3",
+                "search_url": search.get("url"),
+                "fetch": search.get("fetch", "web_extract"),
+                "antibot": search.get("antibot"),
+                "search_by": vectors_mod.supported_by(b),
+                "search_vectors": svectors,
+                "optout_url": opt.get("url"),
+                "optout_email": opt.get("email"),
+                "disclosure_fields": sorted(disclosure.keys()),
+                "needs_operator_input": prewarn,
+                "owns": b.get("owns") or [],
+                "notes": opt.get("notes", ""),
+                "optout_quirks": quirks,
+                "optout_requires": req,
+                # The DELETION lane (right-to-delete), distinct from listing suppression. Structured so
+                # the autopilot can route to it: {via: email|in_flow|web_form, email?, url?, kinds?, notes?}
+                "deletion": opt.get("deletion") or {},
+                # Exact ordered opt-out steps maintained IN the broker record (field-verified knowledge
+                # lives with the data, not in code).
+                "optout_playbook": opt.get("playbook") or [],
+            }
+        )
     return actions
 
 
@@ -302,17 +304,19 @@ def _parent_playbook(found_rows: list[dict]) -> list[dict]:
     playbook: list[dict] = []
     for i, r in enumerate([x for x in found_rows if x.get("clears_children")], start=1):
         steps = list(r.get("optout_playbook") or []) or synthesize_steps(r)
-        playbook.append({
-            "order": i,
-            "broker_id": r["broker_id"],
-            "broker_name": r["broker_name"],
-            "tier": r["tier"],
-            "clears_children": r["clears_children"],
-            "optout_url": r.get("optout_url"),
-            "optout_email": r.get("optout_email"),
-            "deletion": r.get("deletion") or {},
-            "steps": steps,
-        })
+        playbook.append(
+            {
+                "order": i,
+                "broker_id": r["broker_id"],
+                "broker_name": r["broker_name"],
+                "tier": r["tier"],
+                "clears_children": r["clears_children"],
+                "optout_url": r.get("optout_url"),
+                "optout_email": r.get("optout_email"),
+                "deletion": r.get("deletion") or {},
+                "steps": steps,
+            }
+        )
     return playbook
 
 

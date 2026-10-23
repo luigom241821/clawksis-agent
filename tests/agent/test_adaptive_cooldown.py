@@ -53,6 +53,7 @@ def test_disabled_uses_static_429_ttl():
     assert _exhausted_until(e) == 1000.0 + EXHAUSTED_TTL_429_SECONDS
 
 
+@pytest.mark.real_retry_backoff
 def test_adaptive_grows_with_consecutive_and_caps():
     set_adaptive_cooldown(
         AdaptiveCooldownSettings(enabled=True, base_seconds=60, max_seconds=3600)

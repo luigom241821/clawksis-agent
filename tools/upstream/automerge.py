@@ -29,10 +29,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from sync import ROOT, match_eol  # noqa: E402
-from mkbase import unmap_path  # noqa: E402
-import json  # noqa: E402
-from sync import STATE_FILE, show, rebrand  # noqa: E402
+from sync import ROOT, match_eol
+from mkbase import unmap_path
+import json
+from sync import STATE_FILE, show, rebrand
 
 PENDING = HERE / "pending"
 
@@ -69,7 +69,7 @@ def base_rebranded(fork_path: str, base_rev: str) -> bytes | None:
 
 def pending_divergents() -> list[str]:
     report = (PENDING / "REPORT.md").read_text(encoding="utf-8")
-    return re.findall(r"^- `([^`]+)`", report, re.M)
+    return re.findall(r"^- `([^`]+)`", report, re.MULTILINE)
 
 
 def main() -> int:

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S bash -c 'exec "$BASH" "$(dirname "$0")/run-in-clawk-env" python3 "$0" "$@"'
 """Build the Clawksis Model Catalog — a centralized JSON manifest of curated models.
 
 This script reads the in-repo hardcoded curated lists (``OPENROUTER_MODELS``,
@@ -17,7 +17,7 @@ Usage::
 Output: ``website/static/api/model-catalog.json``
 
 Live URL (after ``deploy-site.yml`` runs on merge to main):
-``https://github.com/samuelgradientai-sys/clawksis-agent
+``https://samuelgradientai-sys.github.io/clawksis-agent/api/model-catalog.json``
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
@@ -33,7 +33,7 @@ sys.path.insert(0, REPO_ROOT)
 # Ensure CLAWK_HOME is set for imports that touch it at module level.
 os.environ.setdefault("CLAWK_HOME", os.path.join(os.path.expanduser("~"), ".clawksis"))
 
-from clawk_cli.models import (  # noqa: E402
+from clawk_cli.models import (
     OPENROUTER_MODELS,
     PREFERRED_SILENT_DEFAULT_MODEL,
     _PROVIDER_MODELS,
@@ -61,7 +61,7 @@ def _nous_entry(mid: str) -> dict:
 def build_catalog() -> dict:
     return {
         "version": CATALOG_VERSION,
-        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "updated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "metadata": {
             "source": "clawksis-agent repo",
             "docs": "https://github.com/samuelgradientai-sys/clawksis-agent",
@@ -85,8 +85,6 @@ def build_catalog() -> dict:
                 "metadata": {
                     "display_name": "Nous Portal",
                     "note": (
-                        "Free-tier gating is determined live via Portal pricing "
-                        "(partition_nous_models_by_tier), not this manifest. "
                         'The entry labeled "default": true is the model Clawksis '
                         "silently lands on when the user never picked one."
                     ),

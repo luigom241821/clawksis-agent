@@ -30,15 +30,13 @@ def extract_reddit_path(url: str) -> Optional[str]:
 class RedditRateLimitError(Exception):
     """Raised when Reddit returns HTTP 429 (rate limited)."""
 
-    pass
-
 
 def fetch_thread_data(
     url: str,
-    mock_data: Optional[Dict] = None,
+    mock_data: Optional[dict] = None,
     timeout: int = 30,
     retries: int = 3,
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     """Fetch Reddit thread JSON data.
 
     Args:
@@ -71,7 +69,7 @@ def fetch_thread_data(
         return None
 
 
-def parse_thread_data(data: Any) -> Dict[str, Any]:
+def parse_thread_data(data: Any) -> dict[str, Any]:
     """Parse Reddit thread JSON into structured data.
 
     Args:
@@ -128,7 +126,7 @@ def parse_thread_data(data: Any) -> Dict[str, Any]:
     return result
 
 
-def get_top_comments(comments: List[Dict], limit: int = 10) -> List[Dict[str, Any]]:
+def get_top_comments(comments: list[dict], limit: int = 10) -> list[dict[str, Any]]:
     """Get top comments sorted by score.
 
     Args:
@@ -147,7 +145,7 @@ def get_top_comments(comments: List[Dict], limit: int = 10) -> List[Dict[str, An
     return sorted_comments[:limit]
 
 
-def extract_comment_insights(comments: List[Dict], limit: int = 7) -> List[str]:
+def extract_comment_insights(comments: list[dict], limit: int = 7) -> list[str]:
     """Extract key insights from top comments.
 
     Uses simple heuristics to identify valuable comments:
@@ -198,11 +196,11 @@ def extract_comment_insights(comments: List[Dict], limit: int = 7) -> List[str]:
 
 
 def enrich_reddit_item(
-    item: Dict[str, Any],
-    mock_thread_data: Optional[Dict] = None,
+    item: dict[str, Any],
+    mock_thread_data: Optional[dict] = None,
     timeout: int = 10,
     retries: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Enrich a Reddit item with real engagement data.
 
     Args:
@@ -249,13 +247,15 @@ def enrich_reddit_item(
     for c in top_comments:
         permalink = c.get("permalink", "")
         comment_url = f"https://reddit.com{permalink}" if permalink else ""
-        item["top_comments"].append({
-            "score": c.get("score", 0),
-            "date": dates.timestamp_to_date(c.get("created_utc")),
-            "author": c.get("author", ""),
-            "excerpt": c.get("body", "")[:200],
-            "url": comment_url,
-        })
+        item["top_comments"].append(
+            {
+                "score": c.get("score", 0),
+                "date": dates.timestamp_to_date(c.get("created_utc")),
+                "author": c.get("author", ""),
+                "excerpt": c.get("body", "")[:200],
+                "url": comment_url,
+            }
+        )
 
     # Extract insights
     item["comment_insights"] = extract_comment_insights(top_comments)
@@ -264,10 +264,10 @@ def enrich_reddit_item(
 
 
 def enrich_reddit_item_sc(
-    item: Dict[str, Any],
+    item: dict[str, Any],
     token: str,
     timeout: int = 30,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Enrich a Reddit item using ScrapeCreators comment API.
 
     No rate limit risk. Uses 1 credit per call.
@@ -301,28 +301,32 @@ def enrich_reddit_item_sc(
         permalink = c.get("permalink", "")
         comment_url = f"https://reddit.com{permalink}" if permalink else ""
 
-        top_comments.append({
-            "score": score,
-            "date": dates.timestamp_to_date(c.get("created_utc"))
-            if c.get("created_utc")
-            else None,
-            "author": author,
-            "body": body[:300],
-            "excerpt": body[:200],
-            "url": comment_url,
-        })
+        top_comments.append(
+            {
+                "score": score,
+                "date": dates.timestamp_to_date(c.get("created_utc"))
+                if c.get("created_utc")
+                else None,
+                "author": author,
+                "body": body[:300],
+                "excerpt": body[:200],
+                "url": comment_url,
+            }
+        )
 
     top_comments.sort(key=lambda c: c.get("score", 0), reverse=True)
 
     item["top_comments"] = []
     for c in top_comments:
-        item["top_comments"].append({
-            "score": c.get("score", 0),
-            "date": c.get("date"),
-            "author": c.get("author", ""),
-            "excerpt": c.get("excerpt", ""),
-            "url": c.get("url", ""),
-        })
+        item["top_comments"].append(
+            {
+                "score": c.get("score", 0),
+                "date": c.get("date"),
+                "author": c.get("author", ""),
+                "excerpt": c.get("excerpt", ""),
+                "url": c.get("url", ""),
+            }
+        )
 
     item["comment_insights"] = extract_comment_insights(top_comments)
 

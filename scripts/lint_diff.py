@@ -30,7 +30,7 @@ def _load_json(path: Path | None) -> list[dict]:
     if path is None or not path.exists() or path.stat().st_size == 0:
         return []
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
         print(f"warning: could not parse {path}: {exc}", file=sys.stderr)
         return []
@@ -51,13 +51,15 @@ def _normalize_ruff(entries: list[dict]) -> list[dict]:
         except ValueError:
             pass
         line = (e.get("location") or {}).get("row", 0)
-        out.append({
-            "tool": "ruff",
-            "rule": code,
-            "path": filename,
-            "line": line,
-            "message": e.get("message", ""),
-        })
+        out.append(
+            {
+                "tool": "ruff",
+                "rule": code,
+                "path": filename,
+                "line": line,
+                "message": e.get("message", ""),
+            }
+        )
     return out
 
 
@@ -67,13 +69,15 @@ def _normalize_ty(entries: list[dict]) -> list[dict]:
     for e in entries:
         loc = e.get("location") or {}
         begin = (loc.get("positions") or {}).get("begin") or {}
-        out.append({
-            "tool": "ty",
-            "rule": e.get("check_name", "unknown"),
-            "path": loc.get("path", ""),
-            "line": begin.get("line", 0),
-            "message": e.get("description", ""),
-        })
+        out.append(
+            {
+                "tool": "ty",
+                "rule": e.get("check_name", "unknown"),
+                "path": loc.get("path", ""),
+                "line": begin.get("line", 0),
+                "message": e.get("description", ""),
+            }
+        )
     return out
 
 
@@ -192,7 +196,7 @@ def main() -> int:
 
     summary = "\n".join(buf)
     if args.output:
-        args.output.write_text(summary)
+        args.output.write_text(summary, encoding="utf-8")
     else:
         print(summary)
     return 0

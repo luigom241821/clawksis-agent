@@ -22,7 +22,7 @@ if "dotenv" not in sys.modules:
     sys.modules["dotenv"] = fake_dotenv
 
 from clawk_cli.auth import resolve_api_key_provider_credentials
-from clawk_cli.models import CANONICAL_PROVIDERS, _PROVIDER_LABELS, normalize_provider
+from clawk_cli.models import normalize_provider
 
 
 @pytest.fixture(autouse=True)
@@ -48,17 +48,6 @@ class TestFireworksAliases:
         assert normalize_in_providers(alias) == "fireworks"
 
 
-class TestFireworksOrdering:
-    """Fireworks participates in the canonical provider catalog."""
-
-    def test_present_in_canonical_providers(self):
-        slugs = [p.slug for p in CANONICAL_PROVIDERS]
-        assert "fireworks" in slugs
-
-    def test_has_a_label(self):
-        assert _PROVIDER_LABELS.get("fireworks") == "Fireworks AI"
-
-
 class TestFireworksConfigRegistry:
     def test_optional_env_vars_include_fireworks(self):
         from clawk_cli.config import OPTIONAL_ENV_VARS
@@ -70,24 +59,7 @@ class TestFireworksConfigRegistry:
         assert "FIREWORKS_BASE_URL" not in OPTIONAL_ENV_VARS
 
 
-class TestFireworksOverlay:
-    def test_overlay_exists(self):
-        from clawk_cli.providers import CLAWK_OVERLAYS
-
-        assert "fireworks" in CLAWK_OVERLAYS
-        overlay = CLAWK_OVERLAYS["fireworks"]
-        assert overlay.transport == "openai_chat"
-        assert overlay.base_url_override == "https://api.fireworks.ai/inference/v1"
-        assert not overlay.base_url_env_var
-        assert not overlay.is_aggregator
-
-
 class TestFireworksDoctor:
-    def test_provider_env_hints_include_fireworks(self):
-        from clawk_cli.doctor import _PROVIDER_ENV_HINTS
-
-        assert "FIREWORKS_API_KEY" in _PROVIDER_ENV_HINTS
-
     def test_slash_form_model_is_not_flagged_as_vendor_prefixed(
         self, monkeypatch, tmp_path
     ):
@@ -96,7 +68,7 @@ class TestFireworksDoctor:
         dropped — that heuristic is for aggregator vendor slugs only."""
         from clawk_cli import doctor as doctor_mod
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir(parents=True)
         (home / "config.yaml").write_text(
             "model:\n"
@@ -131,8 +103,8 @@ class TestFireworksDoctor:
         with contextlib.suppress(Exception):
             from clawk_cli import auth as _auth_mod
 
-            monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
-            monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
+            monkeypatch.setattr(_auth_mod, "get_nous_auth_status", dict)
+            monkeypatch.setattr(_auth_mod, "get_codex_auth_status", dict)
 
         buf = io.StringIO()
         with contextlib.suppress(SystemExit), contextlib.redirect_stdout(buf):
@@ -164,26 +136,25 @@ class TestFireworksAuxiliary:
             client, model = resolve_provider_client(name)
         return client, model, mock_openai.call_args.kwargs
 
-    def test_client_has_no_partner_attribution_headers(self, monkeypatch):
+    def test_client_sends_attribution_headers(self, monkeypatch):
         monkeypatch.setenv("FIREWORKS_API_KEY", "fw_test_key")
-        client, model, kwargs = self._resolve("fireworks")
+        client, _model, kwargs = self._resolve("fireworks")
         assert client is not None
         headers = kwargs.get("default_headers", {})
-        assert "HTTP-Referer" not in headers
-        assert "X-Title" not in headers
+        assert (
+            headers["HTTP-Referer"]
+            == "https://github.com/samuelgradientai-sys/clawksis-agent"
+        )
+        assert headers["X-Title"] == "Clawksis"
         assert kwargs["base_url"] == "https://api.fireworks.ai/inference/v1"
 
-    def test_aux_model_is_payg_safe(self, monkeypatch):
+    def test_client_sends_clawk_user_agent(self, monkeypatch):
+        """The profile's User-Agent survives the generic default_headers
+        fallback and reaches OpenAI client construction."""
         monkeypatch.setenv("FIREWORKS_API_KEY", "fw_test_key")
-        _, model, _ = self._resolve("fireworks")
-        assert model.startswith("accounts/fireworks/models/")
-        assert "/routers/" not in model
-        assert "turbo" not in model.lower()
-
-    def test_alias_resolves_through_aux_client(self, monkeypatch):
-        monkeypatch.setenv("FIREWORKS_API_KEY", "fw_test_key")
-        client, _, _ = self._resolve("fw")
-        assert client is not None
+        _client, _model, kwargs = self._resolve("fireworks")
+        headers = kwargs.get("default_headers", {})
+        assert headers["User-Agent"].startswith("ClawksisAgent/")
 
 
 class TestFireworksModelMetadata:

@@ -1,8 +1,4 @@
-"""``clawk import`` subcommand parser.
-
-Extracted verbatim from ``clawk_cli/main.py:main()`` (god-file Phase 2).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk import`` subcommand parser."""
 
 from __future__ import annotations
 
@@ -11,9 +7,6 @@ from typing import Callable
 
 def build_import_cmd_parser(subparsers, *, cmd_import: Callable) -> None:
     """Attach the ``import`` subcommand to ``subparsers``."""
-    # =========================================================================
-    # import command
-    # =========================================================================
     import_parser = subparsers.add_parser(
         "import",
         help="Restore a Clawksis backup from a zip file",

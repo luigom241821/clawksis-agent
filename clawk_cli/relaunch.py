@@ -1,77 +1,34 @@
-"""
-
-Unified self-relaunch for Clawksis CLI.
-
-
-
-Preserves critical flags (--tui, --dev, --profile, --model, etc.) across
-
-process replacement so that ``clawk sessions browse`` or post-setup relaunch
-
-doesn't silently drop the user's UI mode or other preferences.
-
-
-
-Also works when ``clawk`` is not on PATH (e.g. ``nix run`` or ``python -m``).
-
-"""
+"""Unified self-relaunch for Clawksis CLI: preserves inherited flags (--tui, --dev, --profile, --model…)
+across process replacement so ``clawk sessions browse`` / post-setup relaunch keep the user's mode."""
 
 import os
-
+import pathlib
 import shutil
-
 import sys
-
 from typing import Optional, Sequence
 
-
-from clawk_cli._parser import (
-    PRE_ARGPARSE_INHERITED_FLAGS,
-    build_top_level_parser,
-)
+from clawk_cli._parser import PRE_ARGPARSE_INHERITED_FLAGS, build_top_level_parser
 
 
 def _build_inherited_flag_table() -> list[tuple[str, bool]]:
-    """Build the ``(option_string, takes_value)`` table of flags that must
-
-    survive a self-relaunch, by introspecting the real parser used by
-
-    ``clawk`` itself.
-
-
-
-    A flag participates if its argparse Action carries
-
-    ``inherit_on_relaunch = True`` — set by ``_parser._inherited_flag``.
-
-    """
-
+    """``(option_string, takes_value)`` for every parser Action carrying ``inherit_on_relaunch``
+    (set by ``_parser._inherited_flag``), plus the pre-argparse flags."""
     parser, _subparsers, chat_parser = build_top_level_parser()
-
     table: list[tuple[str, bool]] = []
-
     seen: set[tuple[str, bool]] = set()
-
     for p in (parser, chat_parser):
         for action in p._actions:
             if not action.option_strings:
                 continue  # positional / no flag form
-
             if not getattr(action, "inherit_on_relaunch", False):
                 continue
-
             takes_value = action.nargs != 0  # store_true/false set nargs=0
-
             for opt in action.option_strings:
                 key = (opt, takes_value)
-
                 if key not in seen:
                     seen.add(key)
-
                     table.append(key)
-
     table.extend(PRE_ARGPARSE_INHERITED_FLAGS)
-
     return table
 
 
@@ -80,112 +37,69 @@ _INHERITED_FLAGS_TABLE = _build_inherited_flag_table()
 
 def _extract_inherited_flags(argv: Sequence[str]) -> list[str]:
     """Pull out flags that should carry over into a self-relaunched clawk."""
-
     flags: list[str] = []
-
     i = 0
-
     while i < len(argv):
         arg = argv[i]
-
         if "=" in arg:
-            key = arg.split("=", 1)[0]
-
-            for flag, _ in _INHERITED_FLAGS_TABLE:
-                if key == flag:
-                    flags.append(arg)
-
-                    break
-
+            if any(arg.split("=", 1)[0] == flag for flag, _ in _INHERITED_FLAGS_TABLE):
+                flags.append(arg)
             i += 1
-
             continue
-
         for flag, takes_value in _INHERITED_FLAGS_TABLE:
             if arg == flag:
                 flags.append(arg)
-
                 if (
                     takes_value
                     and i + 1 < len(argv)
                     and not argv[i + 1].startswith("-")
                 ):
                     flags.append(argv[i + 1])
-
                     i += 1
-
                 break
-
         i += 1
-
     return flags
 
 
 def resolve_clawk_bin() -> Optional[str]:
-    """Find the clawk entry point.
+    """Clawksis entry point: ``sys.argv[0]`` if a real executable, else ``which clawk``, else ``None``
+    (caller falls back to ``python -m clawk_cli.main``).
 
-
-
-    Priority:
-
-      1. ``sys.argv[0]`` if it resolves to a real executable.
-
-      2. ``shutil.which("clawk")`` on PATH.
-
-      3. ``None`` → caller should fall back to ``python -m clawk_cli.main``.
-
-
-
-    Windows note: ``os.access(path, os.X_OK)`` returns True for ``.py`` and
-
-    ``.pyc`` files on Windows (the OS treats anything listed in PATHEXT as
-
-    executable, and Python files are often registered there).  But
-
-    ``subprocess.run([script.py, ...])`` can't actually execute a .py
-
-    directly — CreateProcessW needs a real .exe, not a script associated
-
-    with the Python launcher.  On Windows we therefore skip the argv[0]
-
-    fast-path when it points at a .py file and fall through to either
-
-    ``clawk.exe`` on PATH or the ``sys.executable -m clawk_cli.main``
-
-    fallback.
-
+    Python launchers are never returned: on Windows a ``.py`` can't be exec'd directly, and on
+    POSIX the git installer runs the extensionless source launcher under the managed venv
+    interpreter while its ``#!/usr/bin/env python3`` shebang would pick the system Python and
+    lose the venv. Falling through to ``sys.executable -m clawk_cli.main`` keeps the venv.
     """
-
     argv0 = sys.argv[0]
-
     _is_windows = sys.platform == "win32"
 
     def _is_python_script(p: str) -> bool:
-
         return p.lower().endswith((".py", ".pyc"))
 
-    # Absolute path to an executable (covers nix store, venv wrappers, etc.)
+    def _is_unsafe_python_launcher(p: str) -> bool:
+        if _is_windows:
+            return _is_python_script(p)
+        # A console script pinned to the running venv (``#!<venv>/bin/python``) keeps the venv and
+        # stays exec-able; a shebang that resolves elsewhere (``env python3``) loses it.
+        from clawk_cli.linux_desktop_entry import _needs_interpreter
 
-    if os.path.isabs(argv0) and os.path.isfile(argv0) and os.access(argv0, os.X_OK):
-        if not (_is_windows and _is_python_script(argv0)):
-            return argv0
+        return _needs_interpreter(pathlib.Path(p))
 
-    # Relative path — resolve against CWD
-
+    # Absolute executable (nix store, venv wrappers, …), then relative-to-CWD, then PATH.
+    if (
+        os.path.isabs(argv0)
+        and os.path.isfile(argv0)
+        and os.access(argv0, os.X_OK)
+        and not _is_unsafe_python_launcher(argv0)
+    ):
+        return argv0
     if not argv0.startswith("-") and os.path.isfile(argv0):
         abs_path = os.path.abspath(argv0)
-
-        if os.access(abs_path, os.X_OK):
-            if not (_is_windows and _is_python_script(abs_path)):
-                return abs_path
-
-    # PATH lookup
-
+        if os.access(abs_path, os.X_OK) and not _is_unsafe_python_launcher(abs_path):
+            return abs_path
     path_bin = shutil.which("clawk")
-
-    if path_bin:
+    if path_bin and not _is_unsafe_python_launcher(path_bin):
         return path_bin
-
     return None
 
 
@@ -195,39 +109,13 @@ def build_relaunch_argv(
     preserve_inherited: bool = True,
     original_argv: Optional[Sequence[str]] = None,
 ) -> list[str]:
-    """Construct an argv list for replacing the current process with clawk.
-
-
-
-    Args:
-
-        extra_args: Arguments to append (e.g. ``["--resume", id]``).
-
-        preserve_inherited: Whether to carry over UI / behaviour flags
-
-            tagged with ``inherit_on_relaunch`` in the parser.
-
-        original_argv: The original argv to scan for flags (defaults to
-
-            ``sys.argv[1:]``).
-
-    """
-
+    """Construct an argv list for replacing the current process with clawk."""
     bin_path = resolve_clawk_bin()
-
-    if bin_path:
-        argv = [bin_path]
-
-    else:
-        argv = [sys.executable, "-m", "clawk_cli.main"]
-
+    argv = [bin_path] if bin_path else [sys.executable, "-m", "clawk_cli.main"]
     src = list(original_argv) if original_argv is not None else list(sys.argv[1:])
-
     if preserve_inherited:
         argv.extend(_extract_inherited_flags(src))
-
     argv.extend(extra_args)
-
     return argv
 
 
@@ -239,78 +127,34 @@ def relaunch(
 ) -> None:
     """Replace the current process with a fresh clawk invocation.
 
-
-
-    On POSIX we use ``os.execvp`` which replaces the running process with
-
-    the new one in place — same PID, no double-fork.  That's what the
-
-    relaunch contract wants: "run clawk again as if the user had typed
-
-    the new argv".
-
-
-
-    Windows has no native exec semantics — ``os.execvp`` on Windows
-
-    *emulates* exec by spawning the child and exiting the parent, but
-
-    only works when the target is a real Win32 executable.  Our target
-
-    is usually ``clawk.exe`` (a Python console-script shim that wraps
-
-    ``python -m clawk_cli.main``) or a ``.cmd`` batch file, and both
-
-    raise ``OSError(8, "Exec format error")`` on Windows' execvp.
-
-
-
-    The Windows-correct pattern is: spawn the child with ``subprocess.run``
-
-    (which routes through ``cmd.exe`` via ``shell=False`` + PATHEXT resolution),
-
-    wait for it to exit, then propagate its exit code via ``sys.exit``.
-
-    That's functionally equivalent — the user sees "clawk exited, then
-
-    new clawk started" — just with two PIDs in play instead of one.
-
+    POSIX: ``os.execvp`` in place (same PID, no double-fork). Windows has no real exec — its
+    ``execvp`` emulation only works for a real Win32 executable, so spawn + exit instead.
     """
-
     new_argv = build_relaunch_argv(
         extra_args, preserve_inherited=preserve_inherited, original_argv=original_argv
     )
-
     if sys.platform == "win32":
-        # Windows: subprocess + exit, because execvp can't swap to .cmd/.exe shims.
-
         import subprocess
 
         try:
-            result = subprocess.run(new_argv)
-
+            result = subprocess.run(new_argv, check=False)
             sys.exit(result.returncode)
-
         except KeyboardInterrupt:
             sys.exit(130)
-
         except OSError as exc:
-            # Surface a helpful error rather than the raw OSError — the
-
-            # caller used to see ``[Errno 8] Exec format error`` which is
-
-            # cryptic.  Common causes: ``clawk`` not on PATH yet (install
-
-            # hasn't propagated User PATH into this shell) or a stale shim.
-
+            # Raw ``[Errno 8] Exec format error`` is cryptic; usual causes are ``clawk`` not on
+            # PATH yet (install hasn't propagated User PATH into this shell) or a stale shim.
             print(
                 f"\nClawksis relaunch failed: {exc}\n"
                 f"Command: {' '.join(new_argv)}\n"
                 f"Fix: open a new terminal so PATH picks up, then re-run clawk.",
                 file=sys.stderr,
             )
-
             sys.exit(1)
-
     else:
+        from clawk_cli.observability.shared_metrics_startup import (
+            mark_in_place_relaunch,
+        )
+
+        mark_in_place_relaunch()
         os.execvp(new_argv[0], new_argv)

@@ -9,7 +9,7 @@ description: "How to build a cloud browser backend plugin for Clawksis"
 Browser provider plugins register a **cloud browser backend** that services cloud-mode `browser_*` tool calls (navigate, click, screenshot, …). Built-in providers — Browserbase, Browser Use, and Firecrawl — all ship as plugins under `plugins/browser/<name>/`. You can add a new one, or override a bundled one, by dropping a directory next to them.
 
 :::tip
-Browser backends are one of several **backend plugins** Clawksis supports. The others (with their own ABCs) are [Web Search Provider Plugins](/developer-guide/web-search-provider-plugin) (which this ABC deliberately mirrors), [Image Generation](/developer-guide/image-gen-provider-plugin), [Video Generation](/developer-guide/video-gen-provider-plugin), [Memory Providers](/developer-guide/memory-provider-plugin), [Context Engines](/developer-guide/context-engine-plugin), [Secret Sources](/developer-guide/secret-source-plugin), and [Model Providers](/developer-guide/model-provider-plugin). General tool/hook/CLI plugins live in [Build a Clawksis Plugin](/developer-guide/plugins).
+Browser backends are one of several **backend plugins** Clawksis supports. The others (with their own ABCs) are [Web Search Provider Plugins](./web-search-provider-plugin.md) (which this ABC deliberately mirrors), [Image Generation](./image-gen-provider-plugin.md), [Video Generation](./video-gen-provider-plugin.md), [Memory Providers](./memory-provider-plugin.md), [Context Engines](./context-engine-plugin.md), [Secret Sources](./secret-source-plugin.md), and [Model Providers](./model-provider-plugin.md). General tool/hook/CLI plugins live in [Build a Clawksis Plugin](./plugins/index.md).
 :::
 
 ## How it fits together
@@ -70,11 +70,11 @@ from agent.browser_provider import BrowserProvider
 class MyBackendProvider(BrowserProvider):
     @property
     def name(self) -> str:
-        return "my-backend"  # the browser.cloud_provider config value
+        return "my-backend"          # the browser.cloud_provider config value
 
     @property
     def display_name(self) -> str:
-        return "My Backend"  # shown in `clawk tools`
+        return "My Backend"          # shown in `clawk tools`
 
     def is_available(self) -> bool:
         """Cheap check only — env var present, dep importable.
@@ -87,9 +87,9 @@ class MyBackendProvider(BrowserProvider):
         session = my_api.create_browser(...)
         return {
             "session_name": f"my-backend-{task_id}",  # unique agent-browser session name
-            "bb_session_id": session.id,  # provider session ID (for cleanup)
-            "cdp_url": session.cdp_ws_url,  # CDP websocket URL
-            "features": {"stealth": True},  # feature flags you enabled
+            "bb_session_id": session.id,              # provider session ID (for cleanup)
+            "cdp_url": session.cdp_ws_url,            # CDP websocket URL
+            "features": {"stealth": True},            # feature flags you enabled
         }
 
     def close_session(self, session_id: str) -> bool:
@@ -122,13 +122,11 @@ def get_setup_schema(self) -> dict:
         "badge": "paid",
         "tag": "Cloud browser with stealth and proxies",
         "env_vars": [
-            {
-                "key": "MY_BACKEND_API_KEY",
-                "prompt": "My Backend API key",
-                "url": "https://mybackend.example",
-            },
+            {"key": "MY_BACKEND_API_KEY",
+             "prompt": "My Backend API key",
+             "url": "https://mybackend.example"},
         ],
-        "post_setup": "agent_browser",  # auto-installs the agent-browser npm dep
+        "post_setup": "agent_browser",   # ensures local Chromium is installed (agent-browser itself resolves via npx)
     }
 ```
 

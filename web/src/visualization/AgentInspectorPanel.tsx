@@ -133,6 +133,7 @@ export function AgentInspectorPanel({
 }: AgentInspectorPanelProps) {
   // Re-fold on every feed change; cheap (the ring buffer is ≤500 events) and
   // keeps the "active" dot honest without a separate timer.
+  // eslint-disable-next-line react-hooks/purity -- 'now' only drives the activity dot; recomputed per feed tick
   const agents = useMemo(() => buildAgents(feed.events, Date.now()), [feed.events]);
   // Nothing is selected until the user clicks an agent — in the list here OR a
   // sprite in the office (which the host pipes in via the controlled prop).

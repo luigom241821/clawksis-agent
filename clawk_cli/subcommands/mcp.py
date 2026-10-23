@@ -1,54 +1,30 @@
-"""``clawk mcp`` subcommand parser.
-
-Extracted from ``clawk_cli/main.py:main()`` (god-file Phase 2 follow-up).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk mcp`` subcommand parser."""
 
 from __future__ import annotations
 
 import argparse
 from typing import Callable
 
-from clawk_cli.subcommands._shared import add_accept_hooks_flag
-
 
 def build_mcp_parser(subparsers, *, cmd_mcp: Callable) -> None:
     """Attach the ``mcp`` subcommand to ``subparsers``."""
     mcp_parser = subparsers.add_parser(
         "mcp",
-        help="Manage MCP servers and run Clawksis as an MCP server",
-        description=(
-            "Manage MCP server connections and run Clawksis as an MCP server.\n\n"
-            "MCP servers provide additional tools via the Model Context Protocol.\n"
-            "Use 'clawk mcp add' to connect to a new server, or\n"
-            "'clawk mcp serve' to expose Clawksis conversations over MCP."
-        ),
+        help="Manage MCP server connections",
+        description="Manage MCP server connections.\n\n"
+        "MCP servers provide additional tools via the Model Context Protocol.\n"
+        "Use 'clawk mcp add' to connect to a new server. Running Clawksis itself as an\n"
+        "MCP server is the mcp-serve plugin: `clawk plugins install mcp-serve`.",
     )
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_action")
-
-    mcp_serve_p = mcp_sub.add_parser(
-        "serve",
-        help="Run Clawksis as an MCP server (expose conversations to other agents)",
-    )
-    mcp_serve_p.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging on stderr",
-    )
-    add_accept_hooks_flag(mcp_serve_p)
 
     mcp_add_p = mcp_sub.add_parser(
         "add", help="Add an MCP server (discovery-first install)"
     )
     mcp_add_p.add_argument("name", help="Server name (used as config key)")
     mcp_add_p.add_argument("--url", help="HTTP/SSE endpoint URL")
-    # dest="mcp_command" so this flag does not clobber the top-level
-    # subparser's args.command attribute, which the dispatcher reads to
-    # route to cmd_mcp.  Without an explicit dest, argparse derives
-    # dest="command" from the flag name and sets it to None when the
-    # flag is omitted, causing `clawk mcp add ...` to fall through to
-    # interactive chat.
+    # dest="mcp_command": the default dest="command" would clobber the top-level
+    # subcommand name the dispatcher routes on (None when omitted → falls into chat).
     mcp_add_p.add_argument(
         "--command", dest="mcp_command", help="Stdio command (e.g. npx)"
     )
@@ -86,14 +62,18 @@ def build_mcp_parser(subparsers, *, cmd_mcp: Callable) -> None:
     mcp_cfg_p.add_argument("name", help="Server name to configure")
 
     mcp_login_p = mcp_sub.add_parser(
-        "login",
-        help="Force re-authentication for an OAuth-based MCP server",
+        "login", help="Force re-authentication for an OAuth-based MCP server"
     )
     mcp_login_p.add_argument("name", help="Server name to re-authenticate")
+    mcp_login_p.add_argument(
+        "--flow",
+        choices=["browser", "device"],
+        default=None,
+        help="OAuth flow (overrides oauth.flow): browser PKCE or RFC 8628 device code",
+    )
 
     mcp_reauth_p = mcp_sub.add_parser(
-        "reauth",
-        help="Re-authenticate one OAuth MCP server, or all of them (--all)",
+        "reauth", help="Re-authenticate one OAuth MCP server, or all of them (--all)"
     )
     mcp_reauth_p.add_argument(
         "name", nargs="?", help="Server name to re-authenticate (omit with --all)"
@@ -104,23 +84,19 @@ def build_mcp_parser(subparsers, *, cmd_mcp: Callable) -> None:
         help="Re-authenticate every OAuth server in config, one at a time",
     )
 
-    # ── Catalog (Nous-approved MCPs shipped with the repo) ─────────────────
+    # Catalog (Nous-approved MCPs shipped with the repo)
     mcp_sub.add_parser(
-        "picker",
-        help="Interactive catalog picker (also the default for `clawk mcp`)",
+        "picker", help="Interactive catalog picker (also the default for `clawk mcp`)"
     )
     mcp_sub.add_parser(
-        "catalog",
-        help="List Nous-approved MCPs available for one-click install",
+        "catalog", help="List Nous-approved MCPs available for one-click install"
     )
     mcp_install_p = mcp_sub.add_parser(
         "install",
-        help="Install a catalog MCP by name (e.g. `clawk mcp install n8n`)",
+        help="Install a catalog MCP by name (e.g. `clawk mcp install deepwiki`)",
     )
     mcp_install_p.add_argument(
-        "identifier",
-        help="Catalog entry name (or `official/<name>`)",
+        "identifier", help="Catalog entry name (or `official/<name>`)"
     )
 
-    add_accept_hooks_flag(mcp_parser)
     mcp_parser.set_defaults(func=cmd_mcp)

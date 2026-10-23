@@ -31,12 +31,12 @@ GENERIC_HANDLES = {
 
 
 def extract_entities(
-    reddit_items: List[Dict[str, Any]],
-    x_items: List[Dict[str, Any]],
+    reddit_items: list[dict[str, Any]],
+    x_items: list[dict[str, Any]],
     max_handles: int = 5,
     max_hashtags: int = 3,
     max_subreddits: int = 5,
-) -> Dict[str, List[str]]:
+) -> dict[str, list[str]]:
     """Extract key entities from Phase 1 results for supplemental searches.
 
     Parses X results for @handles and #hashtags, Reddit results for subreddit
@@ -63,7 +63,7 @@ def extract_entities(
     }
 
 
-def _extract_x_handles(x_items: List[Dict[str, Any]]) -> List[str]:
+def _extract_x_handles(x_items: list[dict[str, Any]]) -> list[str]:
     """Extract and rank @handles from X results.
 
     Sources handles from:
@@ -92,7 +92,7 @@ def _extract_x_handles(x_items: List[Dict[str, Any]]) -> List[str]:
     return [h for h, _ in handle_counts.most_common()]
 
 
-def _extract_x_hashtags(x_items: List[Dict[str, Any]]) -> List[str]:
+def _extract_x_hashtags(x_items: list[dict[str, Any]]) -> list[str]:
     """Extract and rank #hashtags from X results.
 
     Returns hashtags ranked by frequency.
@@ -109,7 +109,7 @@ def _extract_x_hashtags(x_items: List[Dict[str, Any]]) -> List[str]:
     return [f"#{t}" for t, _ in hashtag_counts.most_common()]
 
 
-def _extract_subreddits(reddit_items: List[Dict[str, Any]]) -> List[str]:
+def _extract_subreddits(reddit_items: list[dict[str, Any]]) -> list[str]:
     """Extract and rank subreddits from Reddit results.
 
     Sources from:

@@ -5,7 +5,7 @@ Uses xpzouying/xiaohongshu-mcp REST endpoints:
 - GET /api/v1/login/status
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from . import http
@@ -42,7 +42,7 @@ def _timestamp_to_date_ms(ts: Any) -> Optional[str]:
         if iv <= 0:
             return None
         # API examples use milliseconds.
-        dt = datetime.fromtimestamp(iv / 1000.0, tz=timezone.utc)
+        dt = datetime.fromtimestamp(iv / 1000.0, tz=UTC)
         return dt.strftime("%Y-%m-%d")
     except (TypeError, ValueError, OSError):
         return None
@@ -70,7 +70,7 @@ def search_feeds(
     to_date: str,
     base_url: str,
     depth: str = "default",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Search Xiaohongshu feeds and normalize to web-item shape."""
     base = (base_url or "").rstrip("/")
     if not base:
@@ -106,7 +106,7 @@ def search_feeds(
 
     # Cap source volume similarly to other web sources.
     limit = {"quick": 8, "default": 15, "deep": 25}.get(depth, 15)
-    items: List[Dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
 
     for i, feed in enumerate(feeds[:limit]):
         if not isinstance(feed, dict):
@@ -135,22 +135,24 @@ def search_feeds(
         date_value = _timestamp_to_date_ms(note.get("time"))
         why = f"Xiaohongshu engagement: likes={likes}, comments={comments}, favorites={favorites}"
 
-        items.append({
-            "id": f"XHS{i + 1}",
-            "title": title[:200] if title else f"Xiaohongshu note {feed_id}",
-            "url": _build_note_url(feed_id, xsec_token),
-            "source_domain": "xiaohongshu.com",
-            "snippet": snippet[:500],
-            "date": date_value,
-            "date_confidence": "high" if date_value else "low",
-            "relevance": _relevance_from_interactions(likes, comments, favorites),
-            "why_relevant": why,
-            # Keep raw engagement for debugging/possible future rendering.
-            "engagement": {
-                "likes": likes,
-                "comments": comments,
-                "favorites": favorites,
-            },
-        })
+        items.append(
+            {
+                "id": f"XHS{i + 1}",
+                "title": title[:200] if title else f"Xiaohongshu note {feed_id}",
+                "url": _build_note_url(feed_id, xsec_token),
+                "source_domain": "xiaohongshu.com",
+                "snippet": snippet[:500],
+                "date": date_value,
+                "date_confidence": "high" if date_value else "low",
+                "relevance": _relevance_from_interactions(likes, comments, favorites),
+                "why_relevant": why,
+                # Keep raw engagement for debugging/possible future rendering.
+                "engagement": {
+                    "likes": likes,
+                    "comments": comments,
+                    "favorites": favorites,
+                },
+            }
+        )
 
     return items

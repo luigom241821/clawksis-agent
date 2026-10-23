@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch YouTube transcripts for Memento quiz generation.
 
-Requires: pip install youtube-transcript-api
+Requires the isolated PM helper environment described in memento-flashcards/SKILL.md.
 The quiz question *generation* is done by the agent's LLM — this script only fetches transcripts.
 """
 
@@ -27,13 +27,15 @@ def _normalize_segments(segments: list) -> str:
 
 def cmd_fetch(args: argparse.Namespace) -> None:
     try:
-        import youtube_transcript_api  # noqa: F811
+        import youtube_transcript_api
     except ImportError:
-        _out({
-            "ok": False,
-            "error": "missing_dependency",
-            "message": "Run: pip install youtube-transcript-api",
-        })
+        _out(
+            {
+                "ok": False,
+                "error": "missing_dependency",
+                "message": "Use the isolated PM helper environment described in memento-flashcards/SKILL.md.",
+            }
+        )
         sys.exit(1)
 
     video_id = args.video_id
@@ -44,12 +46,14 @@ def cmd_fetch(args: argparse.Namespace) -> None:
         raw = api.fetch(video_id, languages=languages)
     except Exception as exc:
         error_type = type(exc).__name__
-        _out({
-            "ok": False,
-            "error": "transcript_unavailable",
-            "error_type": error_type,
-            "message": f"Could not fetch transcript for {video_id}: {exc}",
-        })
+        _out(
+            {
+                "ok": False,
+                "error": "transcript_unavailable",
+                "error_type": error_type,
+                "message": f"Could not fetch transcript for {video_id}: {exc}",
+            }
+        )
         sys.exit(1)
 
     segments = raw
@@ -58,18 +62,22 @@ def cmd_fetch(args: argparse.Namespace) -> None:
 
     text = _normalize_segments(segments)
     if not text:
-        _out({
-            "ok": False,
-            "error": "empty_transcript",
-            "message": f"Transcript for {video_id} contained no usable text.",
-        })
+        _out(
+            {
+                "ok": False,
+                "error": "empty_transcript",
+                "message": f"Transcript for {video_id} contained no usable text.",
+            }
+        )
         sys.exit(1)
 
-    _out({
-        "ok": True,
-        "video_id": video_id,
-        "transcript": text,
-    })
+    _out(
+        {
+            "ok": True,
+            "video_id": video_id,
+            "transcript": text,
+        }
+    )
 
 
 def main() -> None:

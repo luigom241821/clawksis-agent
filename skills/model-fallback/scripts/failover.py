@@ -22,7 +22,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # Known providers: env-var that holds their API key -> (provider, default model).
@@ -73,12 +73,14 @@ def detect_providers(env: dict) -> list[dict]:
         if not val or provider in seen:
             continue
         seen.add(provider)
-        found.append({
-            "provider": provider,
-            "model": default_model,
-            "env_key": env_key,
-            "key_tail": val[-4:] if len(val) >= 4 else "****",
-        })
+        found.append(
+            {
+                "provider": provider,
+                "model": default_model,
+                "env_key": env_key,
+                "key_tail": val[-4:] if len(val) >= 4 else "****",
+            }
+        )
     return found
 
 
@@ -129,7 +131,7 @@ def apply_chain(config_path: Path, providers: list[dict]) -> list[dict]:
         cfg = yaml.safe_load(raw) or {}
         if not isinstance(cfg, dict):
             raise SystemExit("config.yaml is not a YAML mapping; refusing to edit.")
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         config_path.with_name(config_path.name + f".bak-{ts}").write_text(
             raw, encoding="utf-8"
         )
@@ -151,7 +153,7 @@ def switch_model(config_path: Path, model: str) -> None:
         cfg = yaml.safe_load(raw) or {}
         if not isinstance(cfg, dict):
             raise SystemExit("config.yaml is not a YAML mapping; refusing to edit.")
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         config_path.with_name(config_path.name + f".bak-{ts}").write_text(
             raw, encoding="utf-8"
         )
@@ -202,7 +204,7 @@ def main() -> int:
         except SystemExit as exc:
             print(str(exc))
             return 1
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             print(f"switch failed: {exc}")
             return 1
         print(
@@ -238,7 +240,7 @@ def main() -> int:
         except SystemExit as exc:
             print(str(exc))
             return 1
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             print(f"apply-chain failed: {exc}")
             return 1
         print("Cadena de fallback escrita en config.yaml (backup al lado):")

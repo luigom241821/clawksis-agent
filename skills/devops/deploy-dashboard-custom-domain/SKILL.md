@@ -1,6 +1,7 @@
 ---
 name: deploy-dashboard-custom-domain
-description: "USE THIS to publish the Clawksis dashboard on a custom domain (https://tu-dominio.com) when the server ALREADY has a reverse proxy — EasyPanel/Coolify (Traefik), nginx, or a Cloudflare Tunnel — so `clawk dashboard domain` skips Caddy. Covers the two real pitfalls: a proxy in Docker can't reach the host's 127.0.0.1 (bind 0.0.0.0 + point the proxy at the docker gateway 172.17.0.1), and Cloudflare orange-cloud + redirect-to-https = infinite loop. Trigger ES+EN: 'publicar el dashboard en un dominio', 'exponer clawksis en mi dominio', 'dashboard en https', 'dominio con Traefik/EasyPanel/Cloudflare', 'clawk dashboard domain', 'deploy dashboard to a domain', 'expose the dashboard', 'dashboard behind Traefik/nginx/Cloudflare'."
+description: "Publish the Clawksis dashboard on a domain behind a proxy."
+platforms: [linux, macos, windows]
 argument-hint: 'deploy-dashboard-custom-domain tu-dominio.com'
 allowed-tools: Bash, Read
 author: Clawksis (Gradient AI)
@@ -23,6 +24,19 @@ es para el caso en que el servidor **ya tiene un reverse proxy** ocupando 80/443
 (EasyPanel/Coolify con Traefik, nginx, un Cloudflare Tunnel) — ahí el comando
 **no** instala Caddy y hay que enrutar por el proxy que ya corre, con dos
 trampas conocidas.
+
+## Cuándo usarla
+
+Publicar el dashboard de Clawksis en un dominio propio (`https://tu-dominio.com`) cuando el
+servidor **ya** tiene un reverse proxy — EasyPanel/Coolify (Traefik), nginx o un Cloudflare
+Tunnel — y por eso `clawk dashboard domain` no instala Caddy. Frases típicas (ES + EN):
+'publicar el dashboard en un dominio', 'exponer clawksis en mi dominio', 'dashboard en https',
+'dominio con Traefik/EasyPanel/Cloudflare', 'clawk dashboard domain', 'deploy dashboard to a
+domain', 'expose the dashboard', 'dashboard behind Traefik/nginx/Cloudflare'.
+
+Las dos trampas reales: un proxy en Docker no alcanza el `127.0.0.1` del host (bind `0.0.0.0`
+y apuntar el proxy a la gateway docker `172.17.0.1`), y Cloudflare con nube naranja +
+redirect-to-https = loop infinito.
 
 ## Regla de oro de seguridad
 

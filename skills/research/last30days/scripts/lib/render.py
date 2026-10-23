@@ -114,11 +114,13 @@ def render_compact(
 
     freshness_warning = _assess_data_freshness(report)
     if freshness_warning:
-        lines.extend([
-            "## Freshness",
-            f"- {freshness_warning}",
-            "",
-        ])
+        lines.extend(
+            [
+                "## Freshness",
+                f"- {freshness_warning}",
+                "",
+            ]
+        )
 
     if report.warnings:
         lines.append("## Warnings")
@@ -637,7 +639,7 @@ def render_comparison_multi(
         raise ValueError("render_comparison_multi requires at least one report")
 
     entities = [label for label, _ in entity_reports]
-    main_label, main_report = entity_reports[0]
+    _main_label, main_report = entity_reports[0]
     synthesized_topic = " vs ".join(entities)
 
     lines: list[str] = [
@@ -1151,7 +1153,7 @@ def _shorten_polymarket_title(title: str) -> str:
     # Pattern: "<Subject> visit <Place>" -> "<Place> visit"
     m = re.match(r"^(.+?)\s+visit\s+(?:the\s+)?(.+)$", t, flags=re.IGNORECASE)
     if m:
-        subject, place = m.group(1), m.group(2)
+        _subject, place = m.group(1), m.group(2)
         t = f"{place} visit"
 
     t = t.strip()
@@ -1307,8 +1309,7 @@ def _site_name_for_url(url: str) -> str:
     # urlparse needs a scheme to resolve the netloc; prepend http:// if missing.
     parsed = urlparse(u if "://" in u else f"http://{u}")
     host = (parsed.netloc or parsed.path.split("/", 1)[0]).lower()
-    if host.startswith("www."):
-        host = host[4:]
+    host = host.removeprefix("www.")
     if not host:
         return u[:40]
     if host in _SITE_NAMES:

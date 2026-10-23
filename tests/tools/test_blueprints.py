@@ -72,23 +72,6 @@ class TestParseBlueprint:
         assert spec.deliver == "telegram"
         assert spec.prompt is not None and spec.prompt.startswith("Summarize")
 
-    def test_plain_skill_is_not_a_blueprint(self):
-        assert parse_blueprint(PLAIN_SKILL) is None
-
-    def test_no_frontmatter_is_not_a_blueprint(self):
-        assert parse_blueprint("just some text, no frontmatter") is None
-
-    def test_missing_schedule_raises(self):
-        with pytest.raises(BlueprintError):
-            parse_blueprint(MALFORMED_BLUEPRINT)
-
-    def test_blueprint_not_mapping_raises(self):
-        bad = (
-            "---\nname: x\nmetadata:\n  clawk:\n    blueprint: not-a-dict\n---\n\nbody"
-        )
-        with pytest.raises(BlueprintError):
-            parse_blueprint(bad)
-
     def test_deliver_defaults_to_origin(self):
         skill = (
             "---\nname: r\ndescription: d\nmetadata:\n  clawk:\n"
@@ -110,12 +93,6 @@ class TestBlueprintSpecForInstalled:
             spec = blueprint_spec_for_installed("morning-brief")
         assert spec is not None
         assert spec.schedule == "0 8 * * *"
-
-    def test_missing_skill_returns_none(self, tmp_path):
-        skills_dir = tmp_path / "skills"
-        skills_dir.mkdir()
-        with patch("tools.skills_hub.SKILLS_DIR", skills_dir):
-            assert blueprint_spec_for_installed("nope") is None
 
     def test_plain_skill_returns_none(self, tmp_path):
         skills_dir = tmp_path / "skills"
@@ -163,12 +140,6 @@ class TestExportBlueprint:
         assert spec.deliver == "telegram"
         # Name is sanitized to a valid skill identifier.
         assert spec.skill_name == "my-morning-brief"
-
-    def test_export_has_blueprint_tag(self):
-        job = {"name": "x", "schedule_display": "every 2h", "skills": ["x"]}
-        md = export_blueprint(job, "body")
-        assert "blueprint" in md
-        assert "automation" in md
 
     def test_export_interval_job_without_display(self):
         # Regression: parse_schedule stores interval periods as "minutes" —

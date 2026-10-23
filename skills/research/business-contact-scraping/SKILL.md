@@ -1,7 +1,13 @@
 ---
 name: business-contact-scraping
-description: Extract business contact data (phone, WhatsApp, email) from Latin American directories, Google Maps, and chain store locators for lead generation. Covers progressive multi-city collection, phone-number dedup, and mobile-only filtering for cold-calling campaigns.
+description: "Scrape business phones and emails for lead generation."
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 version: 2
+metadata:
+  clawk:
+    tags: [leads, scraping, contacts, phone, whatsapp, email, google-maps, latam]
 ---
 
 # Business Contact Scraping for Lead Generation

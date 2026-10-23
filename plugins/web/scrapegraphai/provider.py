@@ -100,7 +100,7 @@ class ScrapegraphWebProvider(WebSearchProvider):
     def supports_extract(self) -> bool:
         return True
 
-    def search(self, query: str, limit: int = 5) -> Dict[str, Any]:
+    def search(self, query: str, limit: int = 5) -> dict[str, Any]:
         return {
             "success": False,
             "error": (
@@ -109,7 +109,7 @@ class ScrapegraphWebProvider(WebSearchProvider):
             ),
         }
 
-    async def extract(self, urls: List[str], **kwargs: Any) -> List[Dict[str, Any]]:
+    async def extract(self, urls: list[str], **kwargs: Any) -> list[dict[str, Any]]:
         from tools.scrapegraph_common import (
             ScrapegraphUnavailable,
             clamp_timeout,
@@ -129,7 +129,7 @@ class ScrapegraphWebProvider(WebSearchProvider):
         raw_timeout = kwargs.get("timeout")
         timeout = clamp_timeout(raw_timeout)
 
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
         for url in urls:
             if is_interrupted():
                 results.append({"url": url, "title": "", "error": "Interrupted"})
@@ -142,38 +142,46 @@ class ScrapegraphWebProvider(WebSearchProvider):
                 # {"content": "NA"}, empty dict) instead of raising — surface
                 # an actionable hint rather than empty/"NA" content.
                 if looks_like_empty_result(data):
-                    results.append({
+                    results.append(
+                        {
+                            "url": url,
+                            "title": "",
+                            "content": "",
+                            "error": (
+                                "ScrapeGraphAI returned no useful content — use "
+                                "the `scrape` tool (Scrapling) for raw content "
+                                "from this page."
+                            ),
+                        }
+                    )
+                    continue
+                content = _stringify(data)
+                results.append(
+                    {
+                        "url": url,
+                        "title": "",
+                        "content": content,
+                        "raw_content": content,
+                        "metadata": {"sourceURL": url},
+                    }
+                )
+            except ScrapegraphUnavailable as exc:
+                results.append(
+                    {
                         "url": url,
                         "title": "",
                         "content": "",
-                        "error": (
-                            "ScrapeGraphAI returned no useful content — use "
-                            "the `scrape` tool (Scrapling) for raw content "
-                            "from this page."
-                        ),
-                    })
-                    continue
-                content = _stringify(data)
-                results.append({
-                    "url": url,
-                    "title": "",
-                    "content": content,
-                    "raw_content": content,
-                    "metadata": {"sourceURL": url},
-                })
-            except ScrapegraphUnavailable as exc:
-                results.append({
-                    "url": url,
-                    "title": "",
-                    "content": "",
-                    "error": str(exc),
-                })
-            except Exception as exc:  # noqa: BLE001 — per-URL failure, don't abort batch
+                        "error": str(exc),
+                    }
+                )
+            except Exception as exc:
                 logger.warning("scrapegraph extract failed for %s: %s", url, exc)
-                results.append({
-                    "url": url,
-                    "title": "",
-                    "content": "",
-                    "error": classify_scrapegraph_error(exc),
-                })
+                results.append(
+                    {
+                        "url": url,
+                        "title": "",
+                        "content": "",
+                        "error": classify_scrapegraph_error(exc),
+                    }
+                )
         return results

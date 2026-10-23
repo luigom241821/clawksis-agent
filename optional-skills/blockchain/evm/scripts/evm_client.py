@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # Chain registry
 # ---------------------------------------------------------------------------
 
-CHAINS: Dict[str, Dict[str, Any]] = {
+CHAINS: dict[str, dict[str, Any]] = {
     "ethereum": {
         "chain_id": 1,
         "rpc": "https://ethereum-rpc.publicnode.com",
@@ -90,7 +90,7 @@ DEFAULT_CHAIN = "ethereum"
 # Known ERC-20 token registry  {chain -> {symbol -> address}}
 # ---------------------------------------------------------------------------
 
-KNOWN_TOKENS: Dict[str, Dict[str, str]] = {
+KNOWN_TOKENS: dict[str, dict[str, str]] = {
     "ethereum": {
         "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
         "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
@@ -190,7 +190,7 @@ GAS_ESTIMATES = {
 }
 
 # CoinGecko symbol -> id map for common tokens
-COINGECKO_IDS: Dict[str, str] = {
+COINGECKO_IDS: dict[str, str] = {
     "ETH": "ethereum",
     "BTC": "bitcoin",
     "BNB": "binancecoin",
@@ -408,7 +408,7 @@ def get_rpc_url(chain: str) -> str:
     return cfg["rpc"]
 
 
-def rpc_call(chain: str, method: str, params: List[Any], req_id: int = 1) -> Any:
+def rpc_call(chain: str, method: str, params: list[Any], req_id: int = 1) -> Any:
     url = get_rpc_url(chain)
     payload = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
     resp = _http_post(url, payload)
@@ -418,8 +418,8 @@ def rpc_call(chain: str, method: str, params: List[Any], req_id: int = 1) -> Any
 
 
 def rpc_batch(
-    chain: str, calls: List[Tuple[str, List[Any]]], batch_limit: int = 10
-) -> List[Any]:
+    chain: str, calls: list[tuple[str, list[Any]]], batch_limit: int = 10
+) -> list[Any]:
     """Send a batch of JSON-RPC calls; returns list of results in same order.
 
     Auto-chunks at `batch_limit` (default 10) so we stay under per-RPC limits.
@@ -434,7 +434,7 @@ def rpc_batch(
         for i, (m, p) in enumerate(calls)
     ]
 
-    out: List[Any] = [None] * len(items)
+    out: list[Any] = [None] * len(items)
     for start in range(0, len(items), batch_limit):
         chunk = items[start : start + batch_limit]
         resp = _http_post(url, chunk)
@@ -479,7 +479,7 @@ def _keccak256(data: bytes) -> bytes:
         0x000000008000000A,
         0x000000008000808B,
         0x800000000000008B,
-        0x8000000000008089,
+        0x8000_0000_0000_8089,
         0x8000000000008003,
         0x8000000000008002,
         0x8000000000000080,
@@ -552,7 +552,7 @@ def _selector(sig: str) -> str:
 
 
 # Precomputed selectors for ERC-20 functions
-ERC20_SELECTORS: Dict[str, str] = {
+ERC20_SELECTORS: dict[str, str] = {
     "name()": "0x06fdde03",
     "symbol()": "0x95d89b41",
     "decimals()": "0x313ce567",
@@ -575,7 +575,7 @@ def eth_call_erc20(
 def decode_string(hex_data: str) -> str:
     """Decode ABI-encoded string from eth_call result."""
     try:
-        raw = hex_data[2:] if hex_data.startswith("0x") else hex_data
+        raw = hex_data.removeprefix("0x")
         if len(raw) < 128:
             # Try decoding as raw bytes (some tokens return non-ABI strings)
             b = bytes.fromhex(raw)
@@ -590,7 +590,7 @@ def decode_string(hex_data: str) -> str:
 
 def decode_uint256(hex_data: str) -> int:
     try:
-        raw = hex_data[2:] if hex_data.startswith("0x") else hex_data
+        raw = hex_data.removeprefix("0x")
         if not raw:
             return 0
         return int(raw, 16)
@@ -618,7 +618,7 @@ def cg_price_by_id(cg_id: str) -> Optional[float]:
         return None
 
 
-def cg_price_by_ids(cg_ids: List[str]) -> Dict[str, float]:
+def cg_price_by_ids(cg_ids: list[str]) -> dict[str, float]:
     """Fetch multiple prices in one request."""
     if not cg_ids:
         return {}
@@ -703,16 +703,18 @@ def cmd_stats(args: argparse.Namespace) -> None:
 
     native_price = get_native_price(chain)
 
-    print_json({
-        "chain": chain,
-        "block_number": block_num,
-        "gas_price_gwei": round(gwei_from_wei(gas_price_wei), 4),
-        "gas_price_wei": gas_price_wei,
-        "native_token": cfg["native"],
-        "native_price_usd": native_price,
-        "tps_estimate": tps,
-        "explorer": cfg["explorer"],
-    })
+    print_json(
+        {
+            "chain": chain,
+            "block_number": block_num,
+            "gas_price_gwei": round(gwei_from_wei(gas_price_wei), 4),
+            "gas_price_wei": gas_price_wei,
+            "native_token": cfg["native"],
+            "native_price_usd": native_price,
+            "tps_estimate": tps,
+            "explorer": cfg["explorer"],
+        }
+    )
 
 
 def cmd_wallet(args: argparse.Namespace) -> None:
@@ -782,24 +784,28 @@ def cmd_wallet(args: argparse.Namespace) -> None:
                 except Exception:
                     pass
 
-            tokens_out.append({
-                "symbol": symbol,
-                "contract": addr,
-                "balance": round(bal_human, 8),
-                "price_usd": token_price,
-                "value_usd": token_usd,
-            })
+            tokens_out.append(
+                {
+                    "symbol": symbol,
+                    "contract": addr,
+                    "balance": round(bal_human, 8),
+                    "price_usd": token_price,
+                    "value_usd": token_usd,
+                }
+            )
 
-    print_json({
-        "chain": chain,
-        "address": address,
-        "native_token": cfg["native"],
-        "native_balance": round(native_val, 8),
-        "native_price_usd": native_usd_price,
-        "native_value_usd": native_usd,
-        "erc20_tokens": tokens_out,
-        "portfolio_total_usd": round(portfolio_usd, 4) if not no_prices else None,
-    })
+    print_json(
+        {
+            "chain": chain,
+            "address": address,
+            "native_token": cfg["native"],
+            "native_balance": round(native_val, 8),
+            "native_price_usd": native_usd_price,
+            "native_value_usd": native_usd,
+            "erc20_tokens": tokens_out,
+            "portfolio_total_usd": round(portfolio_usd, 4) if not no_prices else None,
+        }
+    )
 
 
 def cmd_tx(args: argparse.Namespace) -> None:
@@ -854,26 +860,28 @@ def cmd_tx(args: argparse.Namespace) -> None:
         if native_price:
             fee_usd = round(fee_eth * native_price, 6)
 
-    print_json({
-        "chain": chain,
-        "hash": tx_hash,
-        "block": block_num,
-        "timestamp": timestamp,
-        "from": tx.get("from"),
-        "to": tx.get("to"),
-        "value": round(value_eth, 8),
-        "value_usd": value_usd,
-        "native_token": cfg["native"],
-        "gas_limit": gas_limit,
-        "gas_used": gas_used,
-        "gas_price_gwei": round(gwei_from_wei(gas_price), 4),
-        "fee_native": round(fee_eth, 8) if fee_eth is not None else None,
-        "fee_usd": fee_usd,
-        "status": status,
-        "input_preview": input_preview,
-        "nonce": hex_to_int(tx.get("nonce", "0x0")),
-        "explorer_url": f"{cfg['explorer']}/tx/{tx_hash}",
-    })
+    print_json(
+        {
+            "chain": chain,
+            "hash": tx_hash,
+            "block": block_num,
+            "timestamp": timestamp,
+            "from": tx.get("from"),
+            "to": tx.get("to"),
+            "value": round(value_eth, 8),
+            "value_usd": value_usd,
+            "native_token": cfg["native"],
+            "gas_limit": gas_limit,
+            "gas_used": gas_used,
+            "gas_price_gwei": round(gwei_from_wei(gas_price), 4),
+            "fee_native": round(fee_eth, 8) if fee_eth is not None else None,
+            "fee_usd": fee_usd,
+            "status": status,
+            "input_preview": input_preview,
+            "nonce": hex_to_int(tx.get("nonce", "0x0")),
+            "explorer_url": f"{cfg['explorer']}/tx/{tx_hash}",
+        }
+    )
 
 
 def cmd_token(args: argparse.Namespace) -> None:
@@ -911,17 +919,19 @@ def cmd_token(args: argparse.Namespace) -> None:
         market_cap = round(price * supply, 2)
 
     cfg = CHAINS[chain]
-    print_json({
-        "chain": chain,
-        "contract": contract,
-        "name": name,
-        "symbol": symbol,
-        "decimals": decimals,
-        "total_supply": round(supply, 4),
-        "price_usd": price,
-        "market_cap_usd": market_cap,
-        "explorer_url": f"{cfg['explorer']}/token/{contract}",
-    })
+    print_json(
+        {
+            "chain": chain,
+            "contract": contract,
+            "name": name,
+            "symbol": symbol,
+            "decimals": decimals,
+            "total_supply": round(supply, 4),
+            "price_usd": price,
+            "market_cap_usd": market_cap,
+            "explorer_url": f"{cfg['explorer']}/token/{contract}",
+        }
+    )
 
 
 def cmd_activity(args: argparse.Namespace) -> None:
@@ -934,7 +944,7 @@ def cmd_activity(args: argparse.Namespace) -> None:
     block_hex = rpc_call(chain, "eth_blockNumber", [])
     latest = hex_to_int(block_hex or "0x0")
 
-    txs_out: List[Dict[str, Any]] = []
+    txs_out: list[dict[str, Any]] = []
     scan_range = min(200, latest)
     blocks_checked = 0
 
@@ -959,25 +969,29 @@ def cmd_activity(args: argparse.Namespace) -> None:
                 value_wei = hex_to_int(tx.get("value", "0x0"))
                 value_eth = wei_to_native(value_wei, cfg["decimals"])
                 gas_price = hex_to_int(tx.get("gasPrice") or "0x0")
-                txs_out.append({
-                    "hash": tx.get("hash"),
-                    "block": bn,
-                    "timestamp": timestamp,
-                    "from": tx.get("from"),
-                    "to": tx.get("to"),
-                    "value": round(value_eth, 8),
-                    "native_token": cfg["native"],
-                    "gas_price_gwei": round(gwei_from_wei(gas_price), 4),
-                    "direction": "out" if frm == addr_lower else "in",
-                })
+                txs_out.append(
+                    {
+                        "hash": tx.get("hash"),
+                        "block": bn,
+                        "timestamp": timestamp,
+                        "from": tx.get("from"),
+                        "to": tx.get("to"),
+                        "value": round(value_eth, 8),
+                        "native_token": cfg["native"],
+                        "gas_price_gwei": round(gwei_from_wei(gas_price), 4),
+                        "direction": "out" if frm == addr_lower else "in",
+                    }
+                )
 
-    print_json({
-        "chain": chain,
-        "address": address,
-        "blocks_scanned": blocks_checked,
-        "tx_count": len(txs_out),
-        "transactions": txs_out,
-    })
+    print_json(
+        {
+            "chain": chain,
+            "address": address,
+            "blocks_scanned": blocks_checked,
+            "tx_count": len(txs_out),
+            "transactions": txs_out,
+        }
+    )
 
 
 def cmd_gas(args: argparse.Namespace) -> None:
@@ -990,7 +1004,7 @@ def cmd_gas(args: argparse.Namespace) -> None:
 
     native_price = get_native_price(chain)
 
-    estimates: Dict[str, Any] = {}
+    estimates: dict[str, Any] = {}
     for op, gas_units in GAS_ESTIMATES.items():
         cost_wei = gas_wei * gas_units
         cost_native = wei_to_native(cost_wei, cfg["decimals"])
@@ -1001,14 +1015,16 @@ def cmd_gas(args: argparse.Namespace) -> None:
             "cost_usd": cost_usd,
         }
 
-    print_json({
-        "chain": chain,
-        "native_token": cfg["native"],
-        "gas_price_gwei": round(gas_gwei, 4),
-        "gas_price_wei": gas_wei,
-        "native_price_usd": native_price,
-        "estimates": estimates,
-    })
+    print_json(
+        {
+            "chain": chain,
+            "native_token": cfg["native"],
+            "gas_price_gwei": round(gas_gwei, 4),
+            "gas_price_wei": gas_wei,
+            "native_price_usd": native_price,
+            "estimates": estimates,
+        }
+    )
 
 
 def cmd_price(args: argparse.Namespace) -> None:
@@ -1023,9 +1039,9 @@ def cmd_price(args: argparse.Namespace) -> None:
         price = cg_price_by_contract(chain, token)
         source = "coingecko_contract"
         if price is None:
-            print_json({
-                "error": f"Could not find price for contract {token} on {chain}"
-            })
+            print_json(
+                {"error": f"Could not find price for contract {token} on {chain}"}
+            )
             return
     else:
         symbol = token.upper()
@@ -1040,20 +1056,24 @@ def cmd_price(args: argparse.Namespace) -> None:
                 price = cg_price_by_contract(chain, contract)
                 source = f"coingecko_contract:{contract}"
         if price is None:
-            print_json({
-                "error": f"Could not find price for '{token}'. Try a contract address."
-            })
+            print_json(
+                {
+                    "error": f"Could not find price for '{token}'. Try a contract address."
+                }
+            )
             return
 
-    print_json({
-        "token": token,
-        "chain": chain,
-        "price_usd": price,
-        "source": source,
-    })
+    print_json(
+        {
+            "token": token,
+            "chain": chain,
+            "price_usd": price,
+            "source": source,
+        }
+    )
 
 
-def _fetch_chain_stats(chain: str) -> Dict[str, Any]:
+def _fetch_chain_stats(chain: str) -> dict[str, Any]:
     """Fetch gas price + native price for a single chain (used in compare)."""
     try:
         gas_hex = rpc_call(chain, "eth_gasPrice", [])
@@ -1085,8 +1105,8 @@ def cmd_compare(_args: argparse.Namespace) -> None:
     """Compare gas prices and native token prices across all chains simultaneously."""
     import threading
 
-    results: Dict[str, Any] = {}
-    errors: Dict[str, str] = {}
+    results: dict[str, Any] = {}
+    errors: dict[str, str] = {}
     lock = threading.Lock()
 
     def fetch(chain: str) -> None:
@@ -1109,12 +1129,14 @@ def cmd_compare(_args: argparse.Namespace) -> None:
         key=lambda x: x.get("gas_price_gwei") or float("inf"),
     )
 
-    print_json({
-        "comparison": sorted_by_gas,
-        "errors": errors,
-        "cheapest_gas": sorted_by_gas[0]["chain"] if sorted_by_gas else None,
-        "most_expensive_gas": sorted_by_gas[-1]["chain"] if sorted_by_gas else None,
-    })
+    print_json(
+        {
+            "comparison": sorted_by_gas,
+            "errors": errors,
+            "cheapest_gas": sorted_by_gas[0]["chain"] if sorted_by_gas else None,
+            "most_expensive_gas": sorted_by_gas[-1]["chain"] if sorted_by_gas else None,
+        }
+    )
 
 
 def cmd_whale(args: argparse.Namespace) -> None:
@@ -1131,7 +1153,7 @@ def cmd_whale(args: argparse.Namespace) -> None:
     block_hex = rpc_call(chain, "eth_blockNumber", [])
     latest = hex_to_int(block_hex or "0x0")
 
-    whales: List[Dict[str, Any]] = []
+    whales: list[dict[str, Any]] = []
     blocks_scanned = 0
 
     for bn in range(latest, max(0, latest - blocks), -1):
@@ -1151,30 +1173,34 @@ def cmd_whale(args: argparse.Namespace) -> None:
             value_native = wei_to_native(value_wei, cfg["decimals"])
             value_usd = value_native * native_price
             if value_usd >= min_usd:
-                whales.append({
-                    "hash": tx.get("hash"),
-                    "block": bn,
-                    "timestamp": timestamp,
-                    "from": tx.get("from"),
-                    "from_short": _short_addr(tx.get("from") or ""),
-                    "to": tx.get("to"),
-                    "to_short": _short_addr(tx.get("to") or ""),
-                    "value_native": round(value_native, 6),
-                    "native_token": cfg["native"],
-                    "value_usd": round(value_usd, 2),
-                })
+                whales.append(
+                    {
+                        "hash": tx.get("hash"),
+                        "block": bn,
+                        "timestamp": timestamp,
+                        "from": tx.get("from"),
+                        "from_short": _short_addr(tx.get("from") or ""),
+                        "to": tx.get("to"),
+                        "to_short": _short_addr(tx.get("to") or ""),
+                        "value_native": round(value_native, 6),
+                        "native_token": cfg["native"],
+                        "value_usd": round(value_usd, 2),
+                    }
+                )
 
     whales.sort(key=lambda x: x["value_usd"], reverse=True)
 
-    print_json({
-        "chain": chain,
-        "blocks_scanned": blocks_scanned,
-        "latest_block": latest,
-        "min_usd": min_usd,
-        "native_price_usd": native_price,
-        "whale_count": len(whales),
-        "transfers": whales,
-    })
+    print_json(
+        {
+            "chain": chain,
+            "blocks_scanned": blocks_scanned,
+            "latest_block": latest,
+            "min_usd": min_usd,
+            "native_price_usd": native_price,
+            "whale_count": len(whales),
+            "transfers": whales,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1187,7 +1213,7 @@ def cmd_multichain(args: argparse.Namespace) -> None:
     import threading
 
     address = require_address(args.address)
-    results: Dict[str, Any] = {}
+    results: dict[str, Any] = {}
     lock = threading.Lock()
 
     def scan_chain(chain: str) -> None:
@@ -1197,7 +1223,7 @@ def cmd_multichain(args: argparse.Namespace) -> None:
             native_bal = int(bal_hex, 16) / 1e18 if bal_hex else 0.0
             native_price = get_native_price(chain)
             native_usd = round(native_bal * native_price, 2) if native_price else None
-            entry: Dict[str, Any] = {
+            entry: dict[str, Any] = {
                 "native_symbol": cfg["native"],
                 "native_balance": round(native_bal, 8),
                 "native_price_usd": native_price,
@@ -1223,11 +1249,13 @@ def cmd_multichain(args: argparse.Namespace) -> None:
                 human = bal_int / (10**decimals)
                 tok_price = cg_price_by_contract(chain, contract)
                 tok_usd = round(human * tok_price, 2) if tok_price else None
-                entry["tokens"].append({
-                    "symbol": symbol,
-                    "balance": round(human, 6),
-                    "value_usd": tok_usd,
-                })
+                entry["tokens"].append(
+                    {
+                        "symbol": symbol,
+                        "balance": round(human, 6),
+                        "value_usd": tok_usd,
+                    }
+                )
                 if tok_usd:
                     entry["total_usd"] = round(entry["total_usd"] + tok_usd, 2)
             with lock:
@@ -1245,11 +1273,13 @@ def cmd_multichain(args: argparse.Namespace) -> None:
     grand_total = sum(
         v.get("total_usd", 0) for v in results.values() if isinstance(v, dict)
     )
-    print_json({
-        "address": address,
-        "chains": results,
-        "grand_total_usd": round(grand_total, 2),
-    })
+    print_json(
+        {
+            "address": address,
+            "chains": results,
+            "grand_total_usd": round(grand_total, 2),
+        }
+    )
 
 
 def cmd_allowance(args: argparse.Namespace) -> None:
@@ -1296,24 +1326,28 @@ def cmd_allowance(args: argparse.Namespace) -> None:
             max_uint = 2**256 - 1
             is_unlimited = allowance_int >= max_uint // 2
 
-            approvals.append({
-                "token": symbol,
-                "contract": contract,
-                "spender": spender_name,
-                "spender_address": spender_addr,
-                "allowance": "UNLIMITED"
-                if is_unlimited
-                else str(round(allowance_int / 10**decimals, 4)),
-                "risk": "HIGH" if is_unlimited else "LOW",
-            })
+            approvals.append(
+                {
+                    "token": symbol,
+                    "contract": contract,
+                    "spender": spender_name,
+                    "spender_address": spender_addr,
+                    "allowance": "UNLIMITED"
+                    if is_unlimited
+                    else str(round(allowance_int / 10**decimals, 4)),
+                    "risk": "HIGH" if is_unlimited else "LOW",
+                }
+            )
 
-    print_json({
-        "chain": chain,
-        "address": address,
-        "approvals_found": len(approvals),
-        "approvals": approvals,
-        "note": "Only checks known DEX/bridge spenders. Use a full allowance checker for complete coverage.",
-    })
+    print_json(
+        {
+            "chain": chain,
+            "address": address,
+            "approvals_found": len(approvals),
+            "approvals": approvals,
+            "note": "Only checks known DEX/bridge spenders. Use a full allowance checker for complete coverage.",
+        }
+    )
 
 
 def cmd_decode(args: argparse.Namespace) -> None:
@@ -1328,12 +1362,14 @@ def cmd_decode(args: argparse.Namespace) -> None:
 
     input_data: str = tx.get("input", "0x")
     if not input_data or input_data == "0x":
-        print_json({
-            "chain": chain,
-            "hash": tx_hash,
-            "decoded": None,
-            "note": "No input data (plain ETH transfer)",
-        })
+        print_json(
+            {
+                "chain": chain,
+                "hash": tx_hash,
+                "decoded": None,
+                "note": "No input data (plain ETH transfer)",
+            }
+        )
         return
 
     selector = input_data[:10]  # 0x + 4 bytes = 10 chars
@@ -1347,7 +1383,7 @@ def cmd_decode(args: argparse.Namespace) -> None:
         signatures = [r["text_signature"] for r in data["results"]]
 
     # Decode known transfer(address,uint256) manually as fallback
-    decoded_args: Optional[Dict] = None
+    decoded_args: Optional[dict] = None
     if signatures and len(input_data) >= 74:
         sig = signatures[0]
         if sig == "transfer(address,uint256)" and len(input_data) == 138:
@@ -1359,19 +1395,22 @@ def cmd_decode(args: argparse.Namespace) -> None:
             except Exception:
                 pass
 
-    print_json({
-        "chain": chain,
-        "hash": tx_hash,
-        "selector": selector,
-        "input_length_bytes": (len(input_data) - 2) // 2,
-        "from": tx.get("from"),
-        "to": tx.get("to"),
-        "signatures": signatures,
-        "primary_signature": signatures[0] if signatures else None,
-        "decoded_args": decoded_args,
-        "raw_input_preview": input_data[:74] + ("..." if len(input_data) > 74 else ""),
-        "source": "4byte.directory",
-    })
+    print_json(
+        {
+            "chain": chain,
+            "hash": tx_hash,
+            "selector": selector,
+            "input_length_bytes": (len(input_data) - 2) // 2,
+            "from": tx.get("from"),
+            "to": tx.get("to"),
+            "signatures": signatures,
+            "primary_signature": signatures[0] if signatures else None,
+            "decoded_args": decoded_args,
+            "raw_input_preview": input_data[:74]
+            + ("..." if len(input_data) > 74 else ""),
+            "source": "4byte.directory",
+        }
+    )
 
 
 def cmd_ens(args: argparse.Namespace) -> None:
@@ -1386,24 +1425,23 @@ def cmd_ens(args: argparse.Namespace) -> None:
         return
 
     if not data:
-        print_json({
-            "query": query,
-            "address": None,
-            "ens_name": None,
-            "note": "Not found",
-        })
+        print_json(
+            {"query": query, "address": None, "ens_name": None, "note": "Not found"}
+        )
         return
 
-    print_json({
-        "query": query,
-        "address": data.get("address"),
-        "ens_name": data.get("name"),
-        "avatar": data.get("avatar"),
-        "display": data.get("displayName"),
-        "twitter": data.get("twitter"),
-        "github": data.get("github"),
-        "source": "ensideas.com",
-    })
+    print_json(
+        {
+            "query": query,
+            "address": data.get("address"),
+            "ens_name": data.get("name"),
+            "avatar": data.get("avatar"),
+            "display": data.get("displayName"),
+            "twitter": data.get("twitter"),
+            "github": data.get("github"),
+            "source": "ensideas.com",
+        }
+    )
 
 
 def cmd_contract(args: argparse.Namespace) -> None:
@@ -1414,12 +1452,14 @@ def cmd_contract(args: argparse.Namespace) -> None:
     # Get bytecode
     code_hex = rpc_call(chain, "eth_getCode", [address, "latest"])
     if not code_hex or code_hex == "0x":
-        print_json({
-            "chain": chain,
-            "address": address,
-            "is_contract": False,
-            "note": "EOA (externally owned account)",
-        })
+        print_json(
+            {
+                "chain": chain,
+                "address": address,
+                "is_contract": False,
+                "note": "EOA (externally owned account)",
+            }
+        )
         return
 
     bytecode_bytes = (len(code_hex) - 2) // 2
@@ -1482,19 +1522,21 @@ def cmd_contract(args: argparse.Namespace) -> None:
     if supports_erc165:
         detected_standards.append("ERC-165")
 
-    print_json({
-        "chain": chain,
-        "address": address,
-        "is_contract": True,
-        "bytecode_size_bytes": bytecode_bytes,
-        "is_proxy": is_proxy,
-        "implementation": implementation,
-        "detected_standards": detected_standards,
-        "explorer_url": f"{CHAINS[chain]['explorer']}/address/{address}",
-        "note": "Proxy detected via EIP-1967 storage slot. Standards via EIP-165 + heuristics."
-        if is_proxy
-        else None,
-    })
+    print_json(
+        {
+            "chain": chain,
+            "address": address,
+            "is_contract": True,
+            "bytecode_size_bytes": bytecode_bytes,
+            "is_proxy": is_proxy,
+            "implementation": implementation,
+            "detected_standards": detected_standards,
+            "explorer_url": f"{CHAINS[chain]['explorer']}/address/{address}",
+            "note": "Proxy detected via EIP-1967 storage slot. Standards via EIP-165 + heuristics."
+            if is_proxy
+            else None,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1649,9 +1691,9 @@ def main() -> None:
 
     # Validate chain exists (argparse choices already handles this, but for ENV override)
     if hasattr(args, "chain") and args.chain not in CHAINS:
-        print_json({
-            "error": f"Unknown chain '{args.chain}'. Available: {list(CHAINS.keys())}"
-        })
+        print_json(
+            {"error": f"Unknown chain '{args.chain}'. Available: {list(CHAINS.keys())}"}
+        )
         sys.exit(1)
 
     cmd_fn = DISPATCH.get(args.command)

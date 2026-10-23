@@ -54,7 +54,7 @@ def _get_db():
     return db
 
 
-def _get_profile_for_user(user_id: str) -> Optional[Dict[str, Any]]:
+def _get_profile_for_user(user_id: str) -> Optional[dict[str, Any]]:
     """Buscar perfil del usuario. Devuelve dict con columnas o None."""
     import sqlite3
 
@@ -254,7 +254,7 @@ def list_recent_generations_tool(limit: int = 10) -> str:
 # REGISTRY — registra los 4 tools en el toolset "social_content"
 # ============================================================================
 
-from tools.registry import registry  # noqa: E402
+from tools.registry import registry
 
 if not FEATURE_DEACTIVATED:
     registry.register(

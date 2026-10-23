@@ -32,30 +32,32 @@ def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for Threads search."""
     from .query import extract_core_subject
 
-    _THREADS_NOISE = frozenset({
-        "best",
-        "top",
-        "good",
-        "great",
-        "awesome",
-        "latest",
-        "new",
-        "news",
-        "update",
-        "updates",
-        "trending",
-        "hottest",
-        "popular",
-        "viral",
-        "practices",
-        "features",
-        "recommendations",
-        "advice",
-    })
+    _THREADS_NOISE = frozenset(
+        {
+            "best",
+            "top",
+            "good",
+            "great",
+            "awesome",
+            "latest",
+            "new",
+            "news",
+            "update",
+            "updates",
+            "trending",
+            "hottest",
+            "popular",
+            "viral",
+            "practices",
+            "features",
+            "recommendations",
+            "advice",
+        }
+    )
     return extract_core_subject(topic, noise=_THREADS_NOISE)
 
 
-def _parse_date(item: Dict[str, Any]) -> Optional[str]:
+def _parse_date(item: dict[str, Any]) -> Optional[str]:
     """Parse date from Threads item to YYYY-MM-DD.
 
     Tries common timestamp fields in order: taken_at and create_time
@@ -73,8 +75,8 @@ def _parse_date(item: Dict[str, Any]) -> Optional[str]:
 
 
 def _parse_items(
-    raw_items: List[Dict[str, Any]], core_topic: str
-) -> List[Dict[str, Any]]:
+    raw_items: list[dict[str, Any]], core_topic: str
+) -> list[dict[str, Any]]:
     """Parse raw Threads items into normalized dicts."""
     items = []
     for i, raw in enumerate(raw_items):
@@ -119,24 +121,26 @@ def _parse_items(
             1.0, text_relevance * 0.5 + rank_score * 0.3 + engagement_boost + 0.1
         )
 
-        items.append({
-            "id": post_id,
-            "handle": handle,
-            "display_name": display_name,
-            "text": text,
-            "url": url,
-            "date": date_str,
-            "engagement": {
-                "likes": likes,
-                "replies": replies,
-                "reposts": reposts,
-                "quotes": quotes,
-            },
-            "relevance": round(relevance, 2),
-            "why_relevant": f"Threads: @{handle}: {text[:60]}"
-            if text
-            else f"Threads: {handle}",
-        })
+        items.append(
+            {
+                "id": post_id,
+                "handle": handle,
+                "display_name": display_name,
+                "text": text,
+                "url": url,
+                "date": date_str,
+                "engagement": {
+                    "likes": likes,
+                    "replies": replies,
+                    "reposts": reposts,
+                    "quotes": quotes,
+                },
+                "relevance": round(relevance, 2),
+                "why_relevant": f"Threads: @{handle}: {text[:60]}"
+                if text
+                else f"Threads: {handle}",
+            }
+        )
     return items
 
 
@@ -145,8 +149,8 @@ def search_threads(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    token: str = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+) -> dict[str, Any]:
     """Search Threads via ScrapeCreators API.
 
     Args:
@@ -212,7 +216,7 @@ def search_threads(
     return {"items": items}
 
 
-def parse_threads_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_threads_response(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse Threads search response to normalized format.
 
     Returns:

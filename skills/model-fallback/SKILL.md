@@ -1,12 +1,16 @@
 ---
 name: model-fallback
-description: "USE THIS when the model runs low on credits/billing, returns a billing/quota error (HTTP 402 / insufficient_quota / 'out of credit'), or the user says 'me quedan pocos créditos', 'cambiá de modelo', 'usá otra API key', 'switch model', 'billing error', 'out of tokens'. It is a deterministic SCRIPT (works even when the model is out of tokens) that audits your providers / API keys / fallback chain and configures automatic failover to another key or model."
+description: "Fail over to another API key or model when credits run out."
+version: 1.0.0
+platforms: [linux, macos, windows]
 argument-hint: 'model-fallback | model-fallback --apply-chain'
 allowed-tools: Bash, Read
 author: Clawksis (Gradient AI)
 license: MIT
 user-invocable: true
 metadata:
+  clawk:
+    tags: [billing, fallback, failover, providers, api-keys, models]
   clawksis:
     emoji: "🔁"
   openclaw:
@@ -66,6 +70,8 @@ tokens — por eso es script, no depende del modelo) que:
 - El usuario dice que le quedan pocos créditos o pide cambiar de modelo / usar
   otra API key.
 - Proactivo: si auditás y NO hay cadena pero sí varias keys, sugerí `--apply-chain`.
+- Frases típicas (ES + EN): 'me quedan pocos créditos', 'cambiá de modelo', 'usá otra API
+  key', 'switch model', 'billing error', 'out of tokens'.
 
 > Nota: para resiliencia real sin intervención, conviene tener **2+ API keys del
 > mismo provider** (el pool las rota solo ante 402/429) **y/o** la cadena

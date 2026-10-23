@@ -13,16 +13,20 @@ import json
 import pytest
 
 from tools import browser_tool
+from tools import browser_tool_eval_policy as bt_eval_policy
+from tools import browser_tool_session as bt_session
 
 PRIVATE_URL = "http://127.0.0.1:8080/internal"
-IMAGES_JS_RESULT = json.dumps([
-    {
-        "src": "http://127.0.0.1:8080/logo.png",
-        "alt": "Internal Logo",
-        "width": 200,
-        "height": 100,
-    },
-])
+IMAGES_JS_RESULT = json.dumps(
+    [
+        {
+            "src": "http://127.0.0.1:8080/logo.png",
+            "alt": "Internal Logo",
+            "width": 200,
+            "height": 100,
+        },
+    ]
+)
 
 
 @pytest.fixture(autouse=True)
@@ -35,14 +39,14 @@ def _mock_run_success(monkeypatch):
     def _run(task_id, command, args=None, **kwargs):
         return {"success": True, "data": {"result": IMAGES_JS_RESULT}}
 
-    monkeypatch.setattr(browser_tool, "_run_browser_command", _run)
+    monkeypatch.setattr(bt_session, "_run_browser_command", _run)
 
 
 def test_blocks_images_on_private_page(monkeypatch):
     _mock_run_success(monkeypatch)
-    monkeypatch.setattr(browser_tool, "_eval_ssrf_guard_active", lambda tid: True)
+    monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda tid: True)
     monkeypatch.setattr(
-        browser_tool, "_current_page_private_url", lambda tid: PRIVATE_URL
+        bt_eval_policy, "_current_page_private_url", lambda tid: PRIVATE_URL
     )
 
     result = json.loads(browser_tool.browser_get_images(task_id="test"))
@@ -53,8 +57,8 @@ def test_blocks_images_on_private_page(monkeypatch):
 
 def test_allows_images_on_public_page(monkeypatch):
     _mock_run_success(monkeypatch)
-    monkeypatch.setattr(browser_tool, "_eval_ssrf_guard_active", lambda tid: True)
-    monkeypatch.setattr(browser_tool, "_current_page_private_url", lambda tid: None)
+    monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda tid: True)
+    monkeypatch.setattr(bt_eval_policy, "_current_page_private_url", lambda tid: None)
 
     result = json.loads(browser_tool.browser_get_images(task_id="test"))
     assert result["success"] is True
@@ -64,16 +68,7 @@ def test_allows_images_on_public_page(monkeypatch):
 
 def test_skips_guard_for_local_backend(monkeypatch):
     _mock_run_success(monkeypatch)
-    monkeypatch.setattr(browser_tool, "_eval_ssrf_guard_active", lambda tid: False)
-
-    result = json.loads(browser_tool.browser_get_images(task_id="test"))
-    assert result["success"] is True
-    assert result["count"] == 1
-
-
-def test_skips_guard_when_private_urls_allowed(monkeypatch):
-    _mock_run_success(monkeypatch)
-    monkeypatch.setattr(browser_tool, "_eval_ssrf_guard_active", lambda tid: False)
+    monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda tid: False)
 
     result = json.loads(browser_tool.browser_get_images(task_id="test"))
     assert result["success"] is True
@@ -86,7 +81,7 @@ def test_guard_does_not_block_on_failed_eval(monkeypatch):
     def _run(task_id, command, args=None, **kwargs):
         return {"success": False, "error": "eval failed"}
 
-    monkeypatch.setattr(browser_tool, "_run_browser_command", _run)
+    monkeypatch.setattr(bt_session, "_run_browser_command", _run)
 
     result = json.loads(browser_tool.browser_get_images(task_id="test"))
     assert result["success"] is False

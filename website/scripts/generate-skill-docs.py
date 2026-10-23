@@ -14,15 +14,20 @@ Sidebar is updated to nest all per-skill pages under Skills → Bundled / Option
 
 from __future__ import annotations
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 REPO = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO))
+import clawk_yaml as yaml
+
 DOCS = REPO / "website" / "docs"
 SKILLS_PAGES = DOCS / "user-guide" / "skills"
+ZH_HANS_DOCS = (
+    REPO / "website" / "i18n" / "zh-Hans" / "docusaurus-plugin-content-docs" / "current"
+)
 
 SKILL_SOURCES = [
     ("bundled", REPO / "skills"),
@@ -242,7 +247,7 @@ def rewrite_relative_links(body: str, meta: dict[str, Any]) -> str:
         if url.startswith("mailto:"):
             return m.group(0)
         # Strip leading ./
-        url_clean = url[2:] if url.startswith("./") else url
+        url_clean = url.removeprefix("./")
         full = f"{base}/{url_clean}"
         return f"[{text}]({full})"
 
@@ -284,7 +289,7 @@ def derive_skill_meta(
     rel = skill_path.parent.relative_to(source_dir)
     parts = rel.parts
     if len(parts) == 1:
-        # Top-level skill (e.g. skills/dogfood/SKILL.md) -- rare
+        # Top-level skill (e.g. skills/<name>/SKILL.md with no category) -- rare
         category = parts[0]
         sub = None
         slug = parts[0]
@@ -328,11 +333,14 @@ def render_skill_page(
 ) -> str:
     name = fm.get("name", meta["slug"])
     description = fm.get("description", "").strip()
-    short_desc = description.split(".")[0].strip() if description else name
+    short_desc = (
+        re.split(r"\.(?:\s|$)", description, maxsplit=1)[0].strip()
+        if description
+        else name
+    )
     if len(short_desc) > 160:
         short_desc = short_desc[:157] + "..."
 
-    title = f"{name}"
     # Heuristic nicer title from name
     display_name = name.replace("-", " ").replace("_", " ").title()
 
@@ -350,14 +358,16 @@ def render_skill_page(
     if meta["source_kind"] == "bundled":
         info_rows.append(("Source", "Bundled (installed by default)"))
     else:
-        info_rows.append((
-            "Source",
-            "Optional — install with `clawk skills install official/"
-            + meta["category"]
-            + "/"
-            + meta["slug"]
-            + "`",
-        ))
+        info_rows.append(
+            (
+                "Source",
+                "Optional — install with `clawk skills install official/"
+                + meta["category"]
+                + "/"
+                + meta["slug"]
+                + "`",
+            )
+        )
     source_dir = "skills" if meta["source_kind"] == "bundled" else "optional-skills"
     info_rows.append(("Path", f"`{source_dir}/{meta['rel_path']}`"))
     if version:
@@ -388,9 +398,10 @@ def render_skill_page(
             if skill_index is not None:
                 target_meta = skill_index.get(r)
             if target_meta is not None:
+                # Relative file link: resolves on the site and on GitHub (#114428).
                 href = (
-                    f"/docs/user-guide/skills/{target_meta['source_kind']}"
-                    f"/{target_meta['category']}/{page_id(target_meta)}"
+                    f"../../{target_meta['source_kind']}"
+                    f"/{target_meta['category']}/{page_id(target_meta)}.md"
                 )
                 link_parts.append(f"[`{r}`]({href})")
             else:
@@ -458,8 +469,8 @@ def build_catalog_md_bundled(
         if meta["source_kind"] != "bundled":
             continue
         by_cat[meta["category"]].append((meta, parsed))
-    for k in by_cat:
-        by_cat[k].sort(key=lambda e: e[0]["slug"])
+    for entries in by_cat.values():
+        entries.sort(key=lambda e: e[0]["slug"])
 
     lines = [
         "---",
@@ -489,7 +500,7 @@ def build_catalog_md_bundled(
             if len(desc) > 240:
                 desc = desc[:237].rstrip() + "..."
             link_target = (
-                f"/docs/user-guide/skills/bundled/{meta['category']}/{page_id(meta)}"
+                f"../user-guide/skills/bundled/{meta['category']}/{page_id(meta)}.md"
             )
             path = f"`{meta['rel_path']}`"
             desc_esc = mdx_escape_body(desc).replace("|", "\\|").replace("\n", " ")
@@ -506,8 +517,8 @@ def build_catalog_md_optional(
         if meta["source_kind"] != "optional":
             continue
         by_cat[meta["category"]].append((meta, parsed))
-    for k in by_cat:
-        by_cat[k].sort(key=lambda e: e[0]["slug"])
+    for entries in by_cat.values():
+        entries.sort(key=lambda e: e[0]["slug"])
 
     lines = [
         "---",
@@ -552,24 +563,26 @@ def build_catalog_md_optional(
             if len(desc) > 240:
                 desc = desc[:237].rstrip() + "..."
             link_target = (
-                f"/docs/user-guide/skills/optional/{meta['category']}/{page_id(meta)}"
+                f"../user-guide/skills/optional/{meta['category']}/{page_id(meta)}.md"
             )
             desc_esc = mdx_escape_body(desc).replace("|", "\\|").replace("\n", " ")
             lines.append(f"| [**{name}**]({link_target}) | {desc_esc} |")
         lines.append("")
 
-    lines.extend([
-        "---",
-        "",
-        "## Contributing Optional Skills",
-        "",
-        "To add a new optional skill to the repository:",
-        "",
-        "1. Create a directory under `optional-skills/<category>/<skill-name>/`",
-        "2. Add a `SKILL.md` with standard frontmatter (name, description, version, author)",
-        "3. Include any supporting files in `references/`, `templates/`, or `scripts/` subdirectories",
-        "4. Submit a pull request — the skill will appear in this catalog and get its own docs page once merged",
-    ])
+    lines.extend(
+        [
+            "---",
+            "",
+            "## Contributing Optional Skills",
+            "",
+            "To add a new optional skill to the repository:",
+            "",
+            "1. Create a directory under `optional-skills/<category>/<skill-name>/`",
+            "2. Add a `SKILL.md` with standard frontmatter (name, description, version, author)",
+            "3. Include any supporting files in `references/`, `templates/`, or `scripts/` subdirectories",
+            "4. Submit a pull request — the skill will appear in this catalog and get its own docs page once merged",
+        ]
+    )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -599,19 +612,21 @@ def build_sidebar_items(entries: list[tuple[dict[str, Any], dict[str, Any]]]) ->
         result = []
         for category in sorted(bucket):
             items = sorted(bucket[category], key=lambda m: m["slug"])
-            result.append({
-                "type": "category",
-                "label": category,
-                # Docusaurus generates a translation key from the label by
-                # default (e.g. sidebar.docs.category.productivity). When
-                # the same category name appears under both Bundled and
-                # Optional, the duplicate keys break i18n extraction and
-                # fail the build. Scope each category by source to keep
-                # the keys unique.
-                "key": f"skills-{source}-{category}",
-                "collapsed": True,
-                "items": [sidebar_doc_id(m) for m in items],
-            })
+            result.append(
+                {
+                    "type": "category",
+                    "label": category,
+                    # Docusaurus generates a translation key from the label by
+                    # default (e.g. sidebar.docs.category.productivity). When
+                    # the same category name appears under both Bundled and
+                    # Optional, the duplicate keys break i18n extraction and
+                    # fail the build. Scope each category by source to keep
+                    # the keys unique.
+                    "key": f"skills-{source}-{category}",
+                    "collapsed": True,
+                    "items": [sidebar_doc_id(m) for m in items],
+                }
+            )
         return result
 
     return {
@@ -690,14 +705,6 @@ def write_sidebar(entries):
     sidebar_path = REPO / "website" / "sidebars.ts"
     text = sidebar_path.read_text(encoding="utf-8")
     # Replace the existing Skills block.
-    pattern = re.compile(
-        r"        \{\n"
-        r"          type: 'category',\n"
-        r"          label: 'Skills',\n"
-        r"(?:.*?\n)*?"
-        r"        \},\n",
-        re.DOTALL,
-    )
     # Safer: match the exact current block shape.
     old_block_start = (
         "        {\n          type: 'category',\n          label: 'Skills',\n"
@@ -727,6 +734,34 @@ def write_sidebar(entries):
     print(f"Updated sidebar: {sidebar_path}")
 
 
+def prune_stale_pages(written: set[Path]) -> int:
+    """Delete generated pages this run did not write, plus their zh-Hans mirror twins.
+
+    A skill that moves category, merges into a sibling, or leaves the shipped set
+    otherwise keeps its old page forever: the catalogs and sidebar stop pointing at
+    it, but cross-links still reach a page advertising a skill nobody can install
+    under that name. Only the generated subtrees are swept, never hand-authored
+    pages next to them.
+    """
+    pruned = 0
+    for kind in ("bundled", "optional"):
+        for page in sorted((SKILLS_PAGES / kind).rglob("*.md")):
+            if page.resolve() in written:
+                continue
+            page.unlink()
+            twin = ZH_HANS_DOCS / page.relative_to(DOCS)
+            if twin.exists():
+                twin.unlink()
+            pruned += 1
+        # Mirror copies whose English page is already gone (a hand-deleted page).
+        zh_kind = ZH_HANS_DOCS / SKILLS_PAGES.relative_to(DOCS) / kind
+        for twin in sorted(zh_kind.rglob("*.md")) if zh_kind.exists() else []:
+            if not (DOCS / twin.relative_to(ZH_HANS_DOCS)).exists():
+                twin.unlink()
+                pruned += 1
+    return pruned
+
+
 def main():
     entries = discover_skills()
     print(f"Discovered {len(entries)} skills")
@@ -740,7 +775,7 @@ def main():
             skill_index[name] = meta
 
     # Write per-skill pages
-    written = 0
+    written: set[Path] = set()
     for meta, parsed in entries:
         out_path = page_output_path(meta)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -748,8 +783,12 @@ def main():
             meta, parsed["frontmatter"], parsed["body"], skill_index=skill_index
         )
         out_path.write_text(content, encoding="utf-8")
-        written += 1
-    print(f"Wrote {written} per-skill pages under {SKILLS_PAGES}")
+        written.add(out_path.resolve())
+    print(f"Wrote {len(written)} per-skill pages under {SKILLS_PAGES}")
+
+    pruned = prune_stale_pages(written)
+    if pruned:
+        print(f"Pruned {pruned} page(s) whose skill no longer ships")
 
     # Regenerate catalogs
     bundled_catalog = build_catalog_md_bundled(entries)

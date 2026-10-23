@@ -38,7 +38,7 @@ import { join } from 'node:path'
 
 // clean EOF, not SIGTERM) diagnosable after the fact.
 
-const logDir = join(process.env.CLAWK_HOME?.trim() || join(homedir(), '.clawk'), 'logs')
+const logDir = join(process.env.CLAWK_HOME?.trim() || join(homedir(), '.clawksis'), 'logs')
 
 const CRASH_LOG = join(logDir, 'tui_gateway_crash.log')
 

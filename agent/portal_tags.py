@@ -1,20 +1,17 @@
-"""Contexto ambiental de conversacion (contextvars).
+"""Contexto ambiental de conversacion y de afinidad (contextvars).
 
 Upstream usaba este modulo para etiquetar cada llamada LLM con tags del Nous
 Portal. Clawksis es BYOK y no habla con el Portal, asi que aca sobrevive
-UNICAMENTE la parte generica y util: publicar el id de conversacion activo en
-un ``ContextVar`` para que todo lo que corre dentro del turno (loop principal,
-compresion, vision, web_extract, session_search, slots de MoA, forks de
-background-review) pueda leerlo sin plumbing por call-site.
+UNICAMENTE la parte generica y util: publicar el id de conversacion activo (y
+el scope de afinidad/ruteo declarado) en un ``ContextVar`` para que todo lo que
+corre dentro del turno (loop principal, compresion, vision, web_extract,
+session_search, slots de MoA, forks de background-review) pueda leerlo sin
+plumbing por call-site.
 
 Las funciones de tagging del Portal (``nous_portal_tags``, ``conversation_tag``,
 ``clawk_client_tag``) NO se portan: reintroducirlas volveria a acoplar el fork
 al Portal. Si en el futuro se quiere telemetria propia, el hook natural es
 ``get_conversation_context()``.
-
-El nombre del modulo se conserva porque ``run_agent.py`` y
-``agent/title_generator.py`` ya lo importan; renombrarlo es un refactor
-aparte.
 """
 
 from __future__ import annotations
@@ -22,41 +19,63 @@ from __future__ import annotations
 from contextvars import ContextVar
 from typing import Optional
 
-# ContextVar (no threading.local): cada turno corre en su propio Context, asi
-# que turnos concurrentes no se pisan el id de conversacion. Los threads
-# lanzados via ``tools.thread_context.propagate_context_to_thread`` lo heredan
-# por el Context copiado; los threads pelados (title generator) lo capturan
-# explicitamente al spawnear.
+# Ambient conversation id (ATTRIBUTION value, sent as ``conversation=<id>``).
+# The agent loop publishes it at turn entry; auxiliary call sites funnelling
+# through ``auxiliary_client.call_llm`` (no session handle) pick it up via
+# ``get_conversation_context()``. A ContextVar so concurrent agents in one process never
+# see each other's id; ``propagate_context_to_thread`` workers inherit it.
 _conversation_id: ContextVar[Optional[str]] = ContextVar(
     "clawksis_conversation_id", default=None
 )
 
+# Ambient affinity scope (ROUTING value): OpenRouter's sticky ``session_id`` and
+# xAI's ``x-grok-conv-id`` pin a conversation to one
+# backend/prompt cache. Usually equal to the conversation id, but a host that mints
+# one physical session per RESPONSE must route on the key it declared for the whole
+# chat (``prompt_cache_scope.declared_conversation_scope``). Only that declared value
+# is published; unset means consumers fall back to the conversation id, so delegate
+# trees keep sharing their parent's sticky key.
+_affinity_scope: ContextVar[Optional[str]] = ContextVar(
+    "clawk_affinity_scope", default=None
+)
+
+
+def _reset_var(var: ContextVar, token) -> None:
+    """Reset ``var``; a token from another Context (reset on a different thread)
+    falls back to clearing rather than raising in cleanup paths."""
+    try:
+        var.reset(token)
+    except Exception:
+        var.set(None)
+
+
+def set_affinity_scope(scope: Optional[str]):
+    """Publish the declared routing/affinity scope; returns the ContextVar token."""
+    return _affinity_scope.set(scope or None)
+
+
+def reset_affinity_scope(token) -> None:
+    """Restore the previous affinity scope (pair with ``set_affinity_scope``)."""
+    _reset_var(_affinity_scope, token)
+
+
+def get_affinity_scope() -> Optional[str]:
+    return _affinity_scope.get()
+
 
 def set_conversation_context(conversation_id: Optional[str]):
-    """Publica el id de conversacion activo para el turno en curso.
+    """Publish the active conversation id for the current turn; returns the token.
 
-    Lo llama el loop del agente al entrar al turno con el id estable de la
-    conversacion (el ROOT del linaje de sesion, para que sobreviva a la
-    rotacion de sesion por compresion de contexto). Pasar ``None`` limpia.
-    Devuelve el token del ContextVar para poder
-    ``reset_conversation_context(token)`` al salir del turno.
+    Called by the agent loop at turn entry with the session-lineage ROOT id (so
+    the id survives context-compression rotation). ``None`` clears.
     """
-
     return _conversation_id.set(conversation_id or None)
 
 
 def reset_conversation_context(token) -> None:
-    """Restaura el contexto anterior (se usa en par con ``set_...``)."""
-
-    try:
-        _conversation_id.reset(token)
-    except Exception:
-        # Token de otro Context (p.ej. reset en otro thread): limpiar en vez
-        # de romper en un camino de cleanup.
-        _conversation_id.set(None)
+    """Restore the previous conversation context (pair with ``set_...``)."""
+    _reset_var(_conversation_id, token)
 
 
 def get_conversation_context() -> Optional[str]:
-    """Devuelve el id de conversacion ambiental, o ``None`` si no hay."""
-
     return _conversation_id.get()

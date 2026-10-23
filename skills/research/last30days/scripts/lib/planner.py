@@ -642,7 +642,7 @@ def _ranking_query(topic: str, core: str) -> str:
 
 _TRAILING_CONTEXT = re.compile(
     r"\s+\b(?:for|in|on|at|to|with|about|from|by|during|since|after|before|using|via)\b.*$",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -652,12 +652,12 @@ def _comparison_entities(topic: str) -> list[str]:
         r"\bdifference between\s+(.+?)\s+and\s+",
         r"\1 vs ",
         topic,
-        flags=re.I,
+        flags=re.IGNORECASE,
     )
-    normalized = re.sub(r"\b(compared to)\b", " vs ", normalized, flags=re.I)
+    normalized = re.sub(r"\b(compared to)\b", " vs ", normalized, flags=re.IGNORECASE)
     parts = [
         part.strip(" \t\r\n?.,:;!()[]{}\"'")
-        for part in re.split(r"\bvs\.?\b|\bversus\b|/", normalized, flags=re.I)
+        for part in re.split(r"\bvs\.?\b|\bversus\b|/", normalized, flags=re.IGNORECASE)
         if part.strip(" \t\r\n?.,:;!()[]{}\"'")
     ]
     # Strip trailing context from parts ("Svelte for frontend in 2026" -> "Svelte")

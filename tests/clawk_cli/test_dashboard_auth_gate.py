@@ -4,7 +4,11 @@ Phase 0 — establish a baseline pin on the current (pre-OAuth) behavior so
 later phases can prove they didn't break loopback mode.
 """
 
+import asyncio
+import logging
+
 import pytest
+import clawk_cli.web_server_lifecycle as _web_server_lifecycle
 
 # Phase 5 / Phase 6: these tests mutate ``web_server.app.state.auth_required``
 # at module level. Run them in the same xdist worker so they don't race
@@ -12,95 +16,9 @@ import pytest
 # ``app.state``) — the marker name is shared across all dashboard-auth test
 # files that gate the app.
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from clawk_cli import web_server
-
-
-class _NoPlatformsConfig:
-    """Minimal stand-in for the gateway config used by ``/api/status``."""
-
-    @staticmethod
-    def get_connected_platforms():
-        return []
-
-
-@pytest.fixture
-def client_loopback(monkeypatch):
-    # ``/api/status`` calls ``load_gateway_config()``, and its env-override
-    # pass resolves EVERY platform plugin -- telegram pulls in
-    # python-telegram-bot -> tornado, plus discord/slack/lark/... That cold
-    # import cascade is ~8s of CPU on an idle machine; on a CI runner with
-    # one pytest process per test file competing for cores it blew the 30s
-    # pytest-timeout budget, so whichever test touched the endpoint FIRST
-    # died of a "Timeout (>30.0s)" that had nothing to do with what it
-    # asserts. Stub the config load: this file is about the auth gate, not
-    # about gateway configuration, and ``get_status`` already treats the
-    # call as best-effort (it is wrapped in try/except). Bumping the timeout
-    # would only move the flake.
-    import gateway.config as gateway_config
-
-    monkeypatch.setattr(
-        gateway_config,
-        "load_gateway_config",
-        lambda *a, **kw: _NoPlatformsConfig(),
-    )
-
-    # Pin the bound-host state for host_header_middleware so requests with
-    # default Host: testclient pass the DNS-rebinding check.  TestClient
-    # sends Host: testserver by default, but our middleware accepts the
-    # loopback aliases when bound_host is loopback.
-    prev_host = getattr(web_server.app.state, "bound_host", None)
-    prev_port = getattr(web_server.app.state, "bound_port", None)
-    web_server.app.state.bound_host = "127.0.0.1"
-    web_server.app.state.bound_port = 9119
-    client = TestClient(web_server.app, base_url="http://127.0.0.1:9119")
-    yield client
-    web_server.app.state.bound_host = prev_host
-    web_server.app.state.bound_port = prev_port
-
-
-def test_loopback_status_is_public(client_loopback):
-    """`/api/status` must remain reachable without a token in loopback mode."""
-    r = client_loopback.get("/api/status")
-    assert r.status_code == 200
-    body = r.json()
-    assert "version" in body
-
-
-def test_loopback_protected_route_requires_token(client_loopback):
-    """Any non-public /api/ route must require the session token."""
-    # /api/sessions exists and is auth-gated by auth_middleware.
-    r = client_loopback.get("/api/sessions")
-    assert r.status_code == 401
-
-
-def test_loopback_protected_route_accepts_session_token(client_loopback):
-    """The injected SPA token unlocks protected /api/ routes."""
-    r = client_loopback.get(
-        "/api/sessions",
-        headers={"X-Clawksis-Session-Token": web_server._SESSION_TOKEN},
-    )
-    # 200 or 404 (no sessions yet) both prove the auth layer let it through.
-    # 500 is also acceptable if there's a downstream issue unrelated to auth.
-    assert r.status_code != 401, f"Expected auth to succeed but got 401; body: {r.text}"
-
-
-def test_loopback_index_injects_session_token(client_loopback):
-    """Loopback mode keeps injecting the SPA token into index.html.
-
-    This is the property that the new auth gate MUST disable once a gated
-    bind is detected. Phase 3 will add an inverse test for the gated path.
-    """
-    r = client_loopback.get("/")
-    if r.status_code == 404:
-        pytest.skip("WEB_DIST not built in this env")
-    assert "__CLAWK_SESSION_TOKEN__" in r.text
-
-
-def test_loopback_host_header_validation_still_enforced(client_loopback):
-    """DNS-rebinding protection: a foreign Host header is rejected."""
-    r = client_loopback.get("/api/status", headers={"Host": "evil.test"})
-    assert r.status_code == 400
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +61,6 @@ def _stub_uvicorn_run(monkeypatch):
     returns immediately (rather than blocking on the event loop). Returns the dict
     that will capture the keyword args.
     """
-    import asyncio
     import contextlib
     import uvicorn
 
@@ -193,8 +110,21 @@ def _stub_uvicorn_run(monkeypatch):
             pass
 
     monkeypatch.setattr(uvicorn, "Config", _FakeConfig)
+    # Nothing binds here: never let a live dashboard on the host's 9119 trip the pre-bind probe.
+    monkeypatch.setattr(web_server, "_port_bind_conflict", lambda *a, **k: False)
     monkeypatch.setattr(uvicorn, "Server", lambda config: _FakeServer())
     return captured
+
+
+def _restore_app_state_after_test(monkeypatch, *names):
+    """Restore app.state attributes after start_server mutates them."""
+    for name in names:
+        monkeypatch.setattr(
+            web_server.app.state,
+            name,
+            getattr(web_server.app.state, name, None),
+            raising=False,
+        )
 
 
 def test_start_server_loopback_sets_auth_required_false(monkeypatch):
@@ -278,57 +208,308 @@ def test_start_server_gate_with_provider_proceeds_and_sets_proxy_headers(monkeyp
         assert web_server.app.state.auth_required is True
         assert captured["kwargs"].get("host") == "0.0.0.0"
         assert captured["kwargs"].get("proxy_headers") is True
+        assert captured["kwargs"].get("forwarded_allow_ips") == [
+            "127.0.0.1",
+            "::1",
+        ]
     finally:
         clear_providers()
 
 
-def test_start_server_gate_without_provider_fails_closed(monkeypatch):
-    """Fork-specific: no providers + first-run setup unavailable → SystemExit,
-    clear message.
-
-    When setup IS available the server boots with the /auth/setup page (see
-    the with-setup test above); the fail-closed path only survives for the
-    half-configured case where no provider registered AND the first-run page
-    can't bootstrap a login.
-    """
-    from clawk_cli.dashboard_auth import clear_providers
-    from clawk_cli.dashboard_auth import first_run
+def test_start_server_passes_bounded_trusted_proxy_networks(monkeypatch, caplog):
+    """A configured proxy network reaches uvicorn without broadening to all peers."""
+    from clawk_cli.dashboard_auth import clear_providers, register_provider
+    from tests.clawk_cli.conftest_dashboard_auth import StubAuthProvider
 
     clear_providers()
-    monkeypatch.setattr(first_run, "setup_available", lambda: False)
-    _stub_uvicorn_run(monkeypatch)
-    web_server.app.state.auth_required = None
-    with pytest.raises(SystemExit, match=r"setup page is unavailable"):
+    register_provider(StubAuthProvider())
+    captured = _stub_uvicorn_run(monkeypatch)
+    monkeypatch.setattr(
+        web_server,
+        "load_config",
+        lambda: {"dashboard": {"trusted_proxies": ["172.18.0.23/16"]}},
+    )
+    try:
+        with caplog.at_level(logging.INFO, logger=web_server._log.name):
+            web_server.start_server(
+                host="0.0.0.0",
+                port=9119,
+                open_browser=False,
+                allow_public=False,
+            )
+        assert captured["kwargs"]["forwarded_allow_ips"] == [
+            "127.0.0.1",
+            "::1",
+            "172.18.0.0/16",
+        ]
+        assert "Dashboard trusted proxies: 127.0.0.1, ::1, 172.18.0.0/16" in caplog.text
+    finally:
+        clear_providers()
+
+
+def test_trusted_proxy_allowlist_rejects_unbounded_entries(caplog):
+    """Wildcard and whole-address-space trust must fail closed."""
+    trusted = _web_server_lifecycle._dashboard_forwarded_allow_ips(
+        {
+            "trusted_proxies": ["*", "0.0.0.0/0", "::/0", "172.18.0.7"],
+        }
+    )
+
+    assert trusted == ["127.0.0.1", "::1", "172.18.0.7"]
+    assert "never '*' or a /0 network" in caplog.text
+
+
+def test_trusted_container_proxy_controls_https_detection():
+    """Only a configured bridge peer may turn X-Forwarded-Proto into HTTPS."""
+    from clawk_cli.dashboard_auth.cookies import detect_https
+    from starlette.requests import Request
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    trusted = _web_server_lifecycle._dashboard_forwarded_allow_ips(
+        {
+            "trusted_proxies": ["172.18.0.0/16"],
+        }
+    )
+
+    async def detected_scheme(peer: str) -> bool:
+        observed: dict[str, bool] = {}
+
+        async def downstream(scope, receive, send):
+            observed["https"] = detect_https(Request(scope))
+
+        middleware = ProxyHeadersMiddleware(downstream, trusted_hosts=trusted)
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/auth/login",
+            "raw_path": b"/auth/login",
+            "query_string": b"",
+            "root_path": "",
+            "headers": [(b"x-forwarded-proto", b"https")],
+            "client": (peer, 43120),
+            "server": ("clawk", 9119),
+        }
+
+        async def receive():
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            return None
+
+        await middleware(scope, receive, send)
+        return observed["https"]
+
+    assert asyncio.run(detected_scheme("172.18.0.9")) is True
+    assert asyncio.run(detected_scheme("::1")) is True
+    assert asyncio.run(detected_scheme("198.51.100.9")) is False
+
+
+def test_public_url_aware_gate_requires_auth_for_loopback_proxy(monkeypatch):
+    """The shared gate decision includes an external browser-facing URL."""
+    from clawk_cli.web_server import should_require_dashboard_auth
+
+    monkeypatch.setenv(
+        "CLAWK_DASHBOARD_PUBLIC_URL",
+        "https://dashboard.example.test:9443",
+    )
+    assert should_require_dashboard_auth("127.0.0.1") is True
+
+
+def test_public_url_aware_gate_preserves_local_only_mode(monkeypatch):
+    """A loopback browser-facing URL does not change local token mode."""
+    from clawk_cli.web_server import should_require_dashboard_auth
+
+    monkeypatch.setenv(
+        "CLAWK_DASHBOARD_PUBLIC_URL",
+        "http://localhost:9119",
+    )
+    assert should_require_dashboard_auth("127.0.0.1") is False
+
+
+def test_start_server_loopback_public_url_enables_gate(monkeypatch):
+    """A declared external URL turns a loopback reverse proxy into gated mode."""
+    from clawk_cli.dashboard_auth import clear_providers, register_provider
+    from tests.clawk_cli.conftest_dashboard_auth import StubAuthProvider
+
+    monkeypatch.setenv(
+        "CLAWK_DASHBOARD_PUBLIC_URL",
+        "https://dashboard.example.test:9443",
+    )
+    clear_providers()
+    register_provider(StubAuthProvider())
+    captured = _stub_uvicorn_run(monkeypatch)
+    _restore_app_state_after_test(
+        monkeypatch,
+        "auth_required",
+        "bound_host",
+        "bound_port",
+        "trusted_public_hosts",
+    )
+    try:
         web_server.start_server(
-            host="0.0.0.0",
+            host="127.0.0.1",
             port=9119,
             open_browser=False,
             allow_public=False,
         )
+        assert web_server.app.state.auth_required is True
+        assert web_server.app.state.trusted_public_hosts == frozenset(
+            {"dashboard.example.test"}
+        )
+        assert captured["kwargs"].get("host") == "127.0.0.1"
+        assert captured["kwargs"].get("proxy_headers") is True
+    finally:
+        clear_providers()
 
 
-def test_start_server_loopback_keeps_proxy_headers_off(monkeypatch):
-    """Loopback bind: proxy_headers stays False (no TLS terminator in front)."""
-    captured = _stub_uvicorn_run(monkeypatch)
+def test_start_server_loopback_public_url_without_provider_fails_closed(monkeypatch):
+    """Trusting an external Host must never expose the loopback token mode.
+
+    Fork-specific: while the first-run setup page can create the login, the server boots
+    with the gate ON (see test_start_server_public_without_insecure_records_auth_required);
+    it refuses to start only when that setup is unavailable.
+    """
+    from clawk_cli.dashboard_auth import clear_providers
+
+    monkeypatch.setenv(
+        "CLAWK_DASHBOARD_PUBLIC_URL",
+        "https://dashboard.example.test:9443",
+    )
+    clear_providers()
+    _stub_uvicorn_run(monkeypatch)
+    _restore_app_state_after_test(
+        monkeypatch,
+        "auth_required",
+        "bound_host",
+        "bound_port",
+        "trusted_public_hosts",
+    )
+
+    web_server.app.state.auth_required = None
     web_server.start_server(
         host="127.0.0.1",
         port=9119,
         open_browser=False,
         allow_public=False,
     )
-    assert captured["kwargs"].get("proxy_headers") is False
+    assert web_server.app.state.auth_required is True
 
-
-def test_start_server_insecure_keeps_proxy_headers_off(monkeypatch):
-    """Fork-specific: --insecure keeps the gate off, so proxy_headers stays
-    off too."""
-    captured = _stub_uvicorn_run(monkeypatch)
-    web_server.app.state.auth_required = None
-    web_server.start_server(
-        host="0.0.0.0",
-        port=9119,
-        open_browser=False,
-        allow_public=True,
+    monkeypatch.setattr(
+        "clawk_cli.dashboard_auth.first_run.setup_available", lambda: False
     )
-    assert web_server.app.state.auth_required is False
-    assert captured["kwargs"].get("proxy_headers") is False
+    web_server.app.state.auth_required = None
+    with pytest.raises(SystemExit, match=r"no auth providers"):
+        web_server.start_server(
+            host="127.0.0.1",
+            port=9119,
+            open_browser=False,
+            allow_public=False,
+        )
+    assert web_server.app.state.auth_required is True
+
+
+def test_desktop_ssh_backend_serves_session_token_requests_despite_public_url(
+    monkeypatch,
+):
+    """A Desktop-SSH isolated backend on a host that also declares a public
+    ``dashboard.public_url`` must keep answering session-token REST calls.
+
+    Pinned at the request layer, not the predicate: the reporter's failure was
+    the post-bootstrap ``/api/profiles`` call coming back
+    ``401 {"reason": "no_cookie"}`` while ``/api/status`` still passed (#94119,
+    #96490). The gate predicate alone cannot catch a middleware-order or
+    ``auth_required`` plumbing regression that re-engages the cookie gate.
+    """
+    from clawk_cli.dashboard_auth import clear_providers, register_provider
+    from tests.clawk_cli.conftest_dashboard_auth import StubAuthProvider
+
+    monkeypatch.setenv(
+        "CLAWK_DASHBOARD_PUBLIC_URL", "https://dashboard.example.test:9443"
+    )
+    monkeypatch.setenv("CLAWK_DESKTOP", "1")
+    monkeypatch.delenv("CLAWK_DASHBOARD_SESSION_TOKEN", raising=False)
+    clear_providers()
+    register_provider(StubAuthProvider())
+    _stub_uvicorn_run(monkeypatch)
+    _restore_app_state_after_test(
+        monkeypatch,
+        "auth_required",
+        "bound_host",
+        "bound_port",
+        "trusted_public_hosts",
+    )
+    monkeypatch.setattr(web_server, "_SESSION_TOKEN", web_server._SESSION_TOKEN)
+    ssh_token = "a" * 64
+    try:
+        web_server.start_server(
+            host="127.0.0.1",
+            port=0,
+            open_browser=False,
+            allow_public=False,
+            ssh_session_token=ssh_token,
+        )
+        client = TestClient(web_server.app, base_url="http://127.0.0.1")
+        with_token = client.get(
+            "/api/profiles", headers={"X-Clawksis-Session-Token": ssh_token}
+        )
+        assert with_token.status_code == 200, with_token.text
+        without_token = client.get("/api/profiles")
+        assert without_token.status_code == 401
+        # Loopback token mode, never the cookie gate's redirect envelope.
+        assert without_token.json().get("reason") != "no_cookie"
+        # The renderer's gateway session rides the same token on the WS leg (#94119 step 4): the
+        # upgrade is admitted, the backend announces itself and answers a session-list RPC.
+        monkeypatch.setattr(web_server, "_DASHBOARD_EMBEDDED_CHAT_ENABLED", True)
+        loopback = {"host": "127.0.0.1"}  # TestClient's WS default Host is "testserver"
+        with client.websocket_connect(
+            f"/api/ws?token={ssh_token}", headers=loopback
+        ) as ws:
+            assert ws.receive_json()["params"]["type"] == "gateway.ready"
+            ws.send_json(
+                {"jsonrpc": "2.0", "id": 1, "method": "session.list", "params": {}}
+            )
+            reply = ws.receive_json()
+            while reply.get("id") != 1:  # events may interleave before the response
+                reply = ws.receive_json()
+            assert "result" in reply, reply
+        with pytest.raises(WebSocketDisconnect) as rejected:
+            with client.websocket_connect("/api/ws", headers=loopback):
+                pass
+        assert rejected.value.code == 4401
+    finally:
+        clear_providers()
+
+
+@pytest.mark.parametrize(
+    "host,public_url,expected",
+    [
+        # Loopback bind, no public URL → local token mode, no gate.
+        ("127.0.0.1", None, False),
+        ("localhost", None, False),
+        ("::1", None, False),
+        # Loopback bind + non-loopback public URL → gate engages.
+        ("127.0.0.1", "https://dash.example.test", True),
+        ("::1", "https://dash.example.test:8443", True),
+        # Loopback bind + loopback public URL → still local-only.
+        ("127.0.0.1", "http://localhost:9119", False),
+        ("127.0.0.1", "http://127.0.0.1:9119", False),
+        # Non-loopback bind → always gated, public URL irrelevant.
+        ("0.0.0.0", None, True),
+        ("192.168.1.5", None, True),
+        ("0.0.0.0", "http://localhost:9119", True),
+    ],
+)
+def test_should_require_dashboard_auth_truth_table(
+    monkeypatch, host, public_url, expected
+):
+    from clawk_cli.web_server import should_require_dashboard_auth
+
+    if public_url is None:
+        monkeypatch.delenv("CLAWK_DASHBOARD_PUBLIC_URL", raising=False)
+        monkeypatch.setattr(web_server, "_dashboard_public_hosts", lambda: frozenset())
+    else:
+        monkeypatch.setenv("CLAWK_DASHBOARD_PUBLIC_URL", public_url)
+    assert should_require_dashboard_auth(host) is expected

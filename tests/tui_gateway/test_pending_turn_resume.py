@@ -1,5 +1,6 @@
 """Tests for the durable pending-turn journal + crash-resume in tui_gateway."""
 
+import threading
 import types
 
 import pytest
@@ -80,14 +81,44 @@ def test_resume_dispatches_and_clears(monkeypatch):
     monkeypatch.setattr(
         srv,
         "_run_prompt_submit",
-        lambda rid, sid, sess, text: calls.append((sid, text)),
+        lambda rid, sid, sess, text: calls.append((sid, text, sess["running"])),
     )
-    session = {"session_key": "sk1", "running": False}
+    session = {"session_key": "sk1", "running": False, "history_lock": threading.Lock()}
     srv._maybe_resume_pending_turn("sid1", session, "sk1")
     assert db.cleared == ["sk1"]  # cleared before re-dispatch
     assert len(calls) == 1
     assert calls[0][0] == "sid1"
     assert "haz X" in calls[0][1]  # original prompt in the resume note
+    assert (
+        calls[0][2] is True
+    )  # the dispatcher owns ``running`` (upstream turn contract)
+
+
+def test_resume_waits_for_failed_agent_build(monkeypatch):
+    db = _FakeDB(pending=[{"session_id": "sk1", "prompt": "x", "started_at": 1.0}])
+    _enable(monkeypatch, db)
+    monkeypatch.setattr(srv.time, "sleep", lambda s: None)
+    monkeypatch.setattr(srv.threading, "Thread", _SyncThread)
+    calls = []
+    monkeypatch.setattr(srv, "_run_prompt_submit", lambda *a: calls.append(a))
+    session = {
+        "session_key": "sk1",
+        "running": False,
+        "history_lock": threading.Lock(),
+        "agent_error": "boom",
+    }
+    srv._maybe_resume_pending_turn("sid1", session, "sk1")
+    assert calls == []  # no agent -> no turn (the journal entry is already cleared)
+    assert session["running"] is False
+
+
+def test_failed_turn_clears_journal(monkeypatch):
+    db = _FakeDB()
+    _enable(monkeypatch, db)
+    session = {"session_key": "sk1"}
+    srv._start_inflight_turn(session, "hola")
+    srv._fail_inflight_turn(session, "provider down")
+    assert db.cleared == ["sk1"]
 
 
 def test_resume_noop_when_running(monkeypatch):

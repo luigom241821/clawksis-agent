@@ -1,6 +1,6 @@
 ---
 name: opencode
-description: "External coding agents: delegate to OpenCode CLI (primary), Claude Code (Anthropic), or Codex (OpenAI) for features, PR review, and autonomous coding tasks."
+description: "Delegate coding tasks to OpenCode, Claude Code or Codex."
 version: 1.6.0
 author: Clawksis
 license: MIT
@@ -270,8 +270,8 @@ terminal(command="REVIEW=$(mktemp -d) && git clone https://github.com/user/repo.
 Use separate workdirs/worktrees to avoid collisions:
 
 ```
-terminal(command="opencode run 'Fix issue #101 and commit'", workdir="/tmp/issue-101", background=true, pty=true)
-terminal(command="opencode run 'Add parser regression tests and commit'", workdir="/tmp/issue-102", background=true, pty=true)
+terminal(command="opencode run 'Fix issue #101 and commit'", workdir="~/.clawksis/cache/scratch/issue-101", background=true, pty=true)
+terminal(command="opencode run 'Add parser regression tests and commit'", workdir="~/.clawksis/cache/scratch/issue-102", background=true, pty=true)
 process(action="list")
 ```
 
@@ -388,6 +388,7 @@ Install cloudflared: `curl -sL https://github.com/cloudflare/cloudflared/release
   O configura un modelo decente en `~/.opencode/config.json` antes de usarlo.
 
 - **Local models on CPU are slow** — a 1.5B model takes 30s–2min per simple prompt. Don't set short timeouts. For real work, prefer cloud models via OpenRouter or add a GPU.
+
 - Interactive `opencode` (TUI) sessions require `pty=true`. The `opencode run` command does NOT need pty.
 - `/exit` is NOT a valid command -- it opens an agent selector. Use Ctrl+C to exit the TUI.
 - PATH mismatch can select the wrong OpenCode binary/model config.

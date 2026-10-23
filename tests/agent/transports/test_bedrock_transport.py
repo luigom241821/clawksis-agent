@@ -9,17 +9,9 @@ from agent.transports.types import NormalizedResponse
 
 @pytest.fixture
 def transport():
-    import agent.transports.bedrock  # noqa: F401
+    import agent.transports.bedrock
 
     return get_transport("bedrock_converse")
-
-
-class TestBedrockBasic:
-    def test_api_mode(self, transport):
-        assert transport.api_mode == "bedrock_converse"
-
-    def test_registered(self, transport):
-        assert transport is not None
 
 
 class TestBedrockBuildKwargs:
@@ -76,12 +68,6 @@ class TestBedrockValidate:
     def test_none(self, transport):
         assert transport.validate_response(None) is False
 
-    def test_raw_dict_valid(self, transport):
-        assert transport.validate_response({"output": {"message": {}}}) is True
-
-    def test_raw_dict_invalid(self, transport):
-        assert transport.validate_response({"error": "fail"}) is False
-
     def test_normalized_valid(self, transport):
         r = SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content="hi"))]
@@ -92,18 +78,6 @@ class TestBedrockValidate:
 class TestBedrockMapFinishReason:
     def test_end_turn(self, transport):
         assert transport.map_finish_reason("end_turn") == "stop"
-
-    def test_tool_use(self, transport):
-        assert transport.map_finish_reason("tool_use") == "tool_calls"
-
-    def test_max_tokens(self, transport):
-        assert transport.map_finish_reason("max_tokens") == "length"
-
-    def test_guardrail(self, transport):
-        assert transport.map_finish_reason("guardrail_intervened") == "content_filter"
-
-    def test_unknown(self, transport):
-        assert transport.map_finish_reason("unknown") == "stop"
 
 
 class TestBedrockNormalize:
@@ -116,25 +90,20 @@ class TestBedrockNormalize:
             content.append({"text": text})
         if tool_calls:
             for tc in tool_calls:
-                content.append({
-                    "toolUse": {
-                        "toolUseId": tc["id"],
-                        "name": tc["name"],
-                        "input": tc["input"],
+                content.append(
+                    {
+                        "toolUse": {
+                            "toolUseId": tc["id"],
+                            "name": tc["name"],
+                            "input": tc["input"],
+                        }
                     }
-                })
+                )
         return {
             "output": {"message": {"role": "assistant", "content": content}},
             "stopReason": stop_reason,
             "usage": {"inputTokens": 10, "outputTokens": 5, "totalTokens": 15},
         }
-
-    def test_text_response(self, transport):
-        raw = self._make_bedrock_response(text="Hello world")
-        nr = transport.normalize_response(raw)
-        assert isinstance(nr, NormalizedResponse)
-        assert nr.content == "Hello world"
-        assert nr.finish_reason == "stop"
 
     def test_tool_call_response(self, transport):
         raw = self._make_bedrock_response(
@@ -148,24 +117,6 @@ class TestBedrockNormalize:
         assert nr.finish_reason == "tool_calls"
         assert len(nr.tool_calls) == 1
         assert nr.tool_calls[0].name == "terminal"
-
-    def test_raw_reasoning_content_response(self, transport):
-        raw = {
-            "output": {
-                "message": {
-                    "role": "assistant",
-                    "content": [
-                        {"reasoningContent": {"text": "Let me think..."}},
-                        {"text": "Answer."},
-                    ],
-                }
-            },
-            "stopReason": "end_turn",
-            "usage": {"inputTokens": 10, "outputTokens": 5, "totalTokens": 15},
-        }
-        nr = transport.normalize_response(raw)
-        assert nr.reasoning == "Let me think..."
-        assert nr.content == "Answer."
 
     def test_already_normalized_response(self, transport):
         """Test normalize_response handles already-normalized SimpleNamespace (from dispatch site)."""

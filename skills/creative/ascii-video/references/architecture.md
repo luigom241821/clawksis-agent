@@ -175,7 +175,7 @@ for pal in [
     PAL_BOX,
     PAL_CIRCUIT,
     PAL_ARROWS,
-    PAL_HERMES,
+    PAL_CLAWKSIS,
 ]:  # ... all palettes used in project
     all_chars.update(pal)
 # Add any overlay text characters
@@ -346,7 +346,7 @@ PAL_HATCH = " ▣▤▥▦▧▨▩"  # crosshatch density ramp
 
 #### Project-Specific (examples -- invent new ones per project)
 ```python
-PAL_HERMES = " .\u00b7~=\u2248\u221e\u26a1\u263f\u2726\u2605\u2295\u25ca\u25c6\u25b2\u25bc\u25cf\u25a0"  # mythology/tech blend
+PAL_CLAWKSIS = " .\u00b7~=\u2248\u221e\u26a1\u263f\u2726\u2605\u2295\u25ca\u25c6\u25b2\u25bc\u25cf\u25a0"  # mythology/tech blend
 PAL_OCEAN = (
     " ~\u2248\u2248\u2248\u223c\u2307\u2248\u224b\u224c\u2248"  # water/wave characters
 )

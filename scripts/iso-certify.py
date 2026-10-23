@@ -62,6 +62,7 @@ except Exception as exc:  # pragma: no cover - dependency guard
     raise
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 _READY_RE = re.compile(r"CLAWK_(?:DASHBOARD|BACKEND)_READY port=(\d+)")
 _STALL_LOG_RE = re.compile(r"event loop stalled|ws write slow \(loop stalled")
 
@@ -118,11 +119,11 @@ def seed_scratch_home(
             "compute_host_heartbeat_secs": heartbeat_secs,
             "compute_host_respawn_max": respawn_max,
         },
-        # Keep memory/mem0/skills side-machinery from reaching out.
+        # Keep memory/skills side-machinery from reaching out.
         "memory": {"enabled": False},
     }
     # config.yaml is the canonical config; write it directly.
-    import yaml  # provided by the runtime venv
+    import clawk_yaml as yaml
 
     (home / "config.yaml").write_text(
         yaml.safe_dump(cfg, sort_keys=True), encoding="utf-8"
@@ -168,7 +169,7 @@ class ScratchDashboard:
                 self.actual_port = int(m.group(1))
                 self._ready.set()
 
-    def __enter__(self) -> "ScratchDashboard":
+    def __enter__(self) -> ScratchDashboard:
         venv_py = REPO_ROOT / "venv" / "bin" / "python"
         python = str(venv_py) if venv_py.exists() else sys.executable
         env = dict(os.environ)
@@ -198,6 +199,8 @@ class ScratchDashboard:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
         )
         threading.Thread(
@@ -269,24 +272,18 @@ class WSClient:
     def rpc(self, method: str, params: dict, timeout: float = 30.0) -> dict:
         rid = self._next_id()
         self.ws.send(
-            json.dumps({
-                "jsonrpc": "2.0",
-                "id": rid,
-                "method": method,
-                "params": params,
-            })
+            json.dumps(
+                {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
+            )
         )
         return self._recv_until(lambda o: o.get("id") == rid, timeout=timeout)
 
     def send_only(self, method: str, params: dict) -> str:
         rid = self._next_id()
         self.ws.send(
-            json.dumps({
-                "jsonrpc": "2.0",
-                "id": rid,
-                "method": method,
-                "params": params,
-            })
+            json.dumps(
+                {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
+            )
         )
         return rid
 
@@ -615,21 +612,23 @@ def run_certify(args: argparse.Namespace) -> dict[str, Any]:
                 and worst_min_deltas >= 5
             )
 
-            result.update({
-                "ws_probe": ws_stat,
-                "rest_probe": rest_stat,
-                "ws_probes_over_threshold": ws_over,
-                "rest_probes_over_threshold": rest_over,
-                "serving_stalls": serving_stalls,
-                "event_loop_stall_log_lines": log_stalls,
-                "heavy_turns_completed": total_turns,
-                "lanes_with_turn": lanes_with_turn,
-                "median_turn_duration_s": round(median_turn_dur, 2),
-                "min_turn_duration_s": round(min_turn_dur, 2),
-                "worst_lane_min_deltas": worst_min_deltas,
-                "load_valid": load_valid,
-                "lane_errors": lane_errors[:20],
-            })
+            result.update(
+                {
+                    "ws_probe": ws_stat,
+                    "rest_probe": rest_stat,
+                    "ws_probes_over_threshold": ws_over,
+                    "rest_probes_over_threshold": rest_over,
+                    "serving_stalls": serving_stalls,
+                    "event_loop_stall_log_lines": log_stalls,
+                    "heavy_turns_completed": total_turns,
+                    "lanes_with_turn": lanes_with_turn,
+                    "median_turn_duration_s": round(median_turn_dur, 2),
+                    "min_turn_duration_s": round(min_turn_dur, 2),
+                    "worst_lane_min_deltas": worst_min_deltas,
+                    "load_valid": load_valid,
+                    "lane_errors": lane_errors[:20],
+                }
+            )
 
             # AC-4 verdict — heavy run only. A dry-run reports but never PASSes.
             serving_p99 = max(ws_stat["p99_ms"], rest_stat["p99_ms"])

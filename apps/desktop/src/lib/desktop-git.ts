@@ -2,10 +2,12 @@ import type {
   ClawksisGitBaseBranch,
   ClawksisGitBranch,
   ClawksisGitWorktree,
+  ClawksisRepoPullRequests,
   ClawksisRepoStatus,
   ClawksisReviewList,
   ClawksisReviewShipInfo
 } from '@/global'
+import { clawkApi } from '@/clawk'
 
 import { desktopFsProfile, isDesktopFsRemoteMode } from './desktop-fs'
 
@@ -24,7 +26,7 @@ function desktopApi<T>(path: string, body?: Record<string, unknown>): Promise<T>
     throw new Error('Clawksis Desktop bridge is unavailable')
   }
 
-  return desktop.api<T>(
+  return clawkApi<T>(
     body ? { body, method: 'POST', path, profile: desktopFsProfile() } : { path, profile: desktopFsProfile() }
   )
 }
@@ -92,6 +94,9 @@ const remoteGit: GitBridge = {
 
     shipInfo: repoPath => gitGet<ClawksisReviewShipInfo>('review/ship-info', { path: repoPath }),
 
+    prList: (repoPath, branches, numbers) =>
+      gitPost<ClawksisRepoPullRequests>('review/pr-list', { branches, numbers: numbers ?? [], path: repoPath }),
+
     createPr: repoPath => gitPost('review/create-pr', { path: repoPath })
   },
 
@@ -101,5 +106,9 @@ const remoteGit: GitBridge = {
 }
 
 export function desktopGit(): GitBridge | undefined {
+  if (typeof window === 'undefined') {
+    return undefined
+  }
+
   return isDesktopFsRemoteMode() ? remoteGit : window.clawkDesktop?.git
 }

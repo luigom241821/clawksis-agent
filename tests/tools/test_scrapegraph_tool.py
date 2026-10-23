@@ -1,8 +1,8 @@
 """Tests for the ScrapeGraphAI integration (native tool + web_extract backend).
 
-scrapegraphai itself is NOT installed in CI (it's lazy-installed on first use),
-so every test mocks the extraction layer. We verify the wiring: registration,
-toolset membership, the lazy-deps feature, the LLM-config builder, the tool/
+scrapegraphai itself is NOT installed in CI (it's installed on first use via
+pm.ensure_import), so every test mocks the extraction layer. We verify the wiring:
+registration, toolset membership, the pm extra, the LLM-config builder, the tool/
 backend handlers (success + unavailable + error paths), and that web_extract
 prefers scrapegraph over 3rd-party backends once the library is present.
 """
@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 
 import tools.scrapegraph_common as sgc
-import tools.scrapegraph_tool  # noqa: F401 — registers the tool on import
+import tools.scrapegraph_tool
 from plugins.web.scrapegraphai.provider import ScrapegraphWebProvider
 
 
@@ -42,9 +42,31 @@ def test_tool_registered_in_web_toolset():
 
 
 def test_lazy_feature_declared():
-    from tools.lazy_deps import LAZY_DEPS
+    """The pm extra exists in pyproject and its anchor is the scrapegraphai import."""
+    import tomllib
+    from pathlib import Path
 
-    assert LAZY_DEPS.get("scrape.scrapegraph") == ("scrapegraphai",)
+    from pm import extras
+
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"][
+        "optional-dependencies"
+    ]
+    assert sgc.LAZY_FEATURE in declared
+    assert extras.ANCHORS.get(sgc.LAZY_FEATURE) == "scrapegraphai"
+
+
+def test_ensure_installed_wraps_pm_install_error(monkeypatch):
+    """A failed/disabled pm install surfaces as ScrapegraphUnavailable."""
+    import pm
+
+    def _fail(extra):
+        raise RuntimeError(f"install of {extra} disabled")
+
+    monkeypatch.setattr(sgc, "is_available", lambda: False)
+    monkeypatch.setattr(pm, "ensure_import", _fail)
+    with pytest.raises(sgc.ScrapegraphUnavailable, match="scrapegraph disabled"):
+        sgc.ensure_installed()
 
 
 def test_schema_shape():
@@ -149,10 +171,12 @@ def test_handler_multi_urls(monkeypatch):
 
     monkeypatch.setattr("tools.scrapegraph_tool.extract_many", _fake_many)
     res = _run_tool(
-        _handle_scrapegraph({
-            "url": "https://a.com",
-            "urls": ["https://b.com", "a.com"],
-        })
+        _handle_scrapegraph(
+            {
+                "url": "https://a.com",
+                "urls": ["https://b.com", "a.com"],
+            }
+        )
     )
     assert res["ok"] is True
     # de-duped, scheme-normalised, order preserved
@@ -210,20 +234,24 @@ def test_normalize_urls_https_preserved():
 def test_normalize_urls_dedup():
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "url": "https://a.com",
-        "urls": ["https://a.com", "https://b.com"],
-    })
+    out = _normalize_urls(
+        {
+            "url": "https://a.com",
+            "urls": ["https://a.com", "https://b.com"],
+        }
+    )
     assert out == ["https://a.com", "https://b.com"]
 
 
 def test_normalize_urls_order_preserved():
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "url": "https://z.com",
-        "urls": ["https://a.com", "https://m.com"],
-    })
+    out = _normalize_urls(
+        {
+            "url": "https://z.com",
+            "urls": ["https://a.com", "https://m.com"],
+        }
+    )
     assert out == ["https://z.com", "https://a.com", "https://m.com"]
 
 
@@ -247,16 +275,18 @@ def test_normalize_urls_skips_non_http_schemes():
     that only failed later with obscure errors. They must be skipped."""
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "url": "ftp://files.example.com/x.zip",
-        "urls": [
-            "mailto:boss@example.com",
-            "javascript:void(0)",
-            "data:text/html;base64,PGI+",
-            "file:///etc/passwd",
-            "https://good.example.com",
-        ],
-    })
+    out = _normalize_urls(
+        {
+            "url": "ftp://files.example.com/x.zip",
+            "urls": [
+                "mailto:boss@example.com",
+                "javascript:void(0)",
+                "data:text/html;base64,PGI+",
+                "file:///etc/passwd",
+                "https://good.example.com",
+            ],
+        }
+    )
     assert out == ["https://good.example.com"]
 
     # Uppercase scheme is still recognised as non-http(s) and skipped.
@@ -294,9 +324,11 @@ def test_normalize_urls_skips_non_string_items_in_list():
     errors. They must be skipped, keeping only real string URLs."""
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "urls": [42, None, {"a": 1}, ["x"], "b.com", "  c.com  ", 0],
-    })
+    out = _normalize_urls(
+        {
+            "urls": [42, None, {"a": 1}, ["x"], "b.com", "  c.com  ", 0],
+        }
+    )
     assert out == ["https://b.com", "https://c.com"]
 
 
@@ -304,10 +336,12 @@ def test_normalize_urls_mixed_valid_and_junk():
     """Valid `url` + `urls` with junk items: junk dropped, valid kept, no crash."""
     from tools.scrapegraph_tool import _normalize_urls
 
-    out = _normalize_urls({
-        "url": "https://a.com",
-        "urls": [None, "", "https://b.com", {"bad": 1}],
-    })
+    out = _normalize_urls(
+        {
+            "url": "https://a.com",
+            "urls": [None, "", "https://b.com", {"bad": 1}],
+        }
+    )
     assert out == ["https://a.com", "https://b.com"]
 
 
@@ -850,9 +884,9 @@ def test_looks_like_empty_result_nested_shapes():
     assert sgc.looks_like_empty_result({"data": [{}]}) is True
     # Deeply nested mixed shapes.
     assert (
-        sgc.looks_like_empty_result({
-            "content": [{"answer": "none"}, {"answer": "null"}]
-        })
+        sgc.looks_like_empty_result(
+            {"content": [{"answer": "none"}, {"answer": "null"}]}
+        )
         is True
     )
     # Any real value at ANY depth keeps the result.
@@ -926,8 +960,8 @@ def test_extract_structured_install_runs_in_worker_thread(monkeypatch):
     so the first-use 30-60s pip install never freezes the event loop."""
     import tools.scrapegraph_common as sgc
 
-    install_fn = lambda: None  # noqa: E731 — stands in for ensure_installed
-    run_fn = lambda *a, **k: {"ok": True}  # noqa: E731 — stands in for _run_smart
+    install_fn = lambda: None
+    run_fn = lambda *a, **k: {"ok": True}
     calls: list[object] = []
     real_to_thread = asyncio.to_thread
 
@@ -952,8 +986,8 @@ def test_extract_many_install_runs_in_worker_thread(monkeypatch):
     """Same guarantee for the multi-source path."""
     import tools.scrapegraph_common as sgc
 
-    install_fn = lambda: None  # noqa: E731
-    run_fn = lambda *a, **k: [{"ok": True}]  # noqa: E731
+    install_fn = lambda: None
+    run_fn = lambda *a, **k: [{"ok": True}]
     calls: list[object] = []
     real_to_thread = asyncio.to_thread
 

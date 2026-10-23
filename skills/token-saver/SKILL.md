@@ -1,12 +1,16 @@
 ---
 name: token-saver
-description: "USE THIS to optimize / reduce token usage. Audits the installed skills, finds the ones that are NOT being used but still cost context tokens every turn, estimates how much each costs, and recommends which to DISABLE (and can disable them). Trigger on ES+EN: 'optimizar tokens', 'reducir tokens', 'ahorrar tokens', 'gastar menos tokens', 'estoy gastando muchos tokens', 'qué skills desactivar', 'skills que no uso', 'limpiar/aligerar el contexto', 'optimize tokens', 'reduce token usage', 'token audit', 'unused skills', 'context bloat'."
+description: "Find and disable unused skills that waste context tokens."
+version: 1.0.0
+platforms: [linux, macos, windows]
 argument-hint: 'token-saver | token-saver --days 45'
 allowed-tools: Bash, Read
 author: Clawksis (Gradient AI)
 license: MIT
 user-invocable: true
 metadata:
+  clawk:
+    tags: [tokens, context, skills, optimization, cost]
   clawksis:
     emoji: "🪙"
   openclaw:
@@ -22,6 +26,13 @@ Cada skill instalada agrega su descripción al catálogo que el agente ve en CAD
 turno (y su contenido completo cuando se invoca). Las skills que no usás siguen
 costando tokens. Esta skill audita el uso real y recomienda cuáles **desactivar**
 para liberar ese contexto, sin borrar nada (desactivar es reversible).
+
+## Cuándo usarla
+
+Cuando el usuario quiere optimizar / reducir el uso de tokens. Frases típicas (ES + EN):
+'optimizar tokens', 'reducir tokens', 'ahorrar tokens', 'gastar menos tokens', 'estoy gastando
+muchos tokens', 'qué skills desactivar', 'skills que no uso', 'limpiar/aligerar el contexto',
+'optimize tokens', 'reduce token usage', 'token audit', 'unused skills', 'context bloat'.
 
 ## Cómo ejecutarla
 

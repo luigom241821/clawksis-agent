@@ -99,7 +99,7 @@ TRANSITIONS: dict[str, set[str]] = {
 
 
 def now() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def load(subject_id: str) -> dict:
@@ -148,11 +148,9 @@ def transition(subject_id: str, broker_id: str, new_state: str, **fields) -> dic
         for key, value in fields.items():
             case[key] = value
         stamp = now()
-        case.setdefault("history", []).append({
-            "at": stamp,
-            "from": old,
-            "to": new_state,
-        })
+        case.setdefault("history", []).append(
+            {"at": stamp, "from": old, "to": new_state}
+        )
         ledger[broker_id] = case
         save(subject_id, ledger)
         storage.append_jsonl(
@@ -174,11 +172,9 @@ VERIFICATION_POLL_DAYS = 1  # how soon to re-poll for an unarrived verification 
 
 def _plus_days(days: int, start: str | None = None) -> str:
     base = (
-        _dt.datetime.strptime(start, "%Y-%m-%dT%H:%M:%SZ").replace(
-            tzinfo=_dt.timezone.utc
-        )
+        _dt.datetime.strptime(start, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=_dt.UTC)
         if start
-        else _dt.datetime.now(_dt.timezone.utc)
+        else _dt.datetime.now(_dt.UTC)
     )
     return (base + _dt.timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 

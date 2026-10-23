@@ -7,7 +7,7 @@ import shlex
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 
@@ -74,7 +74,7 @@ DANGEROUS_PATTERNS = [
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def is_dangerous(text: str) -> bool:
@@ -130,6 +130,7 @@ def run_safe_command(intent: str) -> tuple[int, str, str, float]:
         text=True,
         timeout=10,
         cwd=os.getenv("HERMES_LITE_WORKDIR", str(Path(__file__).resolve().parent)),
+        check=False,
     )
 
     duration = round(time.time() - start, 3)

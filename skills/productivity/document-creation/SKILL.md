@@ -1,6 +1,7 @@
 ---
 name: document-creation
-description: "Create Word documents (.docx) with APA formatting and custom styling preferences — including Normas APA layout, color accents, Times New Roman, and reference sections."
+description: "Create APA-formatted Word documents with custom styling."
+platforms: [linux, macos, windows]
 version: 1.0.0
 author: Clawksis
 license: MIT

@@ -1,8 +1,13 @@
 ---
 name: supabase
-description: "Use when doing ANY task involving Supabase. Triggers: Supabase products (Database, Auth, Edge Functions, Realtime, Storage, Vectors, Cron, Queues); client libraries and SSR integrations (supabase-js, @supabase/ssr) in Next.js, React, SvelteKit, Astro, Remix; auth issues (login, logout, sessions, JWT, cookies, getSession, getUser, getClaims, RLS); Supabase CLI or MCP server; schema changes, migrations, security audits, Postgres extensions (pg_graphql, pg_cron, pg_vector). ES: supabase, base de datos, postgres, auth/autenticación, login/sesión, JWT/cookies, storage/almacenamiento, RLS/seguridad a nivel de fila, edge functions, realtime/tiempo real, migraciones, supabase-js, CLI de supabase, MCP de supabase, vault, políticas/policies, esquema/schema."
+description: "Build on Supabase: Postgres, auth, RLS, storage, functions."
+version: "0.1.2"
+author: Supabase
+platforms: [linux, macos, windows]
 license: MIT
 metadata:
+  clawk:
+    tags: [supabase, postgres, database, auth, rls, edge-functions, storage, realtime]
   author: supabase
   version: "0.1.2"
   openclaw:
@@ -10,6 +15,18 @@ metadata:
 ---
 
 # Supabase
+
+## When to Use
+
+Any task involving Supabase: its products (Database, Auth, Edge Functions, Realtime, Storage,
+Vectors, Cron, Queues); client libraries and SSR integrations (supabase-js, @supabase/ssr) in
+Next.js, React, SvelteKit, Astro, Remix; auth issues (login, logout, sessions, JWT, cookies,
+getSession, getUser, getClaims, RLS); the Supabase CLI or MCP server; schema changes,
+migrations, security audits, and Postgres extensions (pg_graphql, pg_cron, pg_vector).
+Spanish requests too: supabase, base de datos, postgres, auth/autenticación, login/sesión,
+JWT/cookies, storage/almacenamiento, RLS/seguridad a nivel de fila, edge functions,
+realtime/tiempo real, migraciones, supabase-js, CLI de supabase, MCP de supabase, vault,
+políticas/policies, esquema/schema.
 
 ## Core Principles
 

@@ -60,9 +60,7 @@ IOC_TYPES = [
 
 
 def _now_iso():
-    return (
-        datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds") + "Z"
-    )
+    return datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds") + "Z"
 
 
 def _sha256(content: str) -> str:
@@ -87,7 +85,7 @@ class EvidenceStore:
             try:
                 with open(filepath, "r", encoding="utf-8") as f:
                     self.data = json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
+            except (OSError, json.JSONDecodeError) as e:
                 print(
                     f"Error loading evidence store '{filepath}': {e}", file=sys.stderr
                 )
@@ -110,12 +108,12 @@ class EvidenceStore:
         source: str,
         content: str,
         evidence_type: str,
-        actor: str = None,
-        url: str = None,
-        timestamp: str = None,
-        ioc_type: str = None,
+        actor: str | None = None,
+        url: str | None = None,
+        timestamp: str | None = None,
+        ioc_type: str | None = None,
         verification: str = "unverified",
-        notes: str = None,
+        notes: str | None = None,
     ) -> str:
         evidence_id = self._next_id()
         entry = {
@@ -133,16 +131,20 @@ class EvidenceStore:
             "notes": notes,
         }
         self.data["evidence"].append(entry)
-        self.data["chain_of_custody"].append({
-            "action": "add",
-            "evidence_id": evidence_id,
-            "timestamp": _now_iso(),
-            "source": source,
-        })
+        self.data["chain_of_custody"].append(
+            {
+                "action": "add",
+                "evidence_id": evidence_id,
+                "timestamp": _now_iso(),
+                "source": source,
+            }
+        )
         self._save()
         return evidence_id
 
-    def list_evidence(self, filter_type: str = None, filter_actor: str = None):
+    def list_evidence(
+        self, filter_type: str | None = None, filter_actor: str | None = None
+    ):
         results = self.data["evidence"]
         if filter_type:
             results = [e for e in results if e.get("type") == filter_type]
@@ -157,11 +159,13 @@ class EvidenceStore:
             expected = _sha256(entry["content"])
             stored = entry.get("content_sha256", "")
             if expected != stored:
-                issues.append({
-                    "id": entry["id"],
-                    "stored_sha256": stored,
-                    "computed_sha256": expected,
-                })
+                issues.append(
+                    {
+                        "id": entry["id"],
+                        "stored_sha256": stored,
+                        "computed_sha256": expected,
+                    }
+                )
         return issues
 
     def query(self, keyword: str):

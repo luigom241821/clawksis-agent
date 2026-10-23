@@ -11,7 +11,10 @@ s6-log crash-loops on mkdir: Permission denied.
 
 from __future__ import annotations
 
-from tests.docker.conftest import docker_exec_sh, start_container
+from tests.docker.conftest import (
+    docker_exec_sh,
+    start_container,
+)
 
 
 def test_logs_gateways_seeded_and_clawk_owned(

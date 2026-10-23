@@ -32,33 +32,35 @@ def _extract_core_subject(topic: str) -> str:
     """Extract core subject from verbose query for TikTok search."""
     from .query import extract_core_subject
 
-    _TIKTOK_NOISE = frozenset({
-        "best",
-        "top",
-        "good",
-        "great",
-        "awesome",
-        "killer",
-        "latest",
-        "new",
-        "news",
-        "update",
-        "updates",
-        "trending",
-        "hottest",
-        "popular",
-        "viral",
-        "practices",
-        "features",
-        "recommendations",
-        "advice",
-        "prompt",
-        "prompts",
-        "prompting",
-        "methods",
-        "strategies",
-        "approaches",
-    })
+    _TIKTOK_NOISE = frozenset(
+        {
+            "best",
+            "top",
+            "good",
+            "great",
+            "awesome",
+            "killer",
+            "latest",
+            "new",
+            "news",
+            "update",
+            "updates",
+            "trending",
+            "hottest",
+            "popular",
+            "viral",
+            "practices",
+            "features",
+            "recommendations",
+            "advice",
+            "prompt",
+            "prompts",
+            "prompting",
+            "methods",
+            "strategies",
+            "approaches",
+        }
+    )
     return extract_core_subject(topic, noise=_TIKTOK_NOISE)
 
 
@@ -78,7 +80,7 @@ def _infer_query_intent(topic: str) -> str:
     return "breaking_news"
 
 
-def expand_tiktok_queries(topic: str, depth: str) -> List[str]:
+def expand_tiktok_queries(topic: str, depth: str) -> list[str]:
     """Generate multiple TikTok search queries from a topic.
 
     Mirrors reddit.py's expand_reddit_queries() pattern:
@@ -125,7 +127,7 @@ def _log(msg: str):
     log.source_log("TikTok", msg)
 
 
-def _parse_date(item: Dict[str, Any]) -> Optional[str]:
+def _parse_date(item: dict[str, Any]) -> Optional[str]:
     """Parse date from ScrapeCreators TikTok item to YYYY-MM-DD."""
     ts = item.get("create_time")
     if ts:
@@ -157,8 +159,8 @@ def _clean_webvtt(text: str) -> str:
 
 
 def _parse_items(
-    raw_items: List[Dict[str, Any]], core_topic: str
-) -> List[Dict[str, Any]]:
+    raw_items: list[dict[str, Any]], core_topic: str
+) -> list[dict[str, Any]]:
     """Parse raw TikTok items into normalized dicts."""
     items = []
     for raw in raw_items:
@@ -208,31 +210,35 @@ def _parse_items(
         if not url and author_name and video_id:
             url = f"https://www.tiktok.com/@{author_name}/video/{video_id}"
 
-        items.append({
-            "video_id": video_id,
-            "text": text,
-            "url": url,
-            "author_name": author_name,
-            "date": date_str,
-            "engagement": {
-                "views": play_count,
-                "likes": digg_count,
-                "comments": comment_count,
-                "shares": share_count,
-            },
-            "hashtags": hashtag_names,
-            "duration": duration,
-            "relevance": relevance,
-            "why_relevant": f"TikTok: {text[:60]}" if text else f"TikTok: {core_topic}",
-            "caption_snippet": "",  # populated by fetch_captions
-        })
+        items.append(
+            {
+                "video_id": video_id,
+                "text": text,
+                "url": url,
+                "author_name": author_name,
+                "date": date_str,
+                "engagement": {
+                    "views": play_count,
+                    "likes": digg_count,
+                    "comments": comment_count,
+                    "shares": share_count,
+                },
+                "hashtags": hashtag_names,
+                "duration": duration,
+                "relevance": relevance,
+                "why_relevant": f"TikTok: {text[:60]}"
+                if text
+                else f"TikTok: {core_topic}",
+                "caption_snippet": "",  # populated by fetch_captions
+            }
+        )
     return items
 
 
 def _hashtag_search(
     hashtag: str,
     token: str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Search TikTok by hashtag via ScrapeCreators.
 
     Args:
@@ -264,7 +270,7 @@ def _profile_videos(
     handle: str,
     token: str,
     count: int = 10,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Fetch a TikTok creator's recent videos via ScrapeCreators.
 
     Args:
@@ -299,8 +305,8 @@ def search_tiktok(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    token: str = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+) -> dict[str, Any]:
     """Search TikTok via ScrapeCreators API.
 
     Args:
@@ -367,10 +373,10 @@ def search_tiktok(
 
 
 def fetch_captions(
-    video_items: List[Dict[str, Any]],
+    video_items: list[dict[str, Any]],
     token: str,
     depth: str = "default",
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Fetch transcripts for top N TikTok videos via ScrapeCreators.
 
     Strategy:
@@ -443,10 +449,10 @@ def search_and_enrich(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    token: str = None,
-    hashtags: List[str] | None = None,
-    creators: List[str] | None = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+    hashtags: list[str] | None = None,
+    creators: list[str] | None = None,
+) -> dict[str, Any]:
     """Full TikTok search: find videos, then fetch captions for top results.
 
     Uses expand_tiktok_queries() to generate multiple search queries,
@@ -465,8 +471,8 @@ def search_and_enrich(
         Dict with 'items' list. Each item has a 'caption_snippet' field.
     """
     core_topic = _extract_core_subject(topic)
-    seen_ids: Set[str] = set()
-    items: List[Dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    items: list[dict[str, Any]] = []
     last_error = None
 
     # Step 0a: Hashtag search (high-signal, runs first)
@@ -522,7 +528,7 @@ def search_and_enrich(
     return {"items": items, "error": last_error}
 
 
-def parse_tiktok_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_tiktok_response(response: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse TikTok search response to normalized format.
 
     Returns:
@@ -531,7 +537,7 @@ def parse_tiktok_response(response: Dict[str, Any]) -> List[Dict[str, Any]]:
     return response.get("items", [])
 
 
-def _tiktok_total_engagement(item: Dict[str, Any]) -> int:
+def _tiktok_total_engagement(item: dict[str, Any]) -> int:
     """Total engagement for ranking which posts deserve comment enrichment."""
     eng = item.get("engagement", {})
     return (
@@ -542,11 +548,11 @@ def _tiktok_total_engagement(item: Dict[str, Any]) -> int:
 
 
 def enrich_with_comments(
-    items: List[Dict[str, Any]],
+    items: list[dict[str, Any]],
     token: str,
     max_posts: int = 3,
     max_comments: int = 5,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Enrich top TikTok posts with comment data from ScrapeCreators.
 
     For the top N posts by engagement, fetches comments via the SC API
@@ -599,7 +605,7 @@ def _fetch_post_comments(
     post_url: str,
     token: str,
     max_comments: int = 5,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Fetch comments for a single TikTok post via ScrapeCreators.
 
     SC endpoint: GET /v1/tiktok/video/comments?url=<video_url>
@@ -633,7 +639,7 @@ def _fetch_post_comments(
         key=lambda c: c.get("digg_count", 0) or 0,
         reverse=True,
     )
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for c in raw_comments[:max_comments]:
         text = c.get("text") or ""
         if not text:
@@ -649,10 +655,12 @@ def _fetch_post_comments(
                 date_str = dates.timestamp_to_date(int(create_time)) or ""
             except (ValueError, TypeError):
                 date_str = ""
-        out.append({
-            "author": author,
-            "text": text[:400],
-            "digg_count": c.get("digg_count", 0) or 0,
-            "date": date_str,
-        })
+        out.append(
+            {
+                "author": author,
+                "text": text[:400],
+                "digg_count": c.get("digg_count", 0) or 0,
+                "date": date_str,
+            }
+        )
     return out

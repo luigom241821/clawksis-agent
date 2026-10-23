@@ -6,7 +6,7 @@ author: SHL0MS (github.com/SHL0MS)
 license: MIT
 platforms: [linux, macos, windows]
 prerequisites:
-  commands: [python3]
+  commands: [python]
 metadata:
   clawk:
     tags: [privacy, data-broker, opt-out, ccpa, gdpr, security, doxxing]
@@ -61,7 +61,7 @@ verifying re-scan.
 
 ## Prerequisites
 
-- `python3` (stdlib only; no extra packages needed for the core engine).
+- `python` (stdlib only; no extra packages needed for the core engine).
 - **Optional upgrades** (the skill works zero-config without these; `setup --auto` turns on every
   one it detects, reading credentials from the shell env **and from `$CLAWK_HOME/.env`** so keys
   Clawksis already loads for its own tools are picked up without re-exporting - each one converts a
@@ -80,7 +80,7 @@ verifying re-scan.
       logged-in browser, **NOT** a cloud browser: a headless cloud browser (Browserbase) holds no
       webmail session and is itself Cloudflare/DataDome-gated on webmail and on session-bound broker
       gates (e.g. PeopleConnect guided-mode). Drive the operator's real Chrome over CDP - launch
-      `chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.clawk/chrome-debug"` (a dedicated
+      `chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.clawksis/chrome-debug"` (a dedicated
       debug profile signed into the webmail once, not the Default profile) and connect the browser
       tools to `127.0.0.1:9222`. **`$PDD cdp` launches this for you** (finds Chrome/Chromium/Brave/Edge,
       starts it detached on the dedicated profile, prints the CDP endpoint; `--check` to test, `--print`
@@ -98,7 +98,7 @@ verifying re-scan.
 Run everything through the `terminal` tool. From this skill's directory:
 
 ```bash
-PDD="python3 scripts/pdd.py"
+PDD="python scripts/pdd.py"
 ```
 
 The engine stores data under `$PDD_DATA_DIR` (default `$CLAWK_HOME/unbroker`), written
@@ -311,7 +311,7 @@ recording `found` and before any deletion.
 ## Verification
 
 - `scripts/run_tests.sh tests/skills/test_unbroker_skill.py` (hermetic; no network), or the
-  dependency-free runner `python3 tests/skills/test_unbroker_skill.py`.
+  dependency-free runner `python tests/skills/test_unbroker_skill.py`.
 - Dry run: `$PDD setup --auto && $PDD doctor && SID=$($PDD intake --full-name "Test Person"
-  --email t@example.com --consent | python3 -c 'import sys,json;print(json.load(sys.stdin)["subject_id"])')
+  --email t@example.com --consent | python -c 'import sys,json;print(json.load(sys.stdin)["subject_id"])')
   && $PDD next "$SID"` and confirm a readiness summary plus an ordered action queue.

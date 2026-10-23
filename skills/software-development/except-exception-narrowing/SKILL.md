@@ -1,8 +1,13 @@
 ---
 name: except-exception-narrowing
-description: "Pattern for narrowing broad `except Exception:` clauses in Python code to specific exception types, with proper logging. Use when auditing code for fragile exception handling in Clawksis or any Python project."
+description: "Narrow broad except Exception clauses to specific types."
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 version: "1.0"
 metadata:
+  clawk:
+    tags: [python, exceptions, error-handling, logging, refactoring, code-quality]
   openclaw:
     emoji: "🎯"
     requires:

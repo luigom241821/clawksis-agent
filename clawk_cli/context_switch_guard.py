@@ -1,14 +1,4 @@
-"""Warn when an in-session model switch will trigger preflight compression on the next turn.
-
-Addresses part of #23767 ("user-facing guardrail when switching from a
-high-context provider to a substantially lower-context provider"). The other
-proposed fixes from that issue (hard preflight token guard, metadata cache
-invalidation on switch, compression safety invariant, oversized tool-output
-handling) are tracked separately.
-
-Mirrors the expensive-model guard pattern: merge into ``ModelSwitchResult.warning_message``
-so Herm TUI, CLI, and gateway surfaces that already show switch warnings pick it up.
-"""
+"""Warn when an in-session model switch will trigger preflight compression on the next turn."""
 
 from __future__ import annotations
 
@@ -25,11 +15,21 @@ def _append_warning(result: ModelSwitchResult, text: str) -> None:
         result.warning_message = text
 
 
-def _threshold_tokens(context_length: int, threshold_percent: float) -> int:
-    return max(int(context_length * threshold_percent), MINIMUM_CONTEXT_LENGTH)
+def _threshold_tokens(
+    compressor: Any, model: str, context_length: int, provider: str = ""
+) -> int:
+    """The trigger the compressor WILL use after the switch (cap, model_thresholds and small-window
+    floor included), so the warning quotes the real number; duck-typed engines keep the plain ratio."""
+    preview = getattr(compressor, "preview_threshold_tokens", None)
+    if callable(preview):
+        return int(preview(model, context_length, provider))
+    return max(
+        int(context_length * float(getattr(compressor, "threshold_percent", 0.5))),
+        MINIMUM_CONTEXT_LENGTH,
+    )
 
 
-def _estimate_tokens(agent: Any, messages: Optional[List[dict]]) -> Optional[int]:
+def _estimate_tokens(agent: Any, messages: Optional[list[dict]]) -> Optional[int]:
     cc = getattr(agent, "context_compressor", None)
     if cc is None:
         return None
@@ -49,28 +49,27 @@ def _estimate_tokens(agent: Any, messages: Optional[List[dict]]) -> Optional[int
             tools = getattr(agent, "tools", None)
             return int(
                 estimate_request_tokens_rough(
-                    messages,
-                    system_prompt=system_prompt,
-                    tools=tools or None,
+                    messages, system_prompt=system_prompt, tools=tools or None
                 )
             )
         except Exception:
             pass
 
+    # session_prompt_tokens is a lifetime sum, not occupancy (#126343): never a fallback here.
     last = int(getattr(cc, "last_prompt_tokens", 0) or 0)
-    if last > 0:
-        return last
-    session_prompt = int(getattr(agent, "session_prompt_tokens", 0) or 0)
-    return session_prompt if session_prompt > 0 else None
+    return last if last > 0 else None
 
 
 def merge_preflight_compression_warning(
     result: ModelSwitchResult,
     *,
     agent: Any = None,
-    messages: Optional[List[dict]] = None,
+    messages: Optional[list[dict]] = None,
     custom_providers: list | None = None,
     config_context_length: int | None = None,
+    configured_model: str | None = None,
+    configured_provider: str | None = None,
+    configured_base_url: str | None = None,
 ) -> None:
     """If the next user message will likely preflight-compress, append a warning."""
     if not result.success or agent is None:
@@ -82,6 +81,14 @@ def merge_preflight_compression_warning(
     if cc is None:
         return
 
+    # Fall back to the agent's custom providers: without them the shrink warning used the
+    # hardcoded catalog (e.g. "qwen" → 131072) even when the provider declared 1M.
+    if custom_providers is None:
+        custom_providers = getattr(agent, "_custom_providers", None)
+
+    def _or_agent(value, attr):
+        return value if value is not None else getattr(agent, attr, None)
+
     old_ctx = int(getattr(cc, "context_length", 0) or 0)
     new_ctx = resolve_display_context_length(
         result.new_model,
@@ -91,6 +98,9 @@ def merge_preflight_compression_warning(
         model_info=result.model_info,
         custom_providers=custom_providers,
         config_context_length=config_context_length,
+        configured_model=_or_agent(configured_model, "model"),
+        configured_provider=_or_agent(configured_provider, "provider"),
+        configured_base_url=_or_agent(configured_base_url, "base_url"),
     )
     if not new_ctx:
         return
@@ -99,8 +109,9 @@ def merge_preflight_compression_warning(
     if estimate is None:
         return
 
-    pct = float(getattr(cc, "threshold_percent", 0.5))
-    new_threshold = _threshold_tokens(new_ctx, pct)
+    new_threshold = _threshold_tokens(
+        cc, result.new_model, new_ctx, result.target_provider
+    )
     if estimate < new_threshold:
         return
 
@@ -140,7 +151,14 @@ def enrich_model_switch_warnings_for_gateway(
     if agent is None:
         return
 
-    cfg_ctx = None
+    configured: dict = dict.fromkeys(
+        (
+            "config_context_length",
+            "configured_model",
+            "configured_provider",
+            "configured_base_url",
+        )
+    )
     if load_gateway_config is not None:
         try:
             cfg = load_gateway_config()
@@ -149,7 +167,12 @@ def enrich_model_switch_warnings_for_gateway(
                 isinstance(model_cfg, dict)
                 and model_cfg.get("context_length") is not None
             ):
-                cfg_ctx = int(model_cfg["context_length"])
+                configured.update(
+                    config_context_length=int(model_cfg["context_length"]),
+                    configured_model=model_cfg.get("default") or model_cfg.get("model"),
+                    configured_provider=model_cfg.get("provider"),
+                    configured_base_url=model_cfg.get("base_url"),
+                )
         except Exception:
             pass
 
@@ -168,5 +191,5 @@ def enrich_model_switch_warnings_for_gateway(
         agent=agent,
         messages=messages,
         custom_providers=custom_providers,
-        config_context_length=cfg_ctx,
+        **configured,
     )

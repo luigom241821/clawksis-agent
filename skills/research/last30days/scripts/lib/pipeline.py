@@ -6,7 +6,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from shutil import which
 from typing import Any
 
@@ -553,7 +553,7 @@ def run(
         topic=topic,
         range_from=from_date,
         range_to=to_date,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
         provider_runtime=runtime,
         query_plan=plan,
         clusters=clusters,

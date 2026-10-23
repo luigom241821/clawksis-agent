@@ -22,7 +22,7 @@ import sys
 import urllib.request
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 # ─── Subdomain Discovery (crt.sh) ──────────────────────────────────────────
@@ -42,13 +42,13 @@ def subdomains(domain, include_expired=False, limit=200):
         entries = json.loads(r.read().decode())
 
     seen, results = set(), []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for e in entries:
         not_after = e.get("not_after", "")
         if not include_expired and not_after:
             try:
                 dt = datetime.strptime(not_after[:19], "%Y-%m-%dT%H:%M:%S").replace(
-                    tzinfo=timezone.utc
+                    tzinfo=UTC
                 )
                 if dt <= now:
                     continue
@@ -58,11 +58,13 @@ def subdomains(domain, include_expired=False, limit=200):
             name = name.strip().lower()
             if name and name not in seen:
                 seen.add(name)
-                results.append({
-                    "subdomain": name,
-                    "issuer": e.get("issuer_name", ""),
-                    "not_after": not_after,
-                })
+                results.append(
+                    {
+                        "subdomain": name,
+                        "issuer": e.get("issuer_name", ""),
+                        "not_after": not_after,
+                    }
+                )
 
     results.sort(key=lambda r: (r["subdomain"].startswith("*"), r["subdomain"]))
     return {
@@ -89,7 +91,7 @@ def check_ssl(host, port=443, timeout=10):
     def parse_date(s):
         for fmt in ("%b %d %H:%M:%S %Y %Z", "%b  %d %H:%M:%S %Y %Z"):
             try:
-                return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
+                return datetime.strptime(s, fmt).replace(tzinfo=UTC)
             except ValueError:
                 pass
         return None
@@ -110,7 +112,7 @@ def check_ssl(host, port=443, timeout=10):
                 cert, cipher, proto = s.getpeercert(), s.cipher(), s.version()
 
     not_after = parse_date(cert.get("notAfter", ""))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     days = (not_after - now).days if not_after else None
     is_expired = days is not None and days < 0
 
@@ -256,12 +258,10 @@ def whois_lookup(domain):
                 "%Y-%m-%d",
             ):
                 try:
-                    dt = datetime.strptime(result[field][:19], fmt).replace(
-                        tzinfo=timezone.utc
-                    )
+                    dt = datetime.strptime(result[field][:19], fmt).replace(tzinfo=UTC)
                     result[field] = dt.isoformat()
                     if field == "expiration_date":
-                        days = (dt - datetime.now(timezone.utc)).days
+                        days = (dt - datetime.now(UTC)).days
                         result["expiration_days_remaining"] = days
                         result["is_expired"] = days < 0
                     break

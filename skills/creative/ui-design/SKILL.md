@@ -1,6 +1,6 @@
 ---
 name: ui-design
-description: "UI design workflow: DESIGN.md token specs, throwaway HTML mockup variants, and 54 real design system templates (Stripe, Linear, Vercel)."
+description: "Design UI with DESIGN.md tokens, mockups and templates."
 version: 1.0.0
 author: Clawksis
 license: MIT

@@ -6,7 +6,7 @@ from clawk_cli.active_sessions import (
 
 
 def test_cli_claim_active_session_respects_global_limit(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     cfg = {"max_concurrent_sessions": 1}
     held, message = try_acquire_active_session(
         session_id="held-session",
@@ -25,10 +25,9 @@ def test_cli_claim_active_session_respects_global_limit(tmp_path, monkeypatch):
 
     try:
         assert cli._claim_active_session("cli") is False
-        assert printed == [
-            "[bold red]Clawksis is at the active session limit (1/1). "
-            "Try again when another session finishes.[/]"
-        ]
+        assert len(printed) == 1
+        # Names the holding surface ("tui"), not the blocked one.
+        assert "tui" in printed[0]
 
         held.release()
 

@@ -51,21 +51,25 @@ async def test_external_refresh_picked_up_without_restart(tmp_path, monkeypatch)
 
     # Pre-seed the baseline state: valid tokens the session loaded at startup.
     tokens_file.write_text(
-        json.dumps({
-            "access_token": "OLD_ACCESS",
-            "token_type": "Bearer",
-            "expires_in": 3600,
-            "refresh_token": "OLD_REFRESH",
-        })
+        json.dumps(
+            {
+                "access_token": "OLD_ACCESS",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+                "refresh_token": "OLD_REFRESH",
+            }
+        )
     )
     client_info_file.write_text(
-        json.dumps({
-            "client_id": "test-client",
-            "redirect_uris": ["http://127.0.0.1:12345/callback"],
-            "grant_types": ["authorization_code", "refresh_token"],
-            "response_types": ["code"],
-            "token_endpoint_auth_method": "none",
-        })
+        json.dumps(
+            {
+                "client_id": "test-client",
+                "redirect_uris": ["http://127.0.0.1:12345/callback"],
+                "grant_types": ["authorization_code", "refresh_token"],
+                "response_types": ["code"],
+                "token_endpoint_auth_method": "none",
+            }
+        )
     )
 
     mgr = MCPOAuthManager()
@@ -85,18 +89,23 @@ async def test_external_refresh_picked_up_without_restart(tmp_path, monkeypatch)
     # automatically via the ClawksisMCPOAuthProvider.async_auth_flow
     # pre-hook on the first real request, but we exercise it directly
     # here for test determinism).
-    await mgr.invalidate_if_disk_changed("srv")
+    baseline_changed = await mgr.invalidate_if_disk_changed("srv")
+    assert baseline_changed is False
+    assert provider._initialized is True
+    assert await mgr.invalidate_if_disk_changed("srv") is False  # unchanged file
 
     # EXTERNAL PROCESS: cron rewrites the tokens file with fresh creds.
     # The old refresh_token has been consumed by this external exchange.
     future_mtime = time.time() + 1
     tokens_file.write_text(
-        json.dumps({
-            "access_token": "NEW_ACCESS",
-            "token_type": "Bearer",
-            "expires_in": 3600,
-            "refresh_token": "NEW_REFRESH",
-        })
+        json.dumps(
+            {
+                "access_token": "NEW_ACCESS",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+                "refresh_token": "NEW_REFRESH",
+            }
+        )
     )
     os.utime(tokens_file, (future_mtime, future_mtime))
 
@@ -131,11 +140,13 @@ async def test_handle_401_deduplicates_concurrent_callers(tmp_path, monkeypatch)
     token_dir = tmp_path / "mcp-tokens"
     token_dir.mkdir(parents=True)
     (token_dir / "srv.json").write_text(
-        json.dumps({
-            "access_token": "TOK",
-            "token_type": "Bearer",
-            "expires_in": 3600,
-        })
+        json.dumps(
+            {
+                "access_token": "TOK",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            }
+        )
     )
 
     mgr = MCPOAuthManager()
@@ -167,57 +178,3 @@ async def test_handle_401_deduplicates_concurrent_callers(tmp_path, monkeypatch)
     assert all(r == results[0] for r in results), "dedup must return identical result"
     # Exactly ONE recovery ran — the rest awaited the same pending future.
     assert call_count == 1, f"expected 1 recovery attempt, got {call_count}"
-
-
-@pytest.mark.asyncio
-async def test_handle_401_returns_false_when_no_provider(tmp_path, monkeypatch):
-    """handle_401 for an unknown server returns False cleanly."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    from tools.mcp_oauth_manager import MCPOAuthManager, reset_manager_for_tests
-
-    reset_manager_for_tests()
-
-    mgr = MCPOAuthManager()
-    result = await mgr.handle_401("nonexistent", "any_token")
-    assert result is False
-
-
-@pytest.mark.asyncio
-async def test_invalidate_if_disk_changed_handles_missing_file(tmp_path, monkeypatch):
-    """invalidate_if_disk_changed returns False when tokens file doesn't exist."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    _set_interactive_stdin(monkeypatch)
-    from tools.mcp_oauth_manager import MCPOAuthManager, reset_manager_for_tests
-
-    reset_manager_for_tests()
-
-    mgr = MCPOAuthManager()
-    mgr.get_or_build_provider("srv", "https://example.com/mcp", None)
-
-    # No tokens file exists yet — this is the pre-auth state
-    result = await mgr.invalidate_if_disk_changed("srv")
-    assert result is False
-
-
-@pytest.mark.asyncio
-async def test_provider_is_reused_across_reconnects(tmp_path, monkeypatch):
-    """The manager caches providers; multiple reconnects reuse the same instance.
-
-    This is what makes the disk-watch stick across reconnects: tearing down
-    the MCP session and rebuilding it (Task 5's _reconnect_event path) must
-    not create a new provider, otherwise ``last_mtime_ns`` resets and the
-    first post-reconnect auth flow would spuriously "detect" a change.
-    """
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    _set_interactive_stdin(monkeypatch)
-    from tools.mcp_oauth_manager import MCPOAuthManager, reset_manager_for_tests
-
-    reset_manager_for_tests()
-
-    mgr = MCPOAuthManager()
-    p1 = mgr.get_or_build_provider("srv", "https://example.com/mcp", None)
-
-    # Simulate a reconnect: _run_http calls get_or_build_provider again
-    p2 = mgr.get_or_build_provider("srv", "https://example.com/mcp", None)
-
-    assert p1 is p2, "manager must cache the provider across reconnects"

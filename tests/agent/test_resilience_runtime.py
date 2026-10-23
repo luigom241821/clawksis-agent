@@ -28,12 +28,14 @@ def test_disabled_by_default():
 
 
 def test_enables_limiter_and_breaker_from_config():
-    install_resilience_runtime({
-        "resilience": {
-            "rate_limits": {"enabled": True, "providers": {"p": {"rpm": 10}}},
-            "circuit_breaker": {"enabled": True, "failure_threshold": 2},
+    install_resilience_runtime(
+        {
+            "resilience": {
+                "rate_limits": {"enabled": True, "providers": {"p": {"rpm": 10}}},
+                "circuit_breaker": {"enabled": True, "failure_threshold": 2},
+            }
         }
-    })
+    )
     assert get_rate_limiter() is not None
     breaker = get_circuit_breaker()
     assert breaker is not None and breaker.enabled is True
@@ -56,11 +58,13 @@ def test_install_idempotent_without_force():
 
 
 def test_apply_rate_limit_calls_acquire_when_enabled(monkeypatch):
-    install_resilience_runtime({
-        "resilience": {
-            "rate_limits": {"enabled": True, "providers": {"p": {"tpm": 1000}}}
+    install_resilience_runtime(
+        {
+            "resilience": {
+                "rate_limits": {"enabled": True, "providers": {"p": {"tpm": 1000}}}
+            }
         }
-    })
+    )
     limiter = get_rate_limiter()
     assert limiter is not None
     calls = []
@@ -88,9 +92,13 @@ def test_apply_rate_limit_noop_when_disabled():
 
 def test_apply_rate_limit_never_raises(monkeypatch):
     # Even if the limiter blows up, the request path must be unaffected.
-    install_resilience_runtime({
-        "resilience": {"rate_limits": {"enabled": True, "providers": {"p": {"rpm": 1}}}}
-    })
+    install_resilience_runtime(
+        {
+            "resilience": {
+                "rate_limits": {"enabled": True, "providers": {"p": {"rpm": 1}}}
+            }
+        }
+    )
     limiter = get_rate_limiter()
 
     def _boom(*a, **k):

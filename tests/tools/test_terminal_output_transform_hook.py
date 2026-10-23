@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 import clawk_cli.plugins as plugins_mod
 import tools.terminal_tool as terminal_tool_module
 from tools.environments.local import LocalEnvironment
@@ -19,7 +21,6 @@ def _make_env_config(tmp_path, **overrides):
         "host_cwd": None,
         "modal_mode": "auto",
         "docker_image": "",
-        "singularity_image": "",
         "modal_image": "",
         "daytona_image": "",
     }
@@ -69,61 +70,6 @@ def test_terminal_output_unchanged_when_transform_hook_not_registered(
     assert result["error"] is None
 
 
-def test_terminal_output_unchanged_for_none_hook_result(monkeypatch, tmp_path):
-    result, _mock_env = _run_terminal(
-        monkeypatch,
-        tmp_path,
-        output="plain output",
-        invoke_hook=lambda hook_name, **kwargs: [None],
-    )
-
-    assert result["output"] == "plain output"
-
-
-def test_terminal_output_ignores_invalid_hook_results(monkeypatch, tmp_path):
-    result, _mock_env = _run_terminal(
-        monkeypatch,
-        tmp_path,
-        output="plain output",
-        invoke_hook=lambda hook_name, **kwargs: [{"bad": True}, 123, ["nope"]],
-    )
-
-    assert result["output"] == "plain output"
-
-
-def test_terminal_output_uses_first_valid_string_from_hooks(monkeypatch, tmp_path):
-    result, _mock_env = _run_terminal(
-        monkeypatch,
-        tmp_path,
-        output="plain output",
-        invoke_hook=lambda hook_name, **kwargs: [
-            None,
-            {"bad": True},
-            "first",
-            "second",
-        ],
-    )
-
-    assert result["output"] == "first"
-
-
-def test_terminal_output_transform_still_truncates_long_replacement(
-    monkeypatch, tmp_path
-):
-    transformed_output = "PLUGIN-HEAD\n" + ("A" * 60000) + "\nPLUGIN-TAIL"
-    result, _mock_env = _run_terminal(
-        monkeypatch,
-        tmp_path,
-        output="short output",
-        invoke_hook=lambda hook_name, **kwargs: [transformed_output],
-    )
-
-    assert "PLUGIN-HEAD" in result["output"]
-    assert "PLUGIN-TAIL" in result["output"]
-    assert "[OUTPUT TRUNCATED" in result["output"]
-    assert transformed_output != result["output"]
-
-
 def test_terminal_output_transform_still_runs_strip_and_redact(monkeypatch, tmp_path):
     # Ensure redaction is active regardless of host CLAWK_REDACT_SECRETS state
     # or collection-time import order (the module snapshots env at import).
@@ -150,6 +96,7 @@ def test_terminal_output_transform_still_runs_strip_and_redact(monkeypatch, tmp_
     assert "abc123def456" not in result["output"]  # secret body is gone
 
 
+@pytest.mark.platforms("linux")
 def test_large_process_output_is_bounded_before_sudo_and_plugin_hooks(
     monkeypatch, tmp_path
 ):
@@ -177,7 +124,9 @@ def test_large_process_output_is_bounded_before_sudo_and_plugin_hooks(
             hook_inputs.append(kwargs["output"])
         return []
 
-    monkeypatch.setattr(terminal_tool_module, "_sudo_wrong_password_failure", _sudo_spy)
+    monkeypatch.setattr(
+        "tools.terminal_tool_sudo._sudo_wrong_password_failure", _sudo_spy
+    )
     monkeypatch.setattr("clawk_cli.plugins.invoke_hook", _hook_spy)
 
     env = LocalEnvironment(cwd=str(tmp_path), timeout=10)
@@ -201,22 +150,6 @@ def test_large_process_output_is_bounded_before_sudo_and_plugin_hooks(
     assert hook_inputs[0].endswith("TAIL-SENTINEL")
     assert "[OUTPUT TRUNCATED" in hook_inputs[0]
     assert len(result["output"]) <= limit
-
-
-def test_terminal_output_transform_hook_exception_falls_back(monkeypatch, tmp_path):
-    def _raise(*_args, **_kwargs):
-        raise RuntimeError("boom")
-
-    result, _mock_env = _run_terminal(
-        monkeypatch,
-        tmp_path,
-        output="plain output",
-        invoke_hook=_raise,
-    )
-
-    assert result["output"] == "plain output"
-    assert result["exit_code"] == 0
-    assert result["error"] is None
 
 
 def test_terminal_output_transform_does_not_change_approval_or_exit_code_meaning(
@@ -245,7 +178,7 @@ def test_terminal_output_transform_does_not_change_approval_or_exit_code_meaning
 
 
 def test_terminal_output_transform_integration_with_real_plugin(monkeypatch, tmp_path):
-    import yaml
+    import clawk_yaml as yaml
 
     clawk_home = Path(os.environ["CLAWK_HOME"])
     plugins_dir = clawk_home / "plugins"

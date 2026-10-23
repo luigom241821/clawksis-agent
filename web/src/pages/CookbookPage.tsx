@@ -329,12 +329,14 @@ export default function CookbookPage() {
           d.status === "registering"
         ) {
           setDownloads((prev) => ({ ...prev, [d.download_id]: d }));
+          // eslint-disable-next-line react-hooks/immutability -- declared below; only called after mount
           pollDownload(d.download_id);
         }
       }
       for (const p of res.pulls ?? []) {
         if (p.status === "pulling" || p.status === "validating") {
           setPulling((prev) => ({ ...prev, [p.tag]: p }));
+          // eslint-disable-next-line react-hooks/immutability -- declared below; only called after mount
           pollPull(p.tag);
         }
       }

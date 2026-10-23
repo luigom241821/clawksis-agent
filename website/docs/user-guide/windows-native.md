@@ -9,17 +9,15 @@ sidebar_position: 3
 
 Clawksis runs natively on Windows 10 and Windows 11 — no WSL, no Cygwin, no Docker. This page is the deep dive: what works natively, what's WSL-only, what the installer actually does, and the Windows-specific knobs you might need to touch.
 
-If you just want to install, the one-liner on the [landing page](/) or [Installation page](../getting-started/installation#windows-native-powershell) is all you need. Come back here when something surprises you.
+If you just want to install, the one-liner on the [landing page](../index.mdx) or [Installation page](../getting-started/installation#windows-native) is all you need. Come back here when something surprises you.
 
 :::tip Want WSL instead?
-If you prefer a real POSIX environment (for the dashboard's embedded terminal, `fork` semantics, Linux-style file watchers, etc.), see the **[Windows (WSL2) Guide](./windows-wsl-quickstart.md)**. Both coexist cleanly: native data lives under `%LOCALAPPDATA%\clawk`, WSL data lives under `~/.clawksis`.
+If you prefer a POSIX environment for `fork` semantics or Linux-style file watchers, see the **[Windows (WSL2) Guide](./windows-wsl-quickstart.md)**. Both coexist cleanly: native data lives under `%LOCALAPPDATA%\clawk`, WSL data lives under `~/.clawksis`.
 :::
 
 ## Quick install
 
-[Download the Clawksis Desktop installer](https://github.com/samuelgradientai-sys/clawksis-agent/releases/latest) from our website and run it.
-
-Or, for a command-line only install, open **PowerShell** (or Windows Terminal) and run:
+Open **PowerShell** (or Windows Terminal) and run:
 
 ```powershell
 iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)
@@ -27,91 +25,142 @@ iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/m
 
 No admin rights required. The installer goes to `%LOCALAPPDATA%\clawk\` and adds `clawk` to your **User PATH** — open a new terminal after it finishes.
 
-**Installer options** (requires the scriptblock form to pass parameters):
+**Installer options** use a scriptblock:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1))) -NoVenv -SkipSetup -Branch main
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1))) -NonInteractive -Channel main
 ```
 
-| Parameter     | Default                              | Purpose                                                    |
-| ------------- | ------------------------------------ | ---------------------------------------------------------- |
-| `-Branch`     | `main`                               | Clone a specific branch (useful for testing PRs)           |
-| `-Commit`     | unset                                | Pin install to a specific commit SHA (overrides `-Branch`) |
-| `-Tag`        | unset                                | Pin install to a specific git tag (e.g. `v0.14.0`)         |
-| `-NoVenv`     | off                                  | Skip venv creation (advanced — you manage Python yourself) |
-| `-SkipSetup`  | off                                  | Skip the post-install `clawk setup` wizard                |
-| `-ClawkHome` | `%LOCALAPPDATA%\clawk`              | Override data directory                                    |
-| `-InstallDir` | `%LOCALAPPDATA%\clawk\clawksis-agent` | Override code location                                     |
+| Parameter | Purpose |
+|---|---|
+| `-Channel stable\|main` | `stable` (default): the latest published release. `main`: every commit, saved like `clawk update --set-channel main`. `$env:CLAWK_INSTALL_CHANNEL` sets it for a plain `irm \| iex`. |
+| `-Branch NAME` | Select the source branch; default `main`. Another branch is installed at its tip. |
+| `-Commit SHA` | Select a commit after the branch checkout. |
+| `-ClawkHome PATH` | Select the data directory. |
+| `-InstallDir PATH` | Select the source checkout directory. |
+| `-NonInteractive` | Skip setup and gateway stages that need input. |
+| `-IncludeDesktop` | Build the desktop app and create shortcuts. |
+| `-ShowResolvedPaths` | Print resolved paths as JSON without installing. |
+| `-Verbose` | Stream every child command's output instead of one status line per step. |
+| `-Manifest` / `-ProtocolVersion` | Inspect the stage protocol used by the bootstrap GUI. |
+| `-Stage NAME -Json` | Run one stage and emit its result frame. |
 
-The installer auto-retries flaky git fetches and strips BOM from any downloaded `install.ps1` payload, so a UTF-8 BOM picked up during HTTP transit no longer breaks the `[scriptblock]::Create((irm ...))` form.
+The current script does not accept `-NoVenv` or `-Tag`. `-SkipSetup` is still accepted as a deprecated alias for `-NonInteractive` so older install wrappers keep binding.
+To diagnose an unexpected short Windows path, use `-ShowResolvedPaths` first.
 
-### Dependency bootstrap (`dep_ensure`)
+### MSIX / App Installer and Microsoft Store
 
-On first launch (and on demand when a missing tool is detected), Clawksis runs a small Python bootstrapper — `clawk_cli/dep_ensure.py` — that checks for and lazily installs the non-Python dependencies it needs. On Windows, the relevant ones are:
+The bundled desktop is separate from the source script. Its MSIX package
+requires **Windows 11 22H2 or later**. Windows 10 source-script support does
+not mean the MSIX package supports Windows 10.
 
-| Dependency       | Why Clawksis needs it                                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **PortableGit**  | Provides `bash.exe` for the terminal tool and `git` for in-session clones. Provisioned at install time, not by `dep_ensure`. |
-| **Node.js 22**   | Required for the browser tool (`agent-browser`), the TUI's web bridge, and the WhatsApp bridge.                              |
-| **ffmpeg**       | Audio format conversion for TTS / voice messages.                                                                            |
-| **ripgrep**      | Fast file search — falls back to `grep` if unavailable.                                                                      |
-| **npm packages** | `agent-browser`, Playwright Chromium, and any per-toolset Node deps are installed once at first browser-tool use.            |
+Open the downloaded `.appinstaller` file with Windows App Installer. It installs
+a signed universal bundle and records the update source. The package includes
+Python, Node, supported dependencies, and prebuilt interfaces. It does not clone
+a checkout or build the base runtime on first launch.
 
-Each dep has a `shutil.which(...)`-style check; if a binary is missing and the run is interactive, `dep_ensure` offers to install it (deferring to `scripts\install.ps1 -ensure <dep>` for the actual install logic). Non-interactive runs (gateway, cron, headless desktop launches) skip the prompt and surface a clear `this feature needs <dep>` error instead.
+The MSIX execution aliases expose `clawk`, `clawksis-agent`, and `clawk-acp`.
+If another installation shadows an alias, inspect `Get-Command clawk -All`.
+Windows Settings → Apps → Advanced app settings → App execution aliases
+controls the aliases.
 
-## What the installer actually does
+Sideload updates use the app's Update control and Windows App Installer.
+Clawksis downloads a local descriptor before teardown and registers automatic
+relaunch. It does not require the `ms-appinstaller:` URL protocol. An unknown
+update-check result is not a claim that the package is current.
 
-Top-to-bottom, in order:
+The Microsoft Store variant uses its Partner Center package identity and Store
+updates. It does not use the sideload feed. `clawk update` inside either
+bundled runtime does not run Git against package files.
 
-1. **Bootstraps `uv`** — Astral's fast Python manager. Installed to `%USERPROFILE%\.local\bin`.
-2. **Installs Python 3.11** via `uv`. No existing Python needed.
-3. **Installs Node.js 22** (winget if available, else a portable Node tarball unpacked under `%LOCALAPPDATA%\clawk\node`). Used for the browser tool and the WhatsApp bridge.
-4. **Installs portable Git** — if `git` is already on PATH the installer uses it; otherwise it downloads a trimmed, self-contained **PortableGit** (~45 MB, from the official `git-for-windows` release) to `%LOCALAPPDATA%\clawk\git`. No admin, no Windows installer registry, no interference with anything else on the box.
-5. **Clones the repo** to `%LOCALAPPDATA%\clawk\clawksis-agent` and creates a virtualenv inside it.
-6. **Tiered `uv pip install`** — tries `.[all]` first, falls back to progressively smaller sets (`[messaging,dashboard,ext]` → `[messaging]` → `.`) if a `git+https` dep flakes on rate-limited GitHub. Prevents "single flake drops you to a bare install" failure mode.
-7. **Auto-installs messaging SDKs** keyed off `.env` — if `TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN` / `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` / `WHATSAPP_ENABLED` are present, runs `python -m ensurepip --upgrade` and targeted `pip install` calls so each platform's SDK is actually importable.
-8. **Sets `CLAWK_GIT_BASH_PATH`** to the resolved `bash.exe` so Clawksis finds it deterministically in fresh shells.
-9. **Adds `%LOCALAPPDATA%\clawk\bin` to User PATH** — exposes the `clawk` command after you open a new terminal.
-10. **Runs `clawk setup`** — the normal first-run wizard (model, provider, toolsets). Skip with `-SkipSetup`.
+`Clawksis-Setup.exe` is a different, bootstrap installer. It provisions a source
+checkout through the scripts. Do not confuse it with the self-contained MSIX
+package. See [Updating & Uninstalling](../getting-started/updating.md).
+
+### Dependency bootstrap
+
+PM owns managed tools. Feature code asks PM for the package it needs
+(`pm.ensure("<package>")`, e.g. `cua-driver` for Computer Use) instead of
+re-running the installer. Already installed tools are reused from PM's
+recorded state; a missing optional tool is fetched on demand only when
+[`security.allow_lazy_installs`](../reference/package-management.md#lazy-install-policy)
+permits it. `install.ps1` has no `-Ensure` mode.
+
+```powershell
+clawk pm doctor
+clawk pm install
+```
+
+## What the source installer does
+
+1. Locate Git, or stage the verified Git for Windows pin when Git is absent.
+2. Clone the selected repository branch and apply an optional commit pin.
+3. Bootstrap uv and create the initial Python environment.
+4. Run PM to provision Python 3.14, required tools, and the `all` Python extra.
+5. Mint CLI launchers in the data home's `bin` directory and add it to User PATH.
+6. Prepare configuration and invoke the interactive setup/gateway stages unless skipped.
+7. If requested, build the desktop and create Start Menu/Desktop shortcuts.
+8. Write the bootstrap-completion marker.
+
+The runtime launcher executes PM's store Python and selects the dependency
+environment before imports. PM can publish a new writable environment without
+replacing libraries already loaded by a running process. There is no tiered
+pip fallback to silently reduce the installed feature set.
 
 :::tip Skip provider hunting on Windows
-On Windows, per-tool API key setup (Firecrawl, FAL, Browser Use, OpenAI TTS) is the highest-friction part of getting a useful agent. A [Nous Portal](/user-guide/features/tool-gateway) subscription covers the model **and** all of those tools through one OAuth login. After the installer finishes, run `clawk setup --portal` to wire everything up.
+On Windows, per-tool API key setup (Firecrawl, FAL, Browser Use, OpenAI TTS) is the highest-friction part of getting a useful agent. A [Nous Portal](./features/tool-gateway.md) subscription covers the model **and** all of those tools through one OAuth login. After the installer finishes, run `clawk setup --portal` to wire everything up.
 :::
 
 ## Feature matrix
 
-Everything except the dashboard's embedded terminal pane runs natively on Windows.
+Windows support is feature- and architecture-specific. The base interfaces run
+natively, but some optional SDKs are excluded from particular targets.
 
-| Feature                                                               | Native Windows      | WSL2                   |
-| --------------------------------------------------------------------- | ------------------- | ---------------------- |
-| CLI (`clawk chat`, `clawk setup`, `clawk gateway`, …)              | ✓                   | ✓                      |
-| Interactive TUI (`clawk --tui`)                                      | ✓                   | ✓                      |
-| Messaging gateway (Telegram, Discord, Slack, WhatsApp, 15+ platforms) | ✓                   | ✓                      |
-| Cron scheduler                                                        | ✓                   | ✓                      |
-| Browser tool (Chromium via Node)                                      | ✓                   | ✓                      |
-| MCP servers (stdio and HTTP)                                          | ✓                   | ✓                      |
-| Local Ollama / LM Studio / llama-server                               | ✓                   | ✓ (via WSL networking) |
-| Web dashboard (sessions, jobs, metrics, config)                       | ✓                   | ✓                      |
-| Dashboard `/chat` embedded terminal pane                              | ✗ (needs POSIX PTY) | ✓                      |
-| Auto-start at login                                                   | ✓ (schtasks)        | ✓ (systemd)            |
+| Feature | Native Windows | WSL2 |
+|---|---|---|
+| CLI (`clawk chat`, `clawk setup`, `clawk gateway`, …) | ✓ | ✓ |
+| Interactive TUI (`clawk --tui`) | ✓ | ✓ |
+| Messaging gateway (Telegram, Discord, Slack, WhatsApp, 15+ platforms) | ✓ | ✓ |
+| Cron scheduler | ✓ | ✓ |
+| Browser tool (Chromium via Node) | ✓ | ✓ |
+| MCP servers (stdio and HTTP) | ✓ | ✓ |
+| Local Ollama / LM Studio / llama-server | ✓ | ✓ (via WSL networking) |
+| Web dashboard (sessions, jobs, metrics, config) | ✓ | ✓ |
+| Dashboard `/chat` embedded terminal pane | ConPTY through `pywinpty` | POSIX PTY |
+| Auto-start at login | ✓ (schtasks) | ✓ (systemd) |
 
-The dashboard's `/chat` tab embeds a real terminal via a POSIX PTY (`ptyprocess`). Native Windows has no equivalent primitive; Python's `pywinpty` / Windows ConPTY would work but is a separate implementation — treat as future work. **The rest of the dashboard works natively** — only that one tab shows a "use WSL2 for this" banner.
+The dashboard uses its `pywinpty`/ConPTY bridge on Windows and `ptyprocess`
+on POSIX. A missing or broken native dependency can make the terminal
+unavailable; WSL is an alternative, not a requirement of the current design.
+
+### Optional dependency limits
+
+- Matrix's native encrypted adapter is Linux-only; use a supported proxy route
+  or a Linux backend on Windows.
+- Native Windows ARM64 excludes the `google-chat` SDK extra and
+  the openWakeWord engine. Sherpa supports native Windows ARM64 and is the
+  automatic wake-word default on that target.
+- Local Faster-Whisper STT is excluded on native Windows ARM64. Use a cloud
+  or command-based STT provider. Porcupine remains a wake-engine alternative.
+
+The platform markers in `pyproject.toml` define the packaged dependency set.
+A general gateway or voice feature claim does not override those markers.
 
 ## How Clawksis runs shell commands on Windows
 
 Clawksis's terminal tool runs commands through **Git Bash**, same strategy Claude Code uses. This sidesteps the POSIX-vs-Windows gap without rewriting every tool.
 
-Resolution order for `bash.exe`:
+`pm.shell()` owns Bash resolution. It first checks the Git package recorded in
+PM facts, then the provisioned `PATH`. If a PATH candidate belongs to a WindowsApps
+package, the resolver prefers a conventional Git for Windows installation when available.
 
-1. `CLAWK_GIT_BASH_PATH` environment variable if set.
-2. `%LOCALAPPDATA%\clawk\git\usr\bin\bash.exe` (installer-managed PortableGit).
-3. `%LOCALAPPDATA%\clawk\git\bin\bash.exe` (older Git-for-Windows layout).
-4. System Git-for-Windows install (`%ProgramFiles%\Git\bin\bash.exe`, etc.).
-5. MSYS2, Cygwin, or any `bash.exe` on PATH as a last resort.
+Packaged tools are not general-purpose host installations. An external Python
+process can fail to start a WindowsApps payload executable with `WinError 5`.
+Use the package's own launcher, or use conventional tools for a source checkout.
+Do not disable Windows security controls to work around that boundary.
 
-The installer sets `CLAWK_GIT_BASH_PATH` explicitly so fresh PowerShell sessions don't have to re-discover. Override it if you want Clawksis to use a specific bash — for example, your system Git Bash or a WSL-hosted bash via a symlink.
-
-**Pitfall:** MinGit's layout is different from the full Git-for-Windows installer — bash lives under `usr\bin\bash.exe`, not `bin\bash.exe`. Clawksis checks both. If you're manually unpacking a MinGit zip, make sure you pick the **non-busybox** variant (`MinGit-*-64-bit.zip`, not `MinGit-*-busybox*.zip`) — busybox builds ship `ash` instead of `bash` and most coreutils are missing.
+The current installer does not set `CLAWK_GIT_BASH_PATH`. MinGit is not a
+replacement for Git for Windows with Bash.
 
 ## UTF-8 console on Windows
 
@@ -136,12 +185,12 @@ Clawksis's Windows stdio shim now sets `EDITOR=notepad` as a default. Notepad sh
 
 **User overrides still win** (they're checked before the setdefault):
 
-| Editor    | PowerShell command                                                                 |
-| --------- | ---------------------------------------------------------------------------------- |
-| VS Code   | `$env:EDITOR = "code --wait"`                                                      |
+| Editor | PowerShell command |
+|---|---|
+| VS Code | `$env:EDITOR = "code --wait"` |
 | Notepad++ | `$env:EDITOR = "'C:\Program Files\Notepad++\notepad++.exe' -multiInst -nosession"` |
-| Neovim    | `$env:EDITOR = "nvim"`                                                             |
-| Helix     | `$env:EDITOR = "hx"`                                                               |
+| Neovim | `$env:EDITOR = "nvim"` |
+| Helix | `$env:EDITOR = "hx"` |
 
 The `--wait` flag on VS Code is critical — without it the editor returns immediately and Clawksis gets a blank buffer back.
 
@@ -172,8 +221,9 @@ clawk gateway install
 
 What happens under the hood:
 
-1. `schtasks /Create /SC ONLOGON /RL LIMITED /TN ClawksisGateway` — registers a task that runs at your login with standard (non-elevated) permissions. No UAC prompt.
-2. If schtasks is blocked by group policy, falls back to writing a `start /min cmd.exe /d /c <wrapper>` shortcut into `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`. Same effect, slightly cruder.
+1. `schtasks /Create /SC ONLOGON /RL LIMITED /TN Clawksis_Gateway` — registers a task that runs at your login with standard (non-elevated) permissions. No UAC prompt.
+2. If schtasks is blocked by group policy, falls back to writing a small `Clawksis_Gateway.vbs` launcher (run hidden via `wscript.exe`) into `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`. Same effect, slightly cruder. A VBScript is used rather than a `cmd.exe` shortcut because a console allocated at logon can receive a close event that kills the gateway before it finishes starting.
+   Only one of the two is ever kept: a successful task install removes any Startup-folder entry (including a legacy `Clawksis_Gateway.cmd`), the fallback is skipped while a task is still registered, and `clawk update` / `clawk doctor --fix` clean up older installs that have both, since both would launch the gateway at logon.
 3. Spawns the gateway **detached via `pythonw.exe`** — not `python.exe`. `pythonw.exe` has no console attached, which immunizes it against `CTRL_C_EVENT` broadcasts from sibling processes (a real issue that used to kill the gateway when you Ctrl+C'd anything in the same process group).
 
 Flags used when spawning: `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB`.
@@ -182,56 +232,62 @@ Flags used when spawning: `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_
 
 ```powershell
 clawk gateway status      # Merged view: schtasks + Startup folder + running PID
-clawk gateway start       # Starts the scheduled task now
-clawk gateway stop        # Graceful SIGTERM equivalent (TerminateProcess via psutil)
-clawk gateway restart
+clawk gateway start       # Starts the gateway in the background (asks about login auto-start only on a TTY when nothing is installed)
+clawk gateway stop        # Writes the planned-stop marker, waits for the gateway to drain (≤ agent.restart_drain_timeout, capped at 30 s), then force-kills only if it is still alive
+clawk gateway restart     # Same drain-first stop, then a fresh start
 clawk gateway uninstall   # Removes schtasks entry, Startup shortcut, pid file
 ```
 
 `clawk gateway status` is idempotent — call it a thousand times in a row and it will never accidentally kill the gateway. (Pre-PR #21561 it silently did, via `os.kill(pid, 0)` colliding with `CTRL_C_EVENT` at the C level — see "process management internals" below if you care about the story.)
 
+Login auto-start is only ever installed on an explicit answer: `clawk gateway install`, a `Y` on a real terminal, or `CLAWK_GATEWAY_INSTALL_START_ON_LOGIN=1`. A scripted or piped `clawk gateway start` (no TTY, or `CLAWK_NONINTERACTIVE=1`) starts the gateway without touching the Scheduled Task or the Startup folder; set `CLAWK_GATEWAY_INSTALL_START_ON_LOGIN=0` to skip the question on a terminal too.
+
 ### Why not a Windows Service?
 
-Services require admin rights to install and tie the gateway's lifecycle to machine boot, not user login. The typical Clawksis user wants: log in → gateway available, log out → gateway gone. Scheduled Tasks do exactly that without elevation. If you genuinely want a service, use `nssm` or `sc create` manually — but you probably don't.
+Services require admin rights to install and tie the gateway's lifecycle to machine boot, not user login. The typical Clawksis user wants: log in → gateway available, log out → gateway gone. Scheduled Tasks do exactly that without elevation. If you genuinely want a service, use `nssm` or `sc create` manually — but you probably don't. If you do, name it `Clawksis*` or point its binary path inside the Clawksis install (`venv\Scripts\clawk.exe`, the checkout, or `gateway-service\`): `clawk update` stops and restarts only services it can positively identify as Clawksis-owned through the Service Control Manager, and pauses a Scheduled-Task-launched gateway by PID (Task Scheduler itself is never touched).
 
 ## Data layout
 
-| Path                                  | Contents                                                            |
-| ------------------------------------- | ------------------------------------------------------------------- |
-| `%LOCALAPPDATA%\clawk\clawksis-agent\` | Git checkout + venv. Safe to `Remove-Item -Recurse` and reinstall.  |
-| `%LOCALAPPDATA%\clawk\git\`          | PortableGit (only if the installer provisioned it).                 |
-| `%LOCALAPPDATA%\clawk\node\`         | Portable Node.js (only if the installer provisioned it).            |
-| `%LOCALAPPDATA%\clawk\bin\`          | `clawk.cmd` shim, added to User PATH.                              |
-| `%USERPROFILE%\.clawk\`              | Your config, auth, skills, sessions, logs. **Survives reinstalls.** |
+| Path | Contents |
+|---|---|
+| `%LOCALAPPDATA%\clawk\clawksis-agent\` | Source checkout for the script installation; absent from an MSIX-only install. |
+| `%LOCALAPPDATA%\clawk\tools\` | Writable managed-tool store. MSIX base tools remain inside the package. |
+| `%LOCALAPPDATA%\clawk\installs\` | Per-install runtime selection, journals, and Python generations. |
+| `%LOCALAPPDATA%\clawk\bin\` | Source-install CLI launchers. MSIX instead provides execution aliases. |
+| `%LOCALAPPDATA%\clawk\` | User configuration, credentials, sessions, plugins, skills, and logs. |
 
-The split is deliberate: `%LOCALAPPDATA%\clawk` is disposable infrastructure (you can blow it away and the one-liner restores it). `%USERPROFILE%\.clawk` is your data — config, memory, skills, session history — and is identical in shape to a Linux install. Mirror it between machines and your Clawksis moves with you.
-
-**Override `CLAWK_HOME`:** set the environment variable to point at a different data dir. Works the same as on Linux.
+These are default paths. `CLAWK_HOME` and installer path arguments can change
+them. A full deletion of `%LOCALAPPDATA%\clawk` also deletes user data and
+can affect other installations that share it. Use the uninstall command or
+Windows package removal instead of deleting that root to repair an app.
 
 ## Browser tool
 
-The browser tool uses `agent-browser` (a Node helper) to drive Chromium. On Windows:
+Browser setup depends on the selected backend. PM supplies the pinned
+`agent-browser` and Chromium packages for the built-in backend. Browser Use
+has its own managed CLI installation through `clawk tools`. A self-contained
+MSIX includes supported browser tools in its payload.
 
-- The installer puts `agent-browser` on PATH via npm.
-- `shutil.which("agent-browser", path=...)` picks up the `.cmd` shim automatically — `CreateProcessW` can't execute an extensionless shebang, so Clawksis always resolves to the `.CMD` wrapper. Don't manually invoke the shebang script; always go through the `.cmd`.
-- Playwright Chromium is auto-installed on first run (`npx playwright install chromium`). If installation fails, `clawk doctor` surfaces it with a fix-it hint.
+On Windows ARM64, the pinned Chromium and `agent-browser` binaries can use
+Windows' x64 emulation. This differs from the native ARM64 Python runtime.
+See [Browser automation](./features/browser.md) for backend selection.
 
 ## Running Clawksis on Windows — practical notes
 
 ### PATH after install
 
-The installer adds `%LOCALAPPDATA%\clawk\clawksis-agent\venv\Scripts` to your **User PATH** via `[Environment]::SetEnvironmentVariable`. Existing terminals don't pick this up — open a new PowerShell window (or Windows Terminal tab) after installation. Close-and-reopen, don't `$env:PATH += …` by hand unless you know what you're doing.
+The installer adds `%LOCALAPPDATA%\clawk\bin` to your **User PATH** via `[Environment]::SetEnvironmentVariable`. Existing terminals don't pick this up — open a new PowerShell window (or Windows Terminal tab) after installation. Close-and-reopen, don't `$env:PATH += …` by hand unless you know what you're doing.
 
 Verify:
 
 ```powershell
-Get-Command clawk        # should print C:\Users\<you>\AppData\Local\clawk\clawksis-agent\venv\Scripts\clawk.exe
+Get-Command clawk        # should print C:\Users\<you>\AppData\Local\clawk\bin\clawk.exe
 clawk --version
 ```
 
 ### Environment variables
 
-Clawksis honors both `$env:X` (process-scope) and User environment variables (permanent, set in System Properties → Environment Variables). Setting API keys in `%USERPROFILE%\.clawk\.env` is the normal path — same as Linux:
+Clawksis honors both `$env:X` (process-scope) and User environment variables (permanent, set in System Properties → Environment Variables). Setting API keys in `%LOCALAPPDATA%\clawk\.env` (your `CLAWK_HOME`) is the normal path — same as Linux:
 
 ```
 OPENROUTER_API_KEY=sk-or-...
@@ -244,11 +300,10 @@ Don't put secrets in User environment variables unless you specifically want eve
 
 These only affect native Windows installs:
 
-| Variable                      | Effect                                                                                                                                             |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CLAWK_GIT_BASH_PATH`        | Override bash.exe discovery. Point at any bash — full Git-for-Windows, WSL bash via symlink, MSYS2, Cygwin. The installer sets this automatically. |
-| `CLAWK_DISABLE_WINDOWS_UTF8` | Set to `1` to disable the UTF-8 stdio shim and fall back to the locale code page. Useful for bisecting an encoding bug.                            |
-| `EDITOR` / `VISUAL`           | Your editor for `/edit` and `Ctrl-X Ctrl-E`. Clawksis defaults to `notepad` if both are unset.                                                       |
+| Variable | Effect |
+|---|---|
+| `CLAWK_DISABLE_WINDOWS_UTF8` | Set to `1` to disable the UTF-8 stdio shim and fall back to the locale code page. Useful for bisecting an encoding bug. |
+| `EDITOR` / `VISUAL` | Your editor for `/edit` and `Ctrl-X Ctrl-E`. Clawksis defaults to `notepad` if both are unset. |
 
 ## Uninstall
 
@@ -258,15 +313,18 @@ From PowerShell:
 clawk uninstall
 ```
 
-That's the clean path — removes the schtasks entry, Startup folder shortcut, `clawk.cmd` shim, deletes `%LOCALAPPDATA%\clawk\clawksis-agent\`, and trims the User PATH. It leaves `%USERPROFILE%\.clawk\` alone (your config, auth, skills, sessions, logs) in case you're reinstalling.
+For source installs, the uninstaller removes owned launchers, service entries,
+and application files. Review `clawk uninstall --dry-run` before removal.
+`--full` also removes data; `--data` removes data without removing packaged code.
+For MSIX or Store installations, remove the app through Windows Settings →
+Apps → Installed apps. The CLI refuses to delete package-owned code.
 
-To nuke everything:
-
-```powershell
-clawk uninstall
-Remove-Item -Recurse -Force "$env:USERPROFILE\.clawk"
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\clawk"
-```
+:::caution User-data deletion
+Before deleting data, stop every Clawksis process that uses the selected `CLAWK_HOME` and make a backup.
+Review `clawk uninstall --dry-run` before choosing a data-removal mode.
+Do not recursively delete the default data root to repair one application or profile.
+A custom `CLAWK_HOME` can be elsewhere, and package removal does not remove that data.
+:::
 
 The `clawk uninstall` CLI subcommand also handles the case where the schtasks entry was registered under a different task name (older installs) — it searches by install path rather than by hardcoded task name.
 
@@ -283,7 +341,7 @@ Consequence: any codepath that said "check if this PID is alive" via `os.kill(pi
 ## Common pitfalls
 
 **`clawk: command not found` right after install.**
-Open a new PowerShell window. The installer added `%LOCALAPPDATA%\clawk\bin` to User PATH, but existing shells need to be restarted to pick it up.
+Open a new PowerShell window. The installer added `%LOCALAPPDATA%\clawk\bin` to User PATH, but existing shells need to be restarted to pick it up. In the meantime you can run `& "$env:LOCALAPPDATA\clawk\bin\clawk.exe"`.
 
 **`WinError 193: %1 is not a valid Win32 application` when running a tool.**
 You hit a shebang-script invocation that bypassed the `.cmd` shim. Clawksis resolves commands through `shutil.which(cmd, path=local_bin)` so PATHEXT picks up `.CMD` — if you're invoking the tool via a hardcoded path instead, switch to the `.cmd` variant (e.g., `npx.cmd`, not `npx`).
@@ -292,16 +350,20 @@ You hit a shebang-script invocation that bypassed the `.cmd` shim. Clawksis reso
 Your download of `install.ps1` picked up a UTF-8 BOM. The `irm | iex` form strips BOMs automatically; `[scriptblock]::Create((irm ...))` does not. Re-run with the simple `irm | iex` form, or download the script manually and save it without a BOM via `[IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding $false))`.
 
 **Gateway won't stay running after restart.**
-Check `clawk gateway status` — it merges the schtasks entry, the Startup-folder shortcut (if used), and the live PID. If schtasks is registered but not running, group policy may be blocking `ONLOGON` triggers. Run `schtasks /Query /TN ClawksisGateway /V /FO LIST` to see the task's failure reason, or fall back to the Startup-folder path by uninstalling and reinstalling with `CLAWK_GATEWAY_FORCE_STARTUP=1`.
+Check `clawk gateway status` — it merges the schtasks entry, the Startup-folder shortcut (if used), and the live PID. If schtasks is registered but not running, group policy may be blocking `ONLOGON` triggers. Run `schtasks /Query /TN Clawksis_Gateway /V /FO LIST` (`Clawksis_Gateway_<profile>` for a named profile) to see the task's failure reason. The Startup-folder fallback engages automatically only when `schtasks` itself fails to register the task; there is no environment variable or flag to force it.
 
 **`/edit` still does nothing after setting `$env:EDITOR`.**
 You set it in the current process only; close and reopen the shell, or set it at User scope in System Properties → Environment Variables. Verify with `echo $env:EDITOR` in a new PowerShell window.
 
 **Browser tool launches but tools time out.**
-Chromium is auto-installed on first run. If the install failed (rate-limited GitHub, Playwright CDN hiccup), run `clawk doctor` — it will surface the missing Chromium and print the exact `npx playwright install chromium` command to fix it.
+Run `clawk doctor` and `clawk pm doctor`. Use `clawk tools` to inspect the
+selected browser backend. Do not install an unrelated Playwright revision into
+a signed app payload.
 
-**`agent-browser` fails with a weird Node version error.**
-The installer provisions Node 22 at `%LOCALAPPDATA%\clawk\node` but your PATH may have an older system Node 18 first. Either move Clawksis's node dir earlier on PATH, or delete the system install if you don't use Node elsewhere.
+**`agent-browser` reports a Node version error.**
+Run `clawk pm doctor` and inspect which Clawksis launcher started the process.
+PM supplies the managed Node version. Do not delete an unrelated system Node
+installation to repair Clawksis.
 
 **Chinese / Japanese / Arabic characters show as `?` in the CLI.**
 The UTF-8 stdio shim didn't activate. Check that `CLAWK_DISABLE_WINDOWS_UTF8` is NOT set (`Get-ChildItem env:CLAWK_DISABLE_WINDOWS_UTF8`). If it's empty and you still see `?`, the console host (very old `cmd.exe`) may not support UTF-8 at all — switch to Windows Terminal.
@@ -314,7 +376,7 @@ If you edited Clawksis config or a skill on Windows using a non-UTF-8 editor (No
 
 ## Where to go next
 
-- **[Installation](../getting-started/installation.md)** — the full install page, including Linux/macOS/WSL2/Termux.
+- **[Installation](../getting-started/installation.md)** — the full install page, including Linux/macOS/WSL2.
 - **[Windows (WSL2) Guide](./windows-wsl-quickstart.md)** — if you want POSIX semantics or the dashboard terminal pane.
 - **[CLI Reference](../reference/cli-commands.md)** — every `clawk` subcommand.
 - **[FAQ](../reference/faq.md)** — common non-Windows-specific questions.

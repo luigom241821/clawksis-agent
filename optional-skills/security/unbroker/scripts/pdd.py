@@ -30,21 +30,21 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import autopilot  # noqa: E402
-import badbool  # noqa: E402
-import cdp  # noqa: E402
-import brokers as brokers_mod  # noqa: E402
-import config as config_mod  # noqa: E402
-import crypto  # noqa: E402
-import dossier as dossier_mod  # noqa: E402
-import email_modes  # noqa: E402
-import emailer  # noqa: E402
-import ledger as ledger_mod  # noqa: E402
-import legal  # noqa: E402
-import paths as paths_mod  # noqa: E402
-import registry  # noqa: E402
-import report as report_mod  # noqa: E402
-import tiers  # noqa: E402
+import autopilot
+import badbool
+import cdp
+import brokers as brokers_mod
+import config as config_mod
+import crypto
+import dossier as dossier_mod
+import email_modes
+import emailer
+import ledger as ledger_mod
+import legal
+import paths as paths_mod
+import registry
+import report as report_mod
+import tiers
 
 
 def _out(obj) -> None:
@@ -329,43 +329,51 @@ def cmd_cdp(args) -> None:
 
     live = cdp.endpoint_status(port)
     if live:
-        _out({
-            "running": True,
-            "endpoint": f"127.0.0.1:{port}",
-            "browser": live.get("Browser"),
-            "webSocketDebuggerUrl": live.get("webSocketDebuggerUrl"),
-            "note": "a debuggable browser is already listening; point Clawksis's browser tools at "
-            f"127.0.0.1:{port} and make sure the operator's webmail is signed in in THAT browser.",
-        })
+        _out(
+            {
+                "running": True,
+                "endpoint": f"127.0.0.1:{port}",
+                "browser": live.get("Browser"),
+                "webSocketDebuggerUrl": live.get("webSocketDebuggerUrl"),
+                "note": "a debuggable browser is already listening; point Clawksis's browser tools at "
+                f"127.0.0.1:{port} and make sure the operator's webmail is signed in in THAT browser.",
+            }
+        )
         return
 
     if getattr(args, "check", False):
-        _out({
-            "running": False,
-            "endpoint": f"127.0.0.1:{port}",
-            "note": f"no debuggable browser here yet; run `pdd.py cdp --port {port}` (no --check) to launch one.",
-        })
+        _out(
+            {
+                "running": False,
+                "endpoint": f"127.0.0.1:{port}",
+                "note": f"no debuggable browser here yet; run `pdd.py cdp --port {port}` (no --check) to launch one.",
+            }
+        )
         return
 
     browser = cdp.find_browser(args.browser)
     if not browser:
-        _out({
-            "running": False,
-            "error": "no Chrome/Chromium-family browser found",
-            "fix": "install Google Chrome, or pass --browser /path/to/chrome (or a command on PATH)",
-        })
+        _out(
+            {
+                "running": False,
+                "error": "no Chrome/Chromium-family browser found",
+                "fix": "install Google Chrome, or pass --browser /path/to/chrome (or a command on PATH)",
+            }
+        )
         return
 
     cmd = cdp.launch_command(browser, port, profile)
     if getattr(args, "print_only", False):
-        _out({
-            "running": False,
-            "browser": browser,
-            "profile": str(profile),
-            "command": cmd,
-            "shell": " ".join(shlex.quote(c) for c in cmd),
-            "note": "run this yourself to launch the debug browser, then sign into your webmail once.",
-        })
+        _out(
+            {
+                "running": False,
+                "browser": browser,
+                "profile": str(profile),
+                "command": cmd,
+                "shell": " ".join(shlex.quote(c) for c in cmd),
+                "note": "run this yourself to launch the debug browser, then sign into your webmail once.",
+            }
+        )
         return
 
     pid = cdp.launch(browser, port, profile)
@@ -375,26 +383,28 @@ def cmd_cdp(args) -> None:
         if live:
             break
         time.sleep(0.5)
-    _out({
-        "running": bool(live),
-        "launched_pid": pid,
-        "browser": browser,
-        "profile": str(profile),
-        "endpoint": f"127.0.0.1:{port}",
-        "webSocketDebuggerUrl": (live or {}).get("webSocketDebuggerUrl"),
-        "next": (
-            [
-                f"point Clawksis's browser tools at 127.0.0.1:{port} (CDP)",
-                "in the launched browser, sign into the operator's webmail ONCE (dedicated debug profile)",
-                "then run email/verify flows in browser mode -- they use this logged-in session",
-            ]
-            if live
-            else [
-                "browser launched but the debug port has not answered yet; give it a few seconds, then "
-                f"re-run `pdd.py cdp --check --port {port}`"
-            ]
-        ),
-    })
+    _out(
+        {
+            "running": bool(live),
+            "launched_pid": pid,
+            "browser": browser,
+            "profile": str(profile),
+            "endpoint": f"127.0.0.1:{port}",
+            "webSocketDebuggerUrl": (live or {}).get("webSocketDebuggerUrl"),
+            "next": (
+                [
+                    f"point Clawksis's browser tools at 127.0.0.1:{port} (CDP)",
+                    "in the launched browser, sign into the operator's webmail ONCE (dedicated debug profile)",
+                    "then run email/verify flows in browser mode -- they use this logged-in session",
+                ]
+                if live
+                else [
+                    "browser launched but the debug port has not answered yet; give it a few seconds, then "
+                    f"re-run `pdd.py cdp --check --port {port}`"
+                ]
+            ),
+        }
+    )
 
 
 def cmd_intake(args) -> None:
@@ -455,16 +465,18 @@ def cmd_intake(args) -> None:
         if args.contact_email:
             prefs["contact_email_for_optouts"] = args.contact_email
     d = dossier_mod.create(identity, consent, residency, prefs)
-    _out({
-        "subject_id": d["subject_id"],
-        "authorized": dossier_mod.is_authorized(d),
-        "residency": residency,
-        "email_mode": (prefs or {}).get("email_mode"),
-        "names": dossier_mod.all_names(d),
-        "emails": len(d["identity"].get("emails") or []),
-        "phones": len(d["identity"].get("phones") or []),
-        "addresses": len(dossier_mod.all_addresses(d)),
-    })
+    _out(
+        {
+            "subject_id": d["subject_id"],
+            "authorized": dossier_mod.is_authorized(d),
+            "residency": residency,
+            "email_mode": (prefs or {}).get("email_mode"),
+            "names": dossier_mod.all_names(d),
+            "emails": len(d["identity"].get("emails") or []),
+            "phones": len(d["identity"].get("phones") or []),
+            "addresses": len(dossier_mod.all_addresses(d)),
+        }
+    )
 
 
 def cmd_brokers(args) -> None:
@@ -473,18 +485,20 @@ def cmd_brokers(args) -> None:
         if args.priority
         else brokers_mod.load_all()
     )
-    _out([
-        {
-            "id": b.get("id"),
-            "name": b.get("name"),
-            "priority": b.get("priority"),
-            "method": (b.get("optout") or {}).get("method"),
-            "owns": b.get("owns") or [],
-            "source": b.get("source"),
-            "confidence": b.get("confidence", "curated"),
-        }
-        for b in bl
-    ])
+    _out(
+        [
+            {
+                "id": b.get("id"),
+                "name": b.get("name"),
+                "priority": b.get("priority"),
+                "method": (b.get("optout") or {}).get("method"),
+                "owns": b.get("owns") or [],
+                "source": b.get("source"),
+                "confidence": b.get("confidence", "curated"),
+            }
+            for b in bl
+        ]
+    )
 
 
 def cmd_refresh_brokers(args) -> None:
@@ -509,7 +523,7 @@ def cmd_refresh_brokers(args) -> None:
                 "not the people-search scan. VT/OR/TX are search portals (no "
                 "bulk export); CA is the superset. See `drop` and `registry`.",
             }
-        except Exception as exc:  # noqa: BLE001 - registry pull is best-effort
+        except Exception as exc:
             out["registry_error"] = str(exc)
     _out(out)
 
@@ -517,10 +531,12 @@ def cmd_refresh_brokers(args) -> None:
 def cmd_registry(args) -> None:
     recs = brokers_mod.load_registry_cache()
     if not recs:
-        _out({
-            "registered_brokers": 0,
-            "note": "registry empty - run `refresh-brokers` (pulls the CA Data Broker Registry)",
-        })
+        _out(
+            {
+                "registered_brokers": 0,
+                "note": "registry empty - run `refresh-brokers` (pulls the CA Data Broker Registry)",
+            }
+        )
         return
     fcra = sum(1 for r in recs if (r.get("optout") or {}).get("fcra"))
     out = {
@@ -564,35 +580,39 @@ def cmd_drop(args) -> None:
         prefs = d.setdefault("preferences", {})
         prefs["drop_filed_at"] = dossier_mod.now()
         dossier_mod.save(d)
-        _out({
-            "subject": args.subject,
-            "drop_filed_at": prefs["drop_filed_at"],
-            "note": "recorded; `next` will stop surfacing the DROP one-shot",
-        })
+        _out(
+            {
+                "subject": args.subject,
+                "drop_filed_at": prefs["drop_filed_at"],
+                "note": "recorded; `next` will stop surfacing the DROP one-shot",
+            }
+        )
         return
-    _out({
-        "subject": args.subject,
-        "eligible": eligible,
-        "residency": res,
-        "drop_url": registry.DROP_URL,
-        "covers_registered_brokers": len(reg),
-        "steps": (
-            [
-                "Go to privacy.ca.gov/drop and create/verify a DROP account (CA resident).",
-                "Submit ONE deletion request; it applies to EVERY registered data broker "
-                f"({len(reg)} in the current registry). Brokers must process starting 2026-08-01.",
-                "After filing, run `drop <subject> --filed` so the loop stops re-surfacing it.",
-            ]
-            if eligible
-            else [
-                "DROP is a California mechanism; this subject's residency is not US-CA.",
-                "Parity path for non-CA: work the people-search sites via `next`, and send targeted "
-                "CCPA/GDPR deletion emails to registry brokers that hold this person's data "
-                "(`registry --search`, then `send-email`).",
-            ]
-        ),
-        "note": "DROP is the highest-leverage removal: one request covers the whole registry.",
-    })
+    _out(
+        {
+            "subject": args.subject,
+            "eligible": eligible,
+            "residency": res,
+            "drop_url": registry.DROP_URL,
+            "covers_registered_brokers": len(reg),
+            "steps": (
+                [
+                    "Go to privacy.ca.gov/drop and create/verify a DROP account (CA resident).",
+                    "Submit ONE deletion request; it applies to EVERY registered data broker "
+                    f"({len(reg)} in the current registry). Brokers must process starting 2026-08-01.",
+                    "After filing, run `drop <subject> --filed` so the loop stops re-surfacing it.",
+                ]
+                if eligible
+                else [
+                    "DROP is a California mechanism; this subject's residency is not US-CA.",
+                    "Parity path for non-CA: work the people-search sites via `next`, and send targeted "
+                    "CCPA/GDPR deletion emails to registry brokers that hold this person's data "
+                    "(`registry --search`, then `send-email`).",
+                ]
+            ),
+            "note": "DROP is the highest-leverage removal: one request covers the whole registry.",
+        }
+    )
 
 
 def cmd_plan(args) -> None:
@@ -647,19 +667,21 @@ def cmd_fanout(args) -> None:
             f"per-broker report."
         )
         batches.append({"batch": i, "brokers": ids, "brief": brief})
-    _out({
-        "subject": args.subject,
-        "broker_count": grouping["broker_count"],
-        "batch_size": grouping["batch_size"],
-        "should_fanout": grouping["should_fanout"],
-        "batch_count": len(batches),
-        "batches": batches,
-        "instruction": (
-            "If should_fanout is true you MUST spawn ONE delegate_task subagent per batch IN PARALLEL, "
-            "passing each batch's `brief`; do not scan all brokers yourself sequentially. Wait for every "
-            "report, consolidate, then proceed to opt-outs. If false, just scan the brokers inline."
-        ),
-    })
+    _out(
+        {
+            "subject": args.subject,
+            "broker_count": grouping["broker_count"],
+            "batch_size": grouping["batch_size"],
+            "should_fanout": grouping["should_fanout"],
+            "batch_count": len(batches),
+            "batches": batches,
+            "instruction": (
+                "If should_fanout is true you MUST spawn ONE delegate_task subagent per batch IN PARALLEL, "
+                "passing each batch's `brief`; do not scan all brokers yourself sequentially. Wait for every "
+                "report, consolidate, then proceed to opt-outs. If false, just scan the brokers inline."
+            ),
+        }
+    )
 
 
 def cmd_record(args) -> None:
@@ -680,11 +702,13 @@ def cmd_record(args) -> None:
         ledger_mod.log_disclosure(
             args.subject, args.broker, args.disclosed, args.channel or "unknown"
         )
-    _out({
-        "broker": args.broker,
-        "state": case["state"],
-        "next_recheck_at": case.get("next_recheck_at"),
-    })
+    _out(
+        {
+            "broker": args.broker,
+            "state": case["state"],
+            "next_recheck_at": case.get("next_recheck_at"),
+        }
+    )
 
 
 def _email_request(
@@ -777,12 +801,14 @@ def cmd_send_email(args) -> None:
     }
     current = ledger_mod.get_case(args.subject, args.broker).get("state")
     if current in _POST_SUBMIT and not getattr(args, "force", False):
-        _out({
-            "skipped": True,
-            "broker": args.broker,
-            "state": current,
-            "note": "already submitted; not re-sending (idempotent). Use --force to re-send.",
-        })
+        _out(
+            {
+                "skipped": True,
+                "broker": args.broker,
+                "state": current,
+                "note": "already submitted; not re-sending (idempotent). Use --force to re-send.",
+            }
+        )
         return
     kind = getattr(args, "kind", "generic") or "generic"
     fields, disclosed = _email_request(
@@ -807,18 +833,20 @@ def cmd_send_email(args) -> None:
             "submitted",
             **ledger_mod.followup_fields("submitted", b, d),
         )
-        _out({
-            "send_via": "browser",
-            "compose": payload,
-            "kind": kind,
-            "disclosed_fields": disclosed,
-            "state": case["state"],
-            "next_recheck_at": case.get("next_recheck_at"),
-            "instruction": "In the operator's logged-in webmail, compose a NEW email to compose.to "
-            "with compose.subject/body EXACTLY (disclose nothing beyond it) and send "
-            "it via browser_* tools. Then use `verify-link` on any confirmation reply.",
-            "note": "recipient is locked to the broker's declared address",
-        })
+        _out(
+            {
+                "send_via": "browser",
+                "compose": payload,
+                "kind": kind,
+                "disclosed_fields": disclosed,
+                "state": case["state"],
+                "next_recheck_at": case.get("next_recheck_at"),
+                "instruction": "In the operator's logged-in webmail, compose a NEW email to compose.to "
+                "with compose.subject/body EXACTLY (disclose nothing beyond it) and send "
+                "it via browser_* tools. Then use `verify-link` on any confirmation reply.",
+                "note": "recipient is locked to the broker's declared address",
+            }
+        )
         return
 
     result = emailer.send(
@@ -836,15 +864,17 @@ def cmd_send_email(args) -> None:
         "submitted",
         **ledger_mod.followup_fields("submitted", b, d),
     )
-    _out({
-        "sent": result,
-        "send_via": "smtp",
-        "kind": kind,
-        "disclosed_fields": disclosed,
-        "state": case["state"],
-        "next_recheck_at": case.get("next_recheck_at"),
-        "note": "if this broker verifies by email, `poll-verification` will pick up the link",
-    })
+    _out(
+        {
+            "sent": result,
+            "send_via": "smtp",
+            "kind": kind,
+            "disclosed_fields": disclosed,
+            "state": case["state"],
+            "next_recheck_at": case.get("next_recheck_at"),
+            "note": "if this broker verifies by email, `poll-verification` will pick up the link",
+        }
+    )
 
 
 def cmd_verify_link(args) -> None:
@@ -865,16 +895,18 @@ def cmd_verify_link(args) -> None:
             "error: provide --text '<email body>' (or --file) from the broker's confirmation email"
         )
     link = email_modes.extract_verification_link(text, b)
-    _out({
-        "broker": args.broker,
-        "verification_link": link,
-        "next": (
-            "browser_navigate the link IN THE SAME browser (sessions are browser-bound), "
-            f"complete the flow, then `record {args.subject} {args.broker} awaiting_processing`"
-            if link
-            else "no broker/opt-out-scoped link found in that text; confirm you opened the right email"
-        ),
-    })
+    _out(
+        {
+            "broker": args.broker,
+            "verification_link": link,
+            "next": (
+                "browser_navigate the link IN THE SAME browser (sessions are browser-bound), "
+                f"complete the flow, then `record {args.subject} {args.broker} awaiting_processing`"
+                if link
+                else "no broker/opt-out-scoped link found in that text; confirm you opened the right email"
+            ),
+        }
+    )
 
 
 def cmd_poll_verification(args) -> None:
@@ -900,11 +932,13 @@ def cmd_poll_verification(args) -> None:
         ):
             targets.append((bid, case, b))
     if not targets:
-        _out({
-            "subject": args.subject,
-            "results": [],
-            "note": "no in-flight cases awaiting email verification",
-        })
+        _out(
+            {
+                "subject": args.subject,
+                "results": [],
+                "note": "no in-flight cases awaiting email verification",
+            }
+        )
         return
     results = []
     for bid, case, b in targets:
@@ -917,21 +951,25 @@ def cmd_poll_verification(args) -> None:
                     "verification_pending",
                     **ledger_mod.followup_fields("verification_pending", b, d),
                 )
-            results.append({
-                "broker": bid,
-                "verification_link": hit["link"],
-                "email_from": hit.get("from"),
-                "email_subject": hit.get("subject"),
-                "next": f"browser_navigate the link IN THE AGENT'S OWN BROWSER, complete "
-                f"the flow, then `record {args.subject} {bid} awaiting_processing` "
-                f"(or confirmed_removed only after a verifying re-scan)",
-            })
+            results.append(
+                {
+                    "broker": bid,
+                    "verification_link": hit["link"],
+                    "email_from": hit.get("from"),
+                    "email_subject": hit.get("subject"),
+                    "next": f"browser_navigate the link IN THE AGENT'S OWN BROWSER, complete "
+                    f"the flow, then `record {args.subject} {bid} awaiting_processing` "
+                    f"(or confirmed_removed only after a verifying re-scan)",
+                }
+            )
         else:
-            results.append({
-                "broker": bid,
-                "verification_link": None,
-                "next": "no matching email yet; poll again later (next_recheck_at is set)",
-            })
+            results.append(
+                {
+                    "broker": bid,
+                    "verification_link": None,
+                    "next": "no matching email yet; poll again later (next_recheck_at is set)",
+                }
+            )
     _out({"subject": args.subject, "results": results})
 
 
@@ -955,19 +993,21 @@ def cmd_tasks(args) -> None:
 def cmd_due(args) -> None:
     _require_subject(args.subject)
     cases = ledger_mod.due(args.subject)
-    _out({
-        "subject": args.subject,
-        "due_count": len(cases),
-        "cases": [
-            {
-                "broker_id": c.get("broker_id"),
-                "state": c.get("state"),
-                "next_recheck_at": c.get("next_recheck_at"),
-            }
-            for c in cases
-        ],
-        "note": "run `next` for the concrete follow-up action per case",
-    })
+    _out(
+        {
+            "subject": args.subject,
+            "due_count": len(cases),
+            "cases": [
+                {
+                    "broker_id": c.get("broker_id"),
+                    "state": c.get("state"),
+                    "next_recheck_at": c.get("next_recheck_at"),
+                }
+                for c in cases
+            ],
+            "note": "run `next` for the concrete follow-up action per case",
+        }
+    )
 
 
 def cmd_show(args) -> None:
@@ -975,16 +1015,18 @@ def cmd_show(args) -> None:
     without re-deriving listing URLs)."""
     _require_subject(args.subject)
     case = ledger_mod.get_case(args.subject, args.broker)
-    _out({
-        "broker": args.broker,
-        "state": case.get("state"),
-        "found": case.get("found"),
-        "evidence": case.get("evidence") or {},
-        "disclosure_log": case.get("disclosure_log") or [],
-        "next_recheck_at": case.get("next_recheck_at"),
-        "human_task_reason": case.get("human_task_reason"),
-        "history": case.get("history") or [],
-    })
+    _out(
+        {
+            "broker": args.broker,
+            "state": case.get("state"),
+            "found": case.get("found"),
+            "evidence": case.get("evidence") or {},
+            "disclosure_log": case.get("disclosure_log") or [],
+            "next_recheck_at": case.get("next_recheck_at"),
+            "human_task_reason": case.get("human_task_reason"),
+            "history": case.get("history") or [],
+        }
+    )
 
 
 def cmd_status(args) -> None:

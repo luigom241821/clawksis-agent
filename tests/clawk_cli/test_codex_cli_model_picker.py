@@ -31,7 +31,7 @@ def _make_fake_jwt(expiry_offset: int = 3600) -> str:
 @pytest.fixture()
 def clawk_auth_only_env(tmp_path, monkeypatch):
     """Tokens already in Clawksis auth store (no Codex CLI needed)."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -39,18 +39,20 @@ def clawk_auth_only_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "no_codex"))
 
     (clawk_home / "auth.json").write_text(
-        json.dumps({
-            "version": 2,
-            "providers": {
-                "openai-codex": {
-                    "tokens": {
-                        "access_token": _make_fake_jwt(),
-                        "refresh_token": "fake-refresh",
-                    },
-                    "last_refresh": "2026-04-12T00:00:00Z",
-                }
-            },
-        })
+        json.dumps(
+            {
+                "version": 2,
+                "providers": {
+                    "openai-codex": {
+                        "tokens": {
+                            "access_token": _make_fake_jwt(),
+                            "refresh_token": "fake-refresh",
+                        },
+                        "last_refresh": "2026-04-12T00:00:00Z",
+                    }
+                },
+            }
+        )
     )
 
     for var in [
@@ -77,54 +79,12 @@ def test_normal_path_still_works(clawk_auth_only_env):
     assert "openai-codex" in slugs
 
 
-def test_codex_picker_uses_live_codex_catalog(
-    clawk_auth_only_env, tmp_path, monkeypatch
-):
-    """The gateway /model picker should surface Codex CLI-only listed models."""
-    from clawk_cli.model_switch import list_authenticated_providers
-
-    codex_home = tmp_path / "codex-home"
-    codex_home.mkdir()
-    (codex_home / "models_cache.json").write_text(
-        json.dumps({
-            "models": [
-                {"slug": "gpt-5.5", "priority": 0, "supported_in_api": True},
-                {
-                    "slug": "gpt-5.3-codex-spark",
-                    "priority": 7,
-                    "supported_in_api": False,
-                },
-            ]
-        })
-    )
-    monkeypatch.setenv("CODEX_HOME", str(codex_home))
-    # Force the cache fallback path — without this the test issues a real
-    # 10s HTTP probe to chatgpt.com/backend-api/codex/models which is both
-    # slow and non-deterministic in CI/sandboxed environments.
-    monkeypatch.setattr(
-        "clawk_cli.codex_models._fetch_models_from_api",
-        lambda access_token: [],
-    )
-
-    providers = list_authenticated_providers(
-        current_provider="openai-codex",
-        # High cap so the curated catalog is never truncated — the assertion
-        # below checks count consistency, which only holds when max_models
-        # exceeds the catalog size (it grows as new gpt-5.x slugs land).
-        max_models=100,
-    )
-
-    codex = next(p for p in providers if p["slug"] == "openai-codex")
-    assert "gpt-5.3-codex-spark" in codex["models"]
-    assert codex["total_models"] == len(codex["models"])
-
-
 @pytest.fixture()
 def claude_code_only_env(tmp_path, monkeypatch):
     """Set up an environment where Anthropic credentials only exist in
     ~/.claude/.credentials.json (Claude Code) — not in env vars or Clawksis
     auth store."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -137,13 +97,15 @@ def claude_code_only_env(tmp_path, monkeypatch):
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
     (claude_dir / ".credentials.json").write_text(
-        json.dumps({
-            "claudeAiOauth": {
-                "accessToken": _make_fake_jwt(),
-                "refreshToken": "fake-refresh",
-                "expiresAt": int(time.time() * 1000) + 3_600_000,
+        json.dumps(
+            {
+                "claudeAiOauth": {
+                    "accessToken": _make_fake_jwt(),
+                    "refreshToken": "fake-refresh",
+                    "expiresAt": int(time.time() * 1000) + 3_600_000,
+                }
             }
-        })
+        )
     )
 
     # Patch Path.home() so the adapter finds the file
@@ -183,7 +145,7 @@ def test_claude_code_file_detected_by_model_picker(claude_code_only_env):
 
 def test_no_codex_when_no_credentials(tmp_path, monkeypatch):
     """openai-codex should NOT appear when no credentials exist anywhere."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))

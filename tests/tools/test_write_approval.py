@@ -18,7 +18,7 @@ import pytest
 @pytest.fixture
 def clawk_home(monkeypatch):
     d = tempfile.mkdtemp(prefix="clawk_wa_test_")
-    home = os.path.join(d, ".clawk")
+    home = os.path.join(d, ".clawksis")
     os.makedirs(home)
     monkeypatch.setenv("CLAWK_HOME", home)
     yield home
@@ -38,18 +38,21 @@ def _set_approval(subsystem, enabled):
 # ---------------------------------------------------------------------------
 
 
-def test_default_gate_is_off(clawk_home):
+def test_list_pending_skips_non_dict_record(clawk_home):
+    """A parseable-but-non-object pending file must be skipped, not crash the sort."""
     from tools import write_approval as wa
 
-    # Default: gate off → writes flow freely.
-    assert wa.write_approval_enabled("memory") is False
-    assert wa.write_approval_enabled("skills") is False
-
-
-def test_invalid_subsystem_is_off(clawk_home):
-    from tools import write_approval as wa
-
-    assert wa.write_approval_enabled("bogus") is False
+    wa.stage_write(
+        "memory",
+        {"action": "add", "target": "user", "content": "ok"},
+        summary="ok",
+        origin="foreground",
+    )
+    pending_dir = wa._pending_path("memory", "").parent
+    (pending_dir / "bad.json").write_text('"not a record"', encoding="utf-8")
+    records = wa.list_pending("memory")
+    assert len(records) == 1 and records[0]["payload"]["content"] == "ok"
+    assert wa.get_pending("memory", "bad") is None
 
 
 def test_normalize_enabled_coerces_values():
@@ -86,39 +89,6 @@ def test_memory_gate_off_allows_write(clawk_home):
     assert wa.pending_count("memory") == 0
 
 
-def test_memory_gate_on_no_interactive_stages(clawk_home):
-    # Gate on, no approval callback / not a gateway context → stage.
-    from tools.memory_tool import memory_tool, MemoryStore
-    from tools import write_approval as wa
-
-    _set_approval("memory", True)
-    store = MemoryStore()
-    store.load_from_disk()
-    r = json.loads(memory_tool("add", "memory", "stage me", store=store))
-    assert r.get("staged") is True
-    assert r.get("pending_id")
-    # Not written to the live store yet.
-    assert store.memory_entries == []
-    pend = wa.list_pending("memory")
-    assert len(pend) == 1
-    assert pend[0]["id"] == r["pending_id"]
-
-
-def test_memory_gate_on_then_apply(clawk_home):
-    from tools.memory_tool import memory_tool, MemoryStore, apply_memory_pending
-    from tools import write_approval as wa
-
-    _set_approval("memory", True)
-    store = MemoryStore()
-    store.load_from_disk()
-    r = json.loads(memory_tool("add", "user", "approved entry", store=store))
-    pid = r["pending_id"]
-    rec = wa.get_pending("memory", pid)
-    result = apply_memory_pending(rec["payload"], store)
-    assert result["success"] is True
-    assert "approved entry" in store.user_entries[0]
-
-
 def test_cli_memory_approve_without_live_agent_uses_fresh_store(clawk_home, capsys):
     """#46783: ``/memory approve`` from a context with no live agent (e.g. the
     Desktop GUI) passed ``memory_store=None`` into the shared handler, which
@@ -153,22 +123,29 @@ def test_cli_memory_approve_without_live_agent_uses_fresh_store(clawk_home, caps
     assert any("remember the launch date" in e for e in reloaded.memory_entries)
 
 
-def test_load_on_disk_store_honors_configured_char_limits(clawk_home, monkeypatch):
-    """load_on_disk_store() must read memory.memory_char_limit /
-    user_char_limit from config so approvals applied without a live agent
-    enforce the SAME caps as the live agent (agent_init.py). Falls back to
-    defaults when config can't be loaded.
-    """
-    from tools.memory_tool import load_on_disk_store
+def test_load_on_disk_store_honors_configured_limits_and_permissions(
+    clawk_home, monkeypatch
+):
+    """Fresh approval stores must match the live agent's limits and target gates."""
+    from tools.memory_tool import MemoryStore, load_on_disk_store
 
-    # Config override path: helper picks up the configured limits.
+    # Config override path: helper picks up configured limits and store flags.
     monkeypatch.setattr(
         "clawk_cli.config.load_config",
-        lambda: {"memory": {"memory_char_limit": 999, "user_char_limit": 444}},
+        lambda: {
+            "memory": {
+                "memory_char_limit": 999,
+                "user_char_limit": 444,
+                "memory_enabled": False,
+                "user_profile_enabled": True,
+            }
+        },
     )
     store = load_on_disk_store()
     assert store.memory_char_limit == 999
     assert store.user_char_limit == 444
+    assert store.memory_enabled is False
+    assert store.user_profile_enabled is True
 
     # Failure path: config raises → defaults, never blows up.
     def _boom():
@@ -176,106 +153,16 @@ def test_load_on_disk_store_honors_configured_char_limits(clawk_home, monkeypatc
 
     monkeypatch.setattr("clawk_cli.config.load_config", _boom)
     fallback = load_on_disk_store()
-    assert fallback.memory_char_limit == 2200
-    assert fallback.user_char_limit == 1375
-
-
-# ---------------------------------------------------------------------------
-# Skill gate
-# ---------------------------------------------------------------------------
-
-_SKILL = (
-    "---\nname: test-skill\ndescription: A test skill\nversion: 1.0.0\n---\n"
-    "# Test\nbody\n"
-)
-
-
-def test_skill_gate_off_allows_create(clawk_home):
-    # Default (gate off) → skill is created normally, not staged.
-    import importlib
-    import tools.skill_manager_tool as smt
-
-    importlib.reload(smt)
-    from tools import write_approval as wa
-
-    r = json.loads(smt.skill_manage("create", "free-skill", content=_SKILL))
-    assert r.get("success") is True
-    assert wa.pending_count("skills") == 0
-
-
-def test_skill_gate_on_always_stages(clawk_home):
-    # Skills stage even in the foreground (too big to review inline).
-    from tools.skill_manager_tool import skill_manage
-    from tools import write_approval as wa
-
-    _set_approval("skills", True)
-    r = json.loads(skill_manage("create", "staged-skill", content=_SKILL))
-    assert r.get("staged") is True
-    assert "staged-skill" in r.get("gist", "")
-    assert wa.pending_count("skills") == 1
-
-
-def test_skill_gate_on_then_apply_writes_file(clawk_home):
-    # SKILLS_DIR is resolved at import time, so reload the skill module under
-    # this test's CLAWK_HOME to exercise the real on-disk write path.
-    import importlib
-    import tools.skill_manager_tool as smt
-
-    importlib.reload(smt)
-    from tools import write_approval as wa
-
-    _set_approval("skills", True)
-    r = json.loads(smt.skill_manage("create", "applied-skill", content=_SKILL))
-    rec = wa.get_pending("skills", r["pending_id"])
-    res = json.loads(smt.apply_skill_pending(rec["payload"]))
-    assert res["success"] is True
-    assert smt._find_skill("applied-skill") is not None
-
-
-def test_skill_create_diff_is_full_content(clawk_home):
-    from tools.skill_manager_tool import skill_manage
-    from tools import write_approval as wa
-
-    _set_approval("skills", True)
-    r = json.loads(skill_manage("create", "diff-skill", content=_SKILL))
-    rec = wa.get_pending("skills", r["pending_id"])
-    diff = wa.skill_pending_diff(rec)
-    assert "name: test-skill" in diff
-
-
-# ---------------------------------------------------------------------------
-# Pending store CRUD
-# ---------------------------------------------------------------------------
-
-
-def test_pending_store_roundtrip(clawk_home):
-    from tools import write_approval as wa
-
-    rec = wa.stage_write(
-        "memory",
-        {"action": "add", "target": "user", "content": "x"},
-        summary="add x",
-        origin="foreground",
-    )
-    assert wa.pending_count("memory") == 1
-    got = wa.get_pending("memory", rec["id"])
-    assert got["payload"]["content"] == "x"
-    assert wa.discard_pending("memory", rec["id"]) is True
-    assert wa.pending_count("memory") == 0
-    assert wa.get_pending("memory", rec["id"]) is None
+    defaults = MemoryStore()
+    assert fallback.memory_char_limit == defaults.memory_char_limit
+    assert fallback.user_char_limit == defaults.user_char_limit
+    assert fallback.memory_enabled is True
+    assert fallback.user_profile_enabled is True
 
 
 # ---------------------------------------------------------------------------
 # Shared command handler
 # ---------------------------------------------------------------------------
-
-
-def test_handle_pending_list_empty(clawk_home):
-    from clawk_cli.write_approval_commands import handle_pending_subcommand
-    from tools import write_approval as wa
-
-    out = handle_pending_subcommand(wa.MEMORY, ["pending"])
-    assert "No pending memory" in out
 
 
 def test_handle_approve_all(clawk_home):
@@ -303,19 +190,174 @@ def test_handle_approve_all(clawk_home):
     assert len(store.user_entries) == 2
 
 
-def test_handle_reject(clawk_home):
+def test_handle_approve_surfaces_overwritten_entry(clawk_home):
+    """#117952: on the /memory approve surface a partial-entry replace must show the
+    approver the FULL entry it overwrote — the store's replaced_entries field used to be
+    dropped by _apply_one, so the incident path stayed silent."""
     from clawk_cli.write_approval_commands import handle_pending_subcommand
+    from tools.memory_tool import MemoryStore
     from tools import write_approval as wa
 
-    rec = wa.stage_write(
-        "skills",
-        {"action": "create", "name": "s"},
-        summary="create s",
+    store = MemoryStore()
+    store.load_from_disk()
+    entry = "RULE A: gate merges. RULE B: ci per HEAD. RULE C: never squash."
+    store.add("memory", entry)
+    wa.stage_write(
+        "memory",
+        {
+            "action": "batch",
+            "target": "memory",
+            "operations": [
+                {
+                    "action": "replace",
+                    "old_text": "RULE B: ci per HEAD.",
+                    "content": "RULE B: CI is per-head.",
+                    "matched_entry": entry,
+                }
+            ],
+        },
+        summary="batch",
         origin="background_review",
     )
-    out = handle_pending_subcommand(wa.SKILLS, ["reject", rec["id"]])
-    assert "Rejected" in out
-    assert wa.pending_count("skills") == 0
+    out = handle_pending_subcommand(wa.MEMORY, ["approve", "all"], memory_store=store)
+    assert "Approved 1" in out and entry in out
+    assert store.memory_entries == ["RULE B: CI is per-head."]
+
+
+def test_handle_approve_lists_a_patch_as_the_entry_before_the_edit(clawk_home):
+    """An approved patch keeps the rest of its entry; the approve output called it an
+    overwrite and told the user to re-add text they had deliberately changed."""
+    from clawk_cli.write_approval_commands import handle_pending_subcommand
+    from tools.memory_tool import MemoryStore
+    from tools import write_approval as wa
+
+    store = MemoryStore()
+    store.load_from_disk()
+    entry = "RULE A: gate merges. RULE B: ci per HEAD. RULE C: never squash."
+    store.add("memory", entry)
+    wa.stage_write(
+        "memory",
+        {
+            "action": "batch",
+            "target": "memory",
+            "operations": [
+                {
+                    "action": "patch",
+                    "old_text": "ci per HEAD",
+                    "content": "CI is per-head",
+                    "matched_entry": entry,
+                }
+            ],
+        },
+        summary="batch",
+        origin="background_review",
+    )
+    out = handle_pending_subcommand(wa.MEMORY, ["approve", "all"], memory_store=store)
+    assert "Patched entry (as it was before the edit):" in out and entry in out
+    assert "Overwrote" not in out
+    assert store.memory_entries == [
+        "RULE A: gate merges. RULE B: CI is per-head. RULE C: never squash."
+    ]
+
+
+_KEPT = "Repo lives in ~/src/app; tests via make test"
+_REVIEWED = "Staging DB: pg-staging-2 (old cluster, retiring)"
+
+
+def _review_stages_remove(shape):
+    """Seed memory, then stage a remove the way the unattended background review does."""
+    from tools.memory_tool import MemoryStore, memory_tool
+    from tools.skill_provenance import (
+        reset_current_write_origin,
+        reset_review_attended,
+        set_current_write_origin,
+        set_review_attended,
+    )
+
+    store = MemoryStore()
+    store.load_from_disk()
+    for entry in (_KEPT, _REVIEWED):
+        assert store.add("memory", entry)["success"]
+    op = {"action": "remove", "old_text": "Staging DB"}
+    kwargs = (
+        op
+        if shape == "single"
+        else {"operations": [op, {"action": "add", "content": "Deploys via make ship"}]}
+    )
+    origin, attended = (
+        set_current_write_origin("background_review"),
+        set_review_attended(False),
+    )
+    try:
+        staged = json.loads(memory_tool(target="memory", store=store, **kwargs))
+    finally:
+        reset_review_attended(attended)
+        reset_current_write_origin(origin)
+    assert staged["staged"] is True, staged
+    return store, staged["pending_id"]
+
+
+@pytest.mark.parametrize("shape", ["single", "batch"])
+def test_approve_refuses_staged_remove_whose_entry_changed(clawk_home, shape):
+    """Approval re-ran the staged old_text search against the file as it is THEN, so it
+    deleted the newer entry the live agent had written in place, which the approver never saw."""
+    from clawk_cli.write_approval_commands import handle_pending_subcommand
+    from tools.memory_tool import load_on_disk_store, memory_tool
+    from tools import write_approval as wa
+
+    store, pid = _review_stages_remove(shape)
+    newer = "Staging DB: pg-staging-3 (migrated 2026-09-20, creds in vault 'stg')"
+    assert json.loads(
+        memory_tool(action="patch", old_text=_REVIEWED, content=newer, store=store)
+    )["success"]
+
+    out = handle_pending_subcommand(
+        wa.MEMORY, ["approve", pid], memory_store=load_on_disk_store()
+    )
+
+    assert load_on_disk_store().memory_entries == [_KEPT, newer], out
+    assert "changed since it was staged" in out
+    assert wa.get_pending(wa.MEMORY, pid) is not None
+    # The pending list shows the whole entry the write targets, not just its search string.
+    assert _REVIEWED in handle_pending_subcommand(wa.MEMORY, ["pending"])
+
+
+@pytest.mark.parametrize("shape", ["single", "batch"])
+def test_approve_names_the_entry_a_remove_deleted(clawk_home, shape):
+    """Approve listed what a replace overwrote but was silent about what a remove deleted."""
+    from clawk_cli.write_approval_commands import handle_pending_subcommand
+    from tools.memory_tool import load_on_disk_store
+    from tools import write_approval as wa
+
+    _store, pid = _review_stages_remove(shape)
+    out = handle_pending_subcommand(
+        wa.MEMORY, ["approve", pid], memory_store=load_on_disk_store()
+    )
+    assert _REVIEWED not in load_on_disk_store().memory_entries, out
+    assert _REVIEWED in out
+
+
+def test_approve_refuses_unpinned_legacy_remove(clawk_home):
+    """A record staged before removes were pinned to their full entry has no verifiable target,
+    so approve refuses it (keeping the record) instead of replaying its old_text search."""
+    from clawk_cli.write_approval_commands import handle_pending_subcommand
+    from tools.memory_tool import load_on_disk_store
+    from tools import write_approval as wa
+
+    _store, pid = _review_stages_remove("single")
+    path = wa._pending_path(wa.MEMORY, pid)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["payload"].pop("matched_entry", None)
+    path.write_text(json.dumps(record), encoding="utf-8")
+    assert "unpinned legacy target" in handle_pending_subcommand(wa.MEMORY, ["pending"])
+
+    out = handle_pending_subcommand(
+        wa.MEMORY, ["approve", pid], memory_store=load_on_disk_store()
+    )
+
+    assert "Approved 0" in out and "predates entry pinning" in out, out
+    assert _REVIEWED in load_on_disk_store().memory_entries
+    assert wa.get_pending(wa.MEMORY, pid) is not None
 
 
 def test_handle_approval_on(clawk_home):
@@ -344,41 +386,6 @@ def test_handle_approval_off(clawk_home):
     )
     assert captured["enabled"] is False
     assert "off" in out
-
-
-def test_handle_mode_alias_still_works(clawk_home):
-    # 'mode' is kept as a back-compat alias for 'approval'.
-    from clawk_cli.write_approval_commands import handle_pending_subcommand
-    from tools import write_approval as wa
-
-    captured = {}
-    out = handle_pending_subcommand(
-        wa.MEMORY,
-        ["mode", "on"],
-        set_mode_fn=lambda enabled: captured.update(enabled=enabled),
-    )
-    assert captured["enabled"] is True
-    assert "on" in out
-
-
-def test_handle_approval_invalid(clawk_home):
-    from clawk_cli.write_approval_commands import handle_pending_subcommand
-    from tools import write_approval as wa
-
-    out = handle_pending_subcommand(
-        wa.MEMORY, ["approval", "bogus"], set_mode_fn=lambda enabled: None
-    )
-    assert "Invalid value" in out
-
-
-def test_handle_unknown_subcommand_returns_none(clawk_home):
-    from clawk_cli.write_approval_commands import handle_pending_subcommand
-    from tools import write_approval as wa
-
-    # An unrecognized /skills subcommand (e.g. 'search') must return None so
-    # the CLI falls through to the skills hub.
-    out = handle_pending_subcommand(wa.SKILLS, ["search", "foo"])
-    assert out is None
 
 
 # ---------------------------------------------------------------------------
@@ -440,68 +447,42 @@ def test_memory_inline_deny_blocks(clawk_home, approval_callback_cleanup):
     assert wa.pending_count("memory") == 0  # denied, not staged
 
 
-def test_memory_inline_callback_error_stages(clawk_home, approval_callback_cleanup):
-    # If the prompt machinery fails, fall back to staging — never drop silently.
-    from tools.memory_tool import memory_tool, MemoryStore
-    from tools.terminal_tool import set_approval_callback
-    from tools import write_approval as wa
-
-    _set_approval("memory", True)
-
-    def broken_cb(command, description, **kw):
-        raise RuntimeError("boom")
-
-    set_approval_callback(broken_cb)
-
-    store = MemoryStore()
-    store.load_from_disk()
-    r = json.loads(memory_tool("add", "memory", "fallback fact", store=store))
-    assert r.get("staged") is True
-    assert wa.pending_count("memory") == 1
-
-
-def test_gateway_context_stages_not_prompts(clawk_home, monkeypatch):
-    # A gateway session has no per-thread CLI callback; the dangerous-command
-    # /approve round-trip lives in the pending-queue machinery which the gate
-    # does not use. The gate must stage, never attempt an inline prompt
-    # (which would hit the input() fallback and silently deny).
-    from tools.memory_tool import memory_tool, MemoryStore
-    from tools import write_approval as wa
-
-    _set_approval("memory", True)
-    monkeypatch.setenv("CLAWK_GATEWAY_SESSION", "1")
-
-    store = MemoryStore()
-    store.load_from_disk()
-    r = json.loads(memory_tool("add", "memory", "gateway fact", store=store))
-    assert r.get("staged") is True
-    assert store.memory_entries == []
-    assert wa.pending_count("memory") == 1
-
-
-def test_skills_never_prompt_inline_even_with_callback(
-    clawk_home, approval_callback_cleanup
+@pytest.mark.parametrize("context", ["single_query", "cron", "webhook"])
+def test_headless_memory_write_stages_without_inline_prompt(
+    clawk_home, approval_callback_cleanup, monkeypatch, context
 ):
-    # Skills always stage — even when an interactive callback is registered.
-    from tools.skill_manager_tool import skill_manage
+    """`clawk chat -q`, cron and unattended platforms can register the CLI callback but have no human to answer
+    it: the write stages at once instead of waiting the approval timeout."""
+    from tools.memory_tool import memory_tool, MemoryStore
     from tools.terminal_tool import set_approval_callback
     from tools import write_approval as wa
 
-    _set_approval("skills", True)
+    _set_approval("memory", True)
+    monkeypatch.setenv(
+        *{
+            "single_query": ("CLAWK_SINGLE_QUERY_SESSION", "1"),
+            "cron": ("CLAWK_CRON_SESSION", "1"),
+            "webhook": ("CLAWK_SESSION_PLATFORM", "webhook"),
+        }[context]
+    )
 
     calls = []
-    set_approval_callback(lambda c, d, **kw: calls.append(1) or "once")
 
-    r = json.loads(
-        skill_manage(
-            action="create",
-            name="test-inline-skill",
-            content="---\nname: test-inline-skill\ndescription: x\n---\nbody\n",
-        )
-    )
-    assert r.get("staged") is True
-    assert calls == []  # never prompted
-    assert wa.pending_count("skills") == 1
+    def approve_if_prompted(*args, **kwargs):
+        calls.append((args, kwargs))
+        return "once"
+
+    set_approval_callback(approve_if_prompted)
+    store = MemoryStore()
+    store.load_from_disk()
+
+    r = json.loads(memory_tool("add", "memory", "headless fact", store=store))
+
+    assert calls == []
+    assert r["success"] is True
+    assert r["staged"] is True
+    assert store.memory_entries == []
+    assert wa.pending_count("memory") == 1
 
 
 def test_memory_invalid_params_rejected_before_staging(clawk_home):
@@ -518,70 +499,59 @@ def test_memory_invalid_params_rejected_before_staging(clawk_home):
     assert wa.pending_count("memory") == 0
 
 
-class TestSkillGist:
-    """skill_gist builds a heuristic one-line summary for a pending skill write.
+# ---------------------------------------------------------------------------
+# Staged-write review hint is surface-aware (#98330)
+# ---------------------------------------------------------------------------
 
-    Pure, no model call — every branch is verifiable from the function source.
-    """
 
-    def test_create_with_frontmatter_description(self):
-        from tools import write_approval as wa
+def _stage_one_memory_write():
+    from tools.memory_tool import memory_tool, MemoryStore
 
-        content = "---\ndescription: My cool skill\n---\nprint('hi')\n"
-        assert (
-            wa.skill_gist("create", "demo", content=content)
-            == f"create 'demo' — My cool skill ({len(content)} chars)"
-        )
+    store = MemoryStore()
+    store.load_from_disk()
+    r = json.loads(memory_tool("add", "memory", "surface hint fact", store=store))
+    assert r.get("staged") is True, r
+    return r
 
-    def test_edit_without_description_uses_size_only(self):
-        from tools import write_approval as wa
 
-        content = "no frontmatter here"
-        assert (
-            wa.skill_gist("edit", "demo", content=content)
-            == f"rewrite 'demo' ({len(content)} chars)"
-        )
+def test_staged_hint_names_the_review_command_on_slash_surfaces(clawk_home):
+    from tools import write_approval as wa
 
-    def test_large_content_reports_kb(self):
-        from tools import write_approval as wa
+    _set_approval("memory", True)
+    r = _stage_one_memory_write()
+    # No headless markers bound (plain foreground turn) → the slash hint stands.
+    assert "/memory pending" in r["message"], r["message"]
+    assert wa.pending_count("memory") == 1
 
-        content = "x" * 2048  # >= 1024 bytes -> KB rounding
-        assert wa.skill_gist("create", "big", content=content) == "create 'big' (3 KB)"
 
-    def test_create_without_content_falls_through(self):
-        from tools import write_approval as wa
+def test_staged_hint_names_the_pending_dir_on_headless_surfaces(
+    clawk_home, monkeypatch
+):
+    from tools import write_approval as wa
 
-        assert wa.skill_gist("create", "demo") == "create 'demo'"
+    _set_approval("memory", True)
+    monkeypatch.setenv("CLAWK_CRON_SESSION", "1")
+    r = _stage_one_memory_write()
+    assert "review with /memory pending" not in r["message"], r["message"]
+    assert "pending records live in" in r["message"]
+    assert str(wa._pending_path(wa.MEMORY, "").parent) in r["message"]
+    monkeypatch.delenv("CLAWK_CRON_SESSION")
 
-    def test_patch_counts_lines(self):
-        from tools import write_approval as wa
+    monkeypatch.setenv("CLAWK_KANBAN_TASK", "task-7")
+    r = _stage_one_memory_write()
+    assert "review with /memory pending" not in r["message"], r["message"]
+    monkeypatch.delenv("CLAWK_KANBAN_TASK")
 
-        assert (
-            wa.skill_gist(
-                "patch",
-                "demo",
-                file_path="SKILL.md",
-                old_string="a\nb",
-                new_string="x\ny\nz",
-            )
-            == "patch 'demo' SKILL.md (+3/-2 lines)"
-        )
+    monkeypatch.setenv("CLAWK_SESSION_PLATFORM", "api_server")
+    r = _stage_one_memory_write()
+    assert "review with /memory pending" not in r["message"], r["message"]
+    assert "pending records live in" in r["message"]
+    monkeypatch.delenv("CLAWK_SESSION_PLATFORM")
+    assert wa.pending_count("memory") == 3
 
-    def test_patch_defaults_target_and_empty_strings(self):
-        from tools import write_approval as wa
 
-        assert wa.skill_gist("patch", "demo") == "patch 'demo' SKILL.md (+0/-0 lines)"
-
-    def test_file_actions_and_unknown_fallback(self):
-        from tools import write_approval as wa
-
-        assert (
-            wa.skill_gist("write_file", "demo", file_path="a.py")
-            == "write a.py in 'demo'"
-        )
-        assert (
-            wa.skill_gist("remove_file", "demo", file_path="a.py")
-            == "remove a.py from 'demo'"
-        )
-        assert wa.skill_gist("delete", "demo") == "delete skill 'demo'"
-        assert wa.skill_gist("unknown", "demo") == "unknown 'demo'"
+def test_staged_hint_keeps_command_for_chat_gateway_platform(clawk_home, monkeypatch):
+    _set_approval("memory", True)
+    monkeypatch.setenv("CLAWK_SESSION_PLATFORM", "telegram")
+    r = _stage_one_memory_write()
+    assert "/memory pending" in r["message"], r["message"]

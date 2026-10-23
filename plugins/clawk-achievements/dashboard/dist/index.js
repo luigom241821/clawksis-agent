@@ -4,7 +4,7 @@
 
   // clawk-achievements dashboard plugin
 
-  // Originally authored by @PCinkusz — https://github.com/PCinkusz/clawk-achievements (MIT).
+  // Originally authored by @PCinkusz — https://github.com/PCinkusz/hermes-achievements (MIT).
 
   // Bundled into clawksis-agent. Upstream repo remains the staging ground for new
 
@@ -672,7 +672,7 @@
 
       const tierPart = achievement.tier ? (achievement.tier + " tier ") : "";
 
-      const tmpl = tx(t, "share.tweet_text", "Just unlocked {tier_part}\"{name}\" in Clawksis ☤", {
+      const tmpl = tx(t, "share.tweet_text", "Just unlocked {tier_part}\"{name}\" in Clawksis ∇", {
 
         tier_part: tierPart,
 

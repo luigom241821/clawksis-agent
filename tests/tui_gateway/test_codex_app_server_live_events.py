@@ -17,11 +17,13 @@ def test_codex_bridge_emits_one_authoritative_tui_tool_lifecycle(monkeypatch):
     monkeypatch.setattr(
         server,
         "_emit",
-        lambda event_type, session_id, payload=None: events.append((
-            event_type,
-            session_id,
-            payload,
-        )),
+        lambda event_type, session_id, payload=None: events.append(
+            (
+                event_type,
+                session_id,
+                payload,
+            )
+        ),
     )
     monkeypatch.setitem(
         server._sessions,
@@ -49,10 +51,12 @@ def test_codex_bridge_emits_one_authoritative_tui_tool_lifecycle(monkeypatch):
     }
 
     bridge({"method": "item/started", "params": {"item": started}})
-    bridge({
-        "method": "item/completed",
-        "params": {"item": dict(started, aggregatedOutput="/tmp\n", exitCode=0)},
-    })
+    bridge(
+        {
+            "method": "item/completed",
+            "params": {"item": dict(started, aggregatedOutput="/tmp\n", exitCode=0)},
+        }
+    )
 
     lifecycle = [
         (event_type, payload)

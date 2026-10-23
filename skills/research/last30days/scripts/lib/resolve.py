@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 from . import categories, dates, grounding
@@ -333,7 +333,7 @@ def auto_resolve(topic: str, config: dict) -> dict:
 
     from_date, to_date = dates.get_date_range(30)
     date_range = (from_date, to_date)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     current_month = now.strftime("%B")
     current_year = now.strftime("%Y")
 

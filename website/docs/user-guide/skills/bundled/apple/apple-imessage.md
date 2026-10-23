@@ -1,62 +1,32 @@
 ---
-
 title: "Imessage — Send and receive iMessages/SMS via the imsg CLI on macOS"
-
 sidebar_label: "Imessage"
-
 description: "Send and receive iMessages/SMS via the imsg CLI on macOS"
-
 ---
-
-
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-
-
 # Imessage
-
-
 
 Send and receive iMessages/SMS via the imsg CLI on macOS.
 
-
-
 ## Skill metadata
 
-
-
 | | |
-
 |---|---|
-
 | Source | Bundled (installed by default) |
-
 | Path | `skills/apple/imessage` |
-
 | Version | `1.0.0` |
-
 | Author | Clawksis |
-
 | License | MIT |
-
 | Platforms | macos |
-
 | Tags | `iMessage`, `SMS`, `messaging`, `macOS`, `Apple` |
-
-
 
 ## Reference: full SKILL.md
 
-
-
 :::info
-
 The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-
 :::
-
-
 
 # iMessage
 
@@ -233,4 +203,3 @@ imsg chats --limit 20 --json | jq '.[] | select(.displayName | contains("Mom"))'
 imsg send --to "+1555123456" --text "I'll be late"
 
 ```
-

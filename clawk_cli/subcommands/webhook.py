@@ -1,8 +1,4 @@
-"""``clawk webhook`` subcommand parser.
-
-Extracted verbatim from ``clawk_cli/main.py:main()`` (god-file Phase 2).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk webhook`` subcommand parser."""
 
 from __future__ import annotations
 
@@ -11,9 +7,6 @@ from typing import Callable
 
 def build_webhook_parser(subparsers, *, cmd_webhook: Callable) -> None:
     """Attach the ``webhook`` subcommand to ``subparsers``."""
-    # =========================================================================
-    # webhook command
-    # =========================================================================
     webhook_parser = subparsers.add_parser(
         "webhook",
         help="Manage dynamic webhook subscriptions",
@@ -49,6 +42,17 @@ def build_webhook_parser(subparsers, *, cmd_webhook: Callable) -> None:
         "--secret", default="", help="HMAC secret (auto-generated if omitted)"
     )
     wh_sub.add_argument(
+        "--route-profile",
+        dest="route_profile",
+        default=None,
+        metavar="PROFILE",
+        help="Bind the route to a multiplexed profile: only POSTs to /p/PROFILE/webhooks/<name> "
+        "are accepted and the agent runs as that profile (default: default; kept on update). "
+        "Changing an existing route's profile rotates its HMAC secret unless a different --secret is supplied. "
+        "Distinct from the global -p/--profile, which picks the gateway whose subscriptions "
+        "file is written.",
+    )
+    wh_sub.add_argument(
         "--deliver-only",
         action="store_true",
         help="Skip the agent — deliver the rendered prompt directly as the "
@@ -56,11 +60,25 @@ def build_webhook_parser(subparsers, *, cmd_webhook: Callable) -> None:
         "(not 'log').",
     )
     wh_sub.add_argument(
+        "--mirror-to-session",
+        action="store_true",
+        help="Also write each delivered message into the target chat's session, so replying to it "
+        "in that chat has context. Only for sources whose content you trust in your conversation.",
+    )
+    wh_sub.add_argument(
         "--script",
         default="",
         help="Filter/transform script under ~/.clawksis/scripts/. The route "
         "payload is passed as JSON on stdin; empty stdout, [SILENT], or a "
         "nonzero exit code ignores the webhook.",
+    )
+    wh_sub.add_argument(
+        "--cron-job",
+        default="",
+        help="Fire an existing cron job (by ID or name) when this route receives an event, instead of "
+        "starting a fresh agent run. The rendered --prompt template is passed to the job as transient "
+        "per-run context; the job's own prompt, skills, and delivery settings apply. Mutually exclusive "
+        "with --deliver-only.",
     )
 
     webhook_subparsers.add_parser(

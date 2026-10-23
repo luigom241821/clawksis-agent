@@ -33,7 +33,7 @@ def _parse_cookie_record(data: bytes) -> dict | None:
     if len(data) < 44:
         return None
     try:
-        (size,) = struct.unpack("<I", data[0:4])
+        (_size,) = struct.unpack("<I", data[0:4])
         # flags at offset 4 (4 bytes, little-endian) — not needed for extraction
         (url_offset,) = struct.unpack("<I", data[16:20])
         (name_offset,) = struct.unpack("<I", data[20:24])

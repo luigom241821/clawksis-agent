@@ -1,8 +1,4 @@
-"""``clawk logs`` subcommand parser.
-
-Extracted verbatim from ``clawk_cli/main.py:main()`` (god-file Phase 2).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk logs`` subcommand parser."""
 
 from __future__ import annotations
 
@@ -12,13 +8,10 @@ from typing import Callable
 
 def build_logs_parser(subparsers, *, cmd_logs: Callable) -> None:
     """Attach the ``logs`` subcommand to ``subparsers``."""
-    # =========================================================================
-    # logs command
-    # =========================================================================
     logs_parser = subparsers.add_parser(
         "logs",
         help="View and filter Clawksis log files",
-        description="View, tail, and filter agent.log / errors.log / gateway.log / gui.log / desktop.log",
+        description="View, tail, and filter agent.log / errors.log / gateway.log / gui.log / desktop.log / update.log / desktop-update-handoff.log",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
@@ -28,6 +21,8 @@ Examples:
     clawk logs gateway -n 100     Show last 100 lines of gateway.log
     clawk logs gui -f             Follow gui.log in real time
     clawk logs desktop -f         Follow desktop.log (Electron app boot/backend)
+    clawk logs update             Show last 50 lines of update.log (clawk update mirror)
+    clawk logs handoff            Show last 50 lines of desktop-update-handoff.log
     clawk logs --level WARNING    Only show WARNING and above
     clawk logs --session abc123   Filter by session ID
     clawk logs --component tools  Only show tool-related lines
@@ -40,7 +35,7 @@ Examples:
         "log_name",
         nargs="?",
         default="agent",
-        help="Log to view: agent (default), errors, gateway, gui, or 'list' to show available files",
+        help="Log to view: agent (default), errors, gateway, gui, desktop, update, handoff, or 'list' to show available files",
     )
     logs_parser.add_argument(
         "-n",
@@ -66,9 +61,7 @@ Examples:
         help="Filter lines containing this session ID substring",
     )
     logs_parser.add_argument(
-        "--since",
-        metavar="TIME",
-        help="Show lines since TIME ago (e.g. 1h, 30m, 2d)",
+        "--since", metavar="TIME", help="Show lines since TIME ago (e.g. 1h, 30m, 2d)"
     )
     logs_parser.add_argument(
         "--component",

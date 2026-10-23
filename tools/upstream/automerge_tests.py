@@ -31,8 +31,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from sync import ROOT, match_eol  # noqa: E402
-from automerge import NOUS_ACTIVE  # noqa: E402
+from sync import ROOT, match_eol
+from automerge import NOUS_ACTIVE
 
 PENDING = HERE / "pending"
 
@@ -73,7 +73,7 @@ def main() -> int:
         report = (PENDING / "REPORT.md").read_text(encoding="utf-8")
         files = [
             p
-            for p in re.findall(r"^- `([^`]+)`", report, re.M)
+            for p in re.findall(r"^- `([^`]+)`", report, re.MULTILINE)
             if p.startswith("tests/")
         ]
 

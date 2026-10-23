@@ -1,9 +1,10 @@
 ---
 name: opportunity-research
-description: >-
-  Research and evaluate digital business opportunities for AI agent platforms.
-  Covers underserved market discovery, competitive analysis, revenue data (MRR/ARR),
-  market sizing, and matching platform capabilities to profitable niches.
+description: "Research and evaluate digital business opportunities."
+version: 1.0.0
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 emoji: 🔍
 category: research
 triggers:
@@ -22,6 +23,9 @@ triggers:
   - EN: "competitive analysis"
   - EN: "market research"
   - EN: "what sector"
+metadata:
+  clawk:
+    tags: [business, research, market-analysis, niches, competitive-analysis, saas]
 ---
 
 # Market Opportunity Research for AI Agent Platforms

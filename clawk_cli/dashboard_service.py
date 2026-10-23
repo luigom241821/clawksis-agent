@@ -79,7 +79,14 @@ def _require_linux_systemd_root(cmd_label: str) -> None:
 
 def _run(cmd: list, check: bool = True) -> "subprocess.CompletedProcess":
     print(f"{_D}  $ {' '.join(cmd)}{_X}")
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     if check and res.returncode != 0:
         err = (res.stderr or res.stdout or "").strip()
         _fail(f"`{' '.join(cmd)}` falló ({res.returncode}): {err}")
@@ -95,8 +102,7 @@ def _build_unit(host: str, port: int, extra_env: "dict[str, str]") -> str:
     )
     return (
         "[Unit]\n"
-        "Description=Clawksis Dashboard (web UI :%d)\n"
-        % port
+        f"Description=Clawksis Dashboard (web UI :{port})\n"
         + "After=network-online.target\n"
         "Wants=network-online.target\n"
         "\n"
@@ -133,7 +139,7 @@ def _existing_domain_env() -> "dict[str, str]":
     except OSError:
         return {}
     found: dict[str, str] = {}
-    for m in re.finditer(r"^Environment=([A-Z0-9_]+)=(.*)$", text, re.M):
+    for m in re.finditer(r"^Environment=([A-Z0-9_]+)=(.*)$", text, re.MULTILINE):
         key, val = m.group(1), m.group(2).strip()
         if key in _DOMAIN_ENV_KEYS:
             found[key] = val
@@ -206,7 +212,9 @@ def cmd_dashboard_service(args) -> None:
     if getattr(args, "status", False):
         if sys.platform != "linux" or shutil.which("systemctl") is None:
             _fail("Este comando requiere Linux con systemd.")
-        subprocess.run(["systemctl", "status", "clawk-dashboard", "--no-pager"])
+        subprocess.run(
+            ["systemctl", "status", "clawk-dashboard", "--no-pager"], check=False
+        )
         return
 
     if getattr(args, "uninstall", False):
@@ -370,6 +378,9 @@ def _write_caddy_block(domain: str, port: int) -> None:
         ["caddy", "validate", "--config", str(CADDYFILE)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
     )
     if valid.returncode != 0:
         # No dejar un Caddyfile inválido en disco: rompería el próximo
@@ -384,7 +395,12 @@ def _write_caddy_block(domain: str, port: int) -> None:
         )
     _run(["systemctl", "enable", "--now", "caddy"], check=False)
     reload_res = subprocess.run(
-        ["systemctl", "reload", "caddy"], capture_output=True, text=True
+        ["systemctl", "reload", "caddy"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
     )
     if reload_res.returncode != 0:
         _run(["systemctl", "restart", "caddy"])
@@ -412,7 +428,13 @@ def _port_holder(port: int) -> "str | None":
     """
     try:
         res = subprocess.run(
-            ["ss", "-tlnpH"], capture_output=True, text=True, timeout=5
+            ["ss", "-tlnpH"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            check=False,
         )
     except Exception:
         return None
@@ -520,7 +542,10 @@ def _docker_gateway_ip() -> str:
             ["ip", "-4", "-o", "addr", "show", "docker0"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
+            check=False,
         )
         m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", res.stdout)
         if m:

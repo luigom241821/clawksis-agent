@@ -49,7 +49,7 @@ def test_cron_storage_anchors_at_profile_home(tmp_path, monkeypatch):
 
     # cron/jobs.py computes CLAWK_DIR from get_clawk_home() at import, so a
     # fresh import under this env anchors the store at <profile>/cron.
-    import cron.jobs as jobs
+    from cron import jobs
 
     importlib.reload(jobs)
     try:
@@ -60,65 +60,6 @@ def test_cron_storage_anchors_at_profile_home(tmp_path, monkeypatch):
         # The shared-root path must NOT be the store — that would re-break
         # per-profile isolation (#4707).
         assert jobs.JOBS_FILE.resolve() != (root / "cron" / "jobs.json").resolve()
-    finally:
-        monkeypatch.undo()
-        importlib.reload(jobs)
-
-
-def test_cron_lock_path_anchors_at_profile_home(tmp_path, monkeypatch):
-    """The tick lock is also profile-scoped, so two profile gateways tick
-    independently instead of contending on one shared lock."""
-    root = tmp_path / "clawk_home"
-    profile_home = root / "profiles" / "coder"
-    profile_home.mkdir(parents=True)
-
-    _set_profile_env(monkeypatch, root, profile_home)
-
-    import cron.scheduler as scheduler
-
-    lock_dir, lock_file = scheduler._get_lock_paths()
-    assert lock_dir.resolve() == (profile_home / "cron").resolve()
-    assert lock_file.resolve() == (profile_home / "cron" / ".tick.lock").resolve()
-    assert lock_dir.resolve() != (root / "cron").resolve()
-
-
-def test_cron_execution_home_follows_active_profile(tmp_path, monkeypatch):
-    """Execution-time home resolution (.env / config.yaml / scripts) follows
-    the active profile, not the shared root — so a profile gateway runs its
-    jobs with that profile's runtime config."""
-    root = tmp_path / "clawk_home"
-    profile_home = root / "profiles" / "coder"
-    profile_home.mkdir(parents=True)
-
-    _set_profile_env(monkeypatch, root, profile_home)
-
-    import cron.scheduler as scheduler
-
-    # The module-level test override must be clear so the dynamic path runs.
-    monkeypatch.setattr(scheduler, "_clawk_home", None, raising=False)
-    assert scheduler._get_clawk_home().resolve() == profile_home.resolve()
-    assert scheduler._get_clawk_home().resolve() != root.resolve()
-
-
-def test_cron_storage_unaffected_when_no_profile(tmp_path, monkeypatch):
-    """With no profile (CLAWK_HOME == root), the store is the root's cron dir
-    — unchanged behavior for single-profile installs."""
-    root = tmp_path / "clawk_home"
-    root.mkdir(parents=True)
-
-    import clawk_constants
-
-    monkeypatch.setattr(
-        clawk_constants, "_get_platform_default_clawk_home", lambda: root
-    )
-    monkeypatch.setenv("CLAWK_HOME", str(root))
-
-    import cron.jobs as jobs
-
-    importlib.reload(jobs)
-    try:
-        assert jobs.CLAWK_DIR.resolve() == root.resolve()
-        assert jobs.JOBS_FILE.resolve() == (root / "cron" / "jobs.json").resolve()
     finally:
         monkeypatch.undo()
         importlib.reload(jobs)

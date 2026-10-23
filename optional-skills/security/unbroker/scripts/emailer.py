@@ -273,7 +273,7 @@ def _decode_part(part) -> str:
             return ""
         charset = part.get_content_charset() or "utf-8"
         return payload.decode(charset, errors="replace")
-    except Exception:  # noqa: BLE001 - malformed MIME must not kill the poll
+    except Exception:
         return ""
 
 
@@ -335,17 +335,19 @@ def fetch_recent(
             if not raw:
                 continue
             msg = _email.message_from_bytes(raw)
-            out.append({
-                "from": msg.get("From", ""),
-                "subject": msg.get("Subject", ""),
-                "date": msg.get("Date", ""),
-                "text": message_text(msg),
-            })
+            out.append(
+                {
+                    "from": msg.get("From", ""),
+                    "subject": msg.get("Subject", ""),
+                    "date": msg.get("Date", ""),
+                    "text": message_text(msg),
+                }
+            )
         return out
     finally:
         try:
             conn.logout()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
 

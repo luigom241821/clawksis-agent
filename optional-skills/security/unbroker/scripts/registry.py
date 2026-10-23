@@ -123,7 +123,7 @@ def slug(name: str, website: str = "") -> str:
         r"\.(com|org|net|io|ai|inc|co|us|info|llc)\b",
         "",
         (name or "").strip(),
-        flags=re.I,
+        flags=re.IGNORECASE,
     )
     s = re.sub(r"[^a-z0-9]+", "", base.lower())
     if s:
@@ -276,7 +276,7 @@ MIN_EXPECTED_CA = 100  # CA registry has ~500+; far fewer => wrong/empty file, w
 
 def fetch(url: str = DEFAULT_URL, timeout: int = 60) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", errors="replace")
 
 
@@ -286,7 +286,7 @@ def _fetch_ca_latest() -> tuple[str, list[dict]]:
     for url in ca_candidate_urls():
         try:
             recs = parse(fetch(url), jurisdiction="US-CA", has_drop=True)
-        except Exception:  # noqa: BLE001 - a missing year 404s; fall through to older years
+        except Exception:
             continue
         if recs:
             return url, recs
@@ -347,7 +347,7 @@ def refresh_all(cache_path: Path, fetched: dict[str, str] | None = None) -> dict
                     jurisdiction=src["jurisdiction"],
                     has_drop=src["has_drop"],
                 )
-        except Exception as exc:  # noqa: BLE001 - one source failing must not sink the rest
+        except Exception as exc:
             per_source[key] = {
                 "jurisdiction": src["jurisdiction"],
                 "format": "csv",

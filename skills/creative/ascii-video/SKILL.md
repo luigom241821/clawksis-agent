@@ -1,7 +1,14 @@
 ---
 name: ascii-video
 description: "ASCII video: convert video/audio to colored ASCII MP4/GIF."
+version: 1.0.0
+author: SHL0MS, Clawksis
+license: MIT
 platforms: [linux, macos, windows]
+metadata:
+  clawk:
+    tags: [ASCII, Video, FFmpeg, Terminal-Art]
+    related_skills: []
 ---
 
 # ASCII Video Production Pipeline
@@ -165,8 +172,7 @@ This is the #1 visual issue. ASCII on black is inherently dark. **Never use `can
 def tonemap(canvas, gamma=0.75):
     f = canvas.astype(np.float32)
     lo, hi = np.percentile(f[::4, ::4], [1, 99.5])
-    if hi - lo < 10:
-        hi = lo + 10
+    if hi - lo < 10: hi = lo + 10
     f = np.clip((f - lo) / (hi - lo), 0, 1) ** gamma
     return (f * 255).astype(np.uint8)
 ```

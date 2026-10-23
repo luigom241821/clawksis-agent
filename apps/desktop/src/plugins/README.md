@@ -4,10 +4,12 @@ Drop a `<name>/plugin.{ts,tsx}` here that default-exports a `ClawksisPlugin` and
 it registers automatically at boot (vite glob in `../contrib/plugins.ts`), with
 the same inventory + live enable/disable contract as runtime plugins.
 
-None ship in-tree today — reference/demo plugins (the counter example, the
-gateway-pill 1:1 rebuild, the runtime-loader hello world) live in the companion
-[`clawk-example-plugins`](https://github.com/NousResearch/clawk-example-plugins)
-repo so the shipped app stays uncluttered.
+Keep this tree for real shipped plugins (and the small authoring fixtures that
+dogfood the SDK). One-off demos that rebuild a core chrome piece 1:1 do not
+belong here — they double the UI and confuse Capabilities ▸ Plugins. Publish those
+in the companion
+[`clawk-example-plugins`](https://github.com/NousResearch/hermes-example-plugins)
+repo instead.
 
 User- and agent-authored plugins load at runtime from
 `$CLAWK_HOME/desktop-plugins/<name>/plugin.js` (the disk door) — see the

@@ -152,14 +152,16 @@ def _build_prompt(
         f"- {subquery.label}: {subquery.ranking_query}" for subquery in plan.subqueries
     )
     candidate_block = "\n".join(
-        "\n".join([
-            f"- candidate_id: {candidate.candidate_id}",
-            f"  sources: {schema.candidate_source_label(candidate)}",
-            f"  title: {candidate.title[:220]}",
-            f"  snippet: {candidate.snippet[:420]}",
-            f"  date: {schema.candidate_best_published_at(candidate) or 'unknown'}",
-            f"  matched_subqueries: {', '.join(candidate.subquery_labels)}",
-        ])
+        "\n".join(
+            [
+                f"- candidate_id: {candidate.candidate_id}",
+                f"  sources: {schema.candidate_source_label(candidate)}",
+                f"  title: {candidate.title[:220]}",
+                f"  snippet: {candidate.snippet[:420]}",
+                f"  date: {schema.candidate_best_published_at(candidate) or 'unknown'}",
+                f"  matched_subqueries: {', '.join(candidate.subquery_labels)}",
+            ]
+        )
         for candidate in candidates
     )
     grounding_hint = ""
@@ -397,13 +399,15 @@ def score_fun(
 
 def _build_fun_prompt(topic: str, candidates: list[schema.Candidate]) -> str:
     candidate_block = "\n".join(
-        "\n".join([
-            f"- candidate_id: {c.candidate_id}",
-            f"  source: {schema.candidate_source_label(c)}",
-            f"  title: {c.title[:220]}",
-            f"  snippet: {c.snippet[:420]}",
-            f"  comments: {_extract_comment_text(c)[:300]}",
-        ])
+        "\n".join(
+            [
+                f"- candidate_id: {c.candidate_id}",
+                f"  source: {schema.candidate_source_label(c)}",
+                f"  title: {c.title[:220]}",
+                f"  snippet: {c.snippet[:420]}",
+                f"  comments: {_extract_comment_text(c)[:300]}",
+            ]
+        )
         for c in candidates
     )
     return (

@@ -26,6 +26,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional
+from datetime import UTC
 
 
 USER_AGENT = (
@@ -56,7 +57,7 @@ def _url_encode(text: str) -> str:
     return urllib.parse.quote_plus(text)
 
 
-def _fetch_json(url: str, timeout: int = 15) -> Optional[Dict[str, Any]]:
+def _fetch_json(url: str, timeout: int = 15) -> Optional[dict[str, Any]]:
     """Fetch JSON from a URL with retry on 429 and error handling.
 
     Returns parsed JSON dict, or None on unrecoverable failure.
@@ -125,7 +126,7 @@ def _fetch_json(url: str, timeout: int = 15) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _parse_posts(data: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _parse_posts(data: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
     """Parse Reddit listing JSON into normalized post dicts."""
     if not data:
         return []
@@ -153,34 +154,36 @@ def _parse_posts(data: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
             try:
                 from datetime import datetime, timezone
 
-                dt = datetime.fromtimestamp(float(created_utc), tz=timezone.utc)
+                dt = datetime.fromtimestamp(float(created_utc), tz=UTC)
                 date_str = dt.strftime("%Y-%m-%d")
             except (ValueError, TypeError, OSError):
                 pass
 
-        posts.append({
-            "id": "",  # Will be assigned after dedup
-            "title": str(post.get("title", "")).strip(),
-            "url": f"https://www.reddit.com{permalink}",
-            "score": score,
-            "num_comments": num_comments,
-            "subreddit": str(post.get("subreddit", "")).strip(),
-            "created_utc": float(created_utc) if created_utc else None,
-            "author": author
-            if author not in ("[deleted]", "[removed]")
-            else "[deleted]",
-            "selftext": selftext[:500] if selftext else "",
-            # Normalized fields matching ScrapeCreators output
-            "date": date_str,
-            "engagement": {
+        posts.append(
+            {
+                "id": "",  # Will be assigned after dedup
+                "title": str(post.get("title", "")).strip(),
+                "url": f"https://www.reddit.com{permalink}",
                 "score": score,
                 "num_comments": num_comments,
-                "upvote_ratio": post.get("upvote_ratio"),
-            },
-            "relevance": _compute_relevance(score, num_comments),
-            "why_relevant": "Reddit public search",
-            "metadata": {},
-        })
+                "subreddit": str(post.get("subreddit", "")).strip(),
+                "created_utc": float(created_utc) if created_utc else None,
+                "author": author
+                if author not in ("[deleted]", "[removed]")
+                else "[deleted]",
+                "selftext": selftext[:500] if selftext else "",
+                # Normalized fields matching ScrapeCreators output
+                "date": date_str,
+                "engagement": {
+                    "score": score,
+                    "num_comments": num_comments,
+                    "upvote_ratio": post.get("upvote_ratio"),
+                },
+                "relevance": _compute_relevance(score, num_comments),
+                "why_relevant": "Reddit public search",
+                "metadata": {},
+            }
+        )
 
     return posts
 
@@ -197,7 +200,7 @@ def search(
     depth: str = "default",
     subreddit: Optional[str] = None,
     timeout: int = 15,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Search Reddit via the public JSON endpoint.
 
     Args:
@@ -246,8 +249,8 @@ def search_reddit_public(
     from_date: str,
     to_date: str,
     depth: str = "default",
-    subreddits: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    subreddits: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
     """High-level free Reddit search + enrichment (keyless).
 
     Thin compatibility shim over the tiered keyless pipeline: the legacy

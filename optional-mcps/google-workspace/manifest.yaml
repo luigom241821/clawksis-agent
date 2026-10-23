@@ -18,7 +18,7 @@ transport:
   type: stdio
   command: "uvx"
   args:
-    - "workspace-mcp@latest"
+    - "workspace-mcp@1.22.0"  # exact pin (supply-chain policy); bump deliberately
     - "--tool-tier"
     - "core"
   version: "1.22.0"  # tested reference (PyPI package `workspace-mcp`)

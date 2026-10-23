@@ -6,6 +6,10 @@ description: "A practical guide to connecting MCP servers to Clawksis, filtering
 
 # Use MCP with Clawksis
 
+Python dependency commands on this page use a
+[PM-prepared source checkout](../reference/package-management.md#developer-workflow).
+After a dependency change, reactivate the checkout and restart Clawksis.
+
 This guide shows how to actually use MCP with Clawksis in day-to-day workflows.
 
 If the feature page explains what MCP is, this guide is about how to get value from it quickly and safely.
@@ -37,13 +41,13 @@ That last part matters. Good MCP usage is not just “connect everything.” It 
 
 ## Step 1: install MCP support
 
-If you installed Clawksis with the standard install script, MCP support is already included (the installer runs `uv pip install -e ".[all]"`).
+If you installed Clawksis with the standard install script, MCP support is already included. PM selects the declared `all` extra.
 
 If you installed without extras and need to add MCP separately:
 
 ```bash
 cd ~/.clawksis/clawksis-agent
-uv pip install -e ".[mcp]"
+python -c "import pm; pm.sync_venv(['mcp'], explicit=True)"
 ```
 
 For npm-based servers, make sure Node.js and `npx` are available.
@@ -83,6 +87,11 @@ You can verify MCP in a few ways:
 - ask Clawksis what tools it has available
 - use `/reload-mcp` after config changes
 - check logs if the server failed to connect
+- run `clawk mcp test <server>` from a shell — it connects, lists the
+  discovered tools, and exits `0` on a completed connect, `1` when the
+  connection fails, and `3` when the server is not in your config (`2` is
+  argparse's usage error), so health probes and cron watchdogs can branch on
+  `$?` instead of parsing the output
 
 A practical test prompt:
 
@@ -536,6 +545,6 @@ Not-great first servers:
 
 ## Related docs
 
-- [MCP (Model Context Protocol)](/user-guide/features/mcp)
-- [FAQ](/reference/faq)
-- [Slash Commands](/reference/slash-commands)
+- [MCP (Model Context Protocol)](../user-guide/features/mcp.md)
+- [FAQ](../reference/faq.md)
+- [Slash Commands](../reference/slash-commands.md)

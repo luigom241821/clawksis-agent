@@ -1,6 +1,6 @@
 ---
 name: doc-coauthoring
-description: "Co-author docs/proposals/specs: context → refine → reader-test. Trigger on write a doc/proposal/spec/PRD/RFC."
+description: "Co-author docs, proposals, specs, PRDs and RFCs."
 version: 1.0.0
 author: Anthropic (ported by Clawksis)
 license: Apache-2.0
@@ -9,7 +9,7 @@ metadata:
   clawk:
     tags: [Documents, Writing, Proposals, Specs, Workflow, Productivity]
     homepage: https://github.com/anthropics/skills/tree/main/skills/doc-coauthoring
-    related_skills: [docx, pdf, ocr-and-documents]
+    related_skills: [docx, pdf]
 ---
 
 <!-- Body ported unmodified from anthropics/skills @ main (Apache-2.0). -->

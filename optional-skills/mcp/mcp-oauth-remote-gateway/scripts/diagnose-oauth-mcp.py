@@ -124,7 +124,7 @@ def main():
         print(f"stored expires_at in {round((exp - time.time()) / 60)} min")
 
     # Step 1: stored token
-    ok, expired, status, txt = _mcp_initialize(mcp_url, tok["access_token"])
+    ok, expired, status, _txt = _mcp_initialize(mcp_url, tok["access_token"])
     print(f"[1] stored-token initialize -> HTTP {status} ok={ok} expired={expired}")
     if ok:
         print(
@@ -180,13 +180,15 @@ def main():
     if ok2:
         if args.write:
             new = dict(tok)
-            new.update({
-                "access_token": new_at,
-                "token_type": j.get("token_type", "Bearer"),
-                "expires_in": j.get("expires_in", tok.get("expires_in")),
-                "scope": j.get("scope", tok.get("scope")),
-                "expires_at": time.time() + float(j.get("expires_in", 3600)),
-            })
+            new.update(
+                {
+                    "access_token": new_at,
+                    "token_type": j.get("token_type", "Bearer"),
+                    "expires_in": j.get("expires_in", tok.get("expires_in")),
+                    "scope": j.get("scope", tok.get("scope")),
+                    "expires_at": time.time() + float(j.get("expires_in", 3600)),
+                }
+            )
             if j.get("refresh_token"):
                 new["refresh_token"] = j["refresh_token"]
             tmp = tpath + ".tmp"

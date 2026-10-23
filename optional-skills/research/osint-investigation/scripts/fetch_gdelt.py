@@ -18,7 +18,7 @@ import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _http import get_json  # noqa: E402
+from _http import get_json
 
 BASE = "https://api.gdeltproject.org/api/v2/doc/doc"
 
@@ -86,7 +86,7 @@ def fetch(
             print(f"GDELT error: {e}", file=sys.stderr)
             payload = {}
             break
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"GDELT error: {e}", file=sys.stderr)
             payload = {}
             break
@@ -99,16 +99,18 @@ def fetch(
             # GDELT format: 20260319T083000Z → 2026-03-19 08:30:00Z
             if len(seen) == 16 and "T" in seen:
                 seen = f"{seen[0:4]}-{seen[4:6]}-{seen[6:8]} {seen[9:11]}:{seen[11:13]}:{seen[13:15]}Z"
-            rows.append({
-                "title": (a.get("title") or "").replace("\n", " ").strip(),
-                "url": a.get("url") or "",
-                "seen_date": seen,
-                "domain": a.get("domain") or "",
-                "language": a.get("language") or "",
-                "source_country": a.get("sourcecountry") or "",
-                "tone": str(a.get("tone") or ""),
-                "social_image": a.get("socialimage") or "",
-            })
+            rows.append(
+                {
+                    "title": (a.get("title") or "").replace("\n", " ").strip(),
+                    "url": a.get("url") or "",
+                    "seen_date": seen,
+                    "domain": a.get("domain") or "",
+                    "language": a.get("language") or "",
+                    "source_country": a.get("sourcecountry") or "",
+                    "tone": str(a.get("tone") or ""),
+                    "social_image": a.get("socialimage") or "",
+                }
+            )
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as fh:

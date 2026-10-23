@@ -4,10 +4,10 @@
 
 # Clawksis ☤
 <p align="center">
-  <a href="https://clawksis-agent.nousresearch.com/">Clawksis</a> | <a href="https://clawksis-agent.nousresearch.com/">Clawksis Desktop</a>
+  <a href="https://github.com/samuelgradientai-sys/clawksis-agent/">Clawksis</a> | <a href="https://github.com/samuelgradientai-sys/clawksis-agent/">Clawksis Desktop</a>
 </p>
 <p align="center">
-  <a href="https://clawksis-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-clawk--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentación"></a>
+  <a href="https://samuelgradientai-sys.github.io/clawksis-agent/"><img src="https://img.shields.io/badge/Docs-clawk--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentación"></a>
   <a href="https://discord.gg/NousResearch"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/Licencia-MIT-green?style=for-the-badge" alt="Licencia: MIT"></a>
   <a href="https://nousresearch.com"><img src="https://img.shields.io/badge/Creado%20por-Nous%20Research-blueviolet?style=for-the-badge" alt="Creado por Nous Research"></a>
@@ -34,10 +34,10 @@ Usa cualquier modelo que quieras — [Nous Portal](https://portal.nousresearch.c
 
 ## Instalación rápida
 
-### Linux, macOS, WSL2, Termux
+### Linux, macOS, WSL2
 
 ```bash
-curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
 ```
 
 ### Windows (nativo, PowerShell)
@@ -47,14 +47,15 @@ curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
 Ejecuta esto en PowerShell:
 
 ```powershell
-iex (irm https://clawksis-agent.nousresearch.com/install.ps1)
+iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)
 ```
 
-El instalador se encarga de todo: uv, Python 3.11, Node.js, ripgrep, ffmpeg, **y un Git Bash portátil** (MinGit, descomprimido en `%LOCALAPPDATA%\clawk\git` — no requiere administrador, completamente aislado de cualquier instalación de Git del sistema). Clawksis usa este Git Bash incluido para ejecutar comandos de shell.
+El instalador de código fuente usa PM para Python 3.14, Node.js, npm,
+ripgrep, FFmpeg y las dependencias de Python. Si falta Git, descarga el archivo
+verificado de Git for Windows en el almacén de Clawksis, sin reemplazar el Git
+del sistema. MSIX/App Installer es una distribución separada.
 
-Si ya tienes Git instalado, el instalador lo detecta y lo usa en su lugar. De lo contrario, una descarga de ~45MB de MinGit es todo lo que necesitas — no tocará ni interferirá con ningún Git del sistema.
-
-> **Android / Termux:** La ruta manual probada está documentada en la [guía de Termux](https://clawksis-agent.nousresearch.com/docs/getting-started/termux). En Termux, Clawksis instala el extra `.[termux]` curado porque el extra completo `.[all]` actualmente incluye dependencias de voz incompatibles con Android.
+> **Android / Termux:** Hay un paquete APT en pruebas para dispositivos aarch64. Incluye Python, Node.js y la TUI. Sigue la [guía de Termux](https://samuelgradientai-sys.github.io/clawksis-agent/getting-started/termux), no el script de instalación para escritorio y servidor.
 >
 > **Windows:** Windows nativo es totalmente compatible — el comando de PowerShell de arriba instala todo. Si prefieres usar WSL2, el comando de Linux también funciona allí. La instalación nativa de Windows se encuentra en `%LOCALAPPDATA%\clawk`; WSL2 instala en `~/.clawksis` como en Linux.
 
@@ -81,7 +82,7 @@ clawk update       # Actualiza a la última versión
 clawk doctor       # Diagnostica cualquier problema
 ```
 
-📖 **[Documentación completa →](https://clawksis-agent.nousresearch.com/docs/)**
+📖 **[Documentación completa →](https://samuelgradientai-sys.github.io/clawksis-agent/)**
 
 ---
 
@@ -90,7 +91,7 @@ clawk doctor       # Diagnostica cualquier problema
 Clawksis funciona con cualquier proveedor que quieras — eso no cambiará. Pero si prefieres no recopilar cinco claves API separadas para el modelo, búsqueda web, generación de imágenes, TTS y un navegador en la nube, **[Nous Portal](https://portal.nousresearch.com)** las cubre todas bajo una sola suscripción:
 
 - **Más de 300 modelos** — elige cualquiera con `/model <nombre>`
-- **Tool Gateway** — búsqueda web (Firecrawl), generación de imágenes (FAL), texto a voz (OpenAI), navegador en la nube (Browser Use), todo enrutado a través de tu suscripción. Sin cuentas adicionales.
+- **Tool Gateway** — búsqueda web, generación de imágenes (FAL), texto a voz (OpenAI), navegador en la nube (Browser Use), todo enrutado a través de tu suscripción. Sin cuentas adicionales.
 
 Un comando desde una instalación nueva:
 
@@ -98,7 +99,7 @@ Un comando desde una instalación nueva:
 clawk setup --portal
 ```
 
-Esto te autentica vía OAuth, establece Nous como tu proveedor y activa el Tool Gateway. Comprueba qué está conectado en cualquier momento con `clawk portal info`. Detalles completos en la [página de documentación del Tool Gateway](https://clawksis-agent.nousresearch.com/docs/user-guide/features/tool-gateway).
+Esto te autentica vía OAuth, establece Nous como tu proveedor y activa el Tool Gateway. Comprueba qué está conectado en cualquier momento con `clawk portal info`. Detalles completos en la [página de documentación del Tool Gateway](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/features/tool-gateway).
 
 Puedes seguir usando tus propias claves por herramienta cuando quieras — el gateway es por backend, no todo o nada.
 
@@ -120,31 +121,31 @@ Clawksis tiene dos puntos de entrada: inicia la interfaz de terminal con `clawk`
 | Interrumpir trabajo actual          | `Ctrl+C` o enviar un nuevo mensaje            | `/stop` o enviar un nuevo mensaje                                                 |
 | Estado específico de plataforma     | `/platforms`                                  | `/status`, `/sethome`                                                             |
 
-Para las listas de comandos completas, consulta la [guía de CLI](https://clawksis-agent.nousresearch.com/docs/user-guide/cli) y la [guía del Gateway de Mensajería](https://clawksis-agent.nousresearch.com/docs/user-guide/messaging).
+Para las listas de comandos completas, consulta la [guía de CLI](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/cli) y la [guía del Gateway de Mensajería](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging).
 
 ---
 
 ## Documentación
 
-Toda la documentación está en **[clawksis-agent.nousresearch.com/docs](https://clawksis-agent.nousresearch.com/docs/)**:
+Toda la documentación está en **[clawksis-agent.nousresearch.com/docs](https://samuelgradientai-sys.github.io/clawksis-agent/)**:
 
 | Sección                                                                                             | Contenido                                                    |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [Inicio rápido](https://clawksis-agent.nousresearch.com/docs/getting-started/quickstart)              | Instalar → configurar → primera conversación en 2 minutos   |
-| [Uso de CLI](https://clawksis-agent.nousresearch.com/docs/user-guide/cli)                             | Comandos, atajos de teclado, personalidades, sesiones        |
-| [Configuración](https://clawksis-agent.nousresearch.com/docs/user-guide/configuration)               | Archivo de configuración, proveedores, modelos, todas las opciones |
-| [Gateway de Mensajería](https://clawksis-agent.nousresearch.com/docs/user-guide/messaging)           | Telegram, Discord, Slack, WhatsApp, Signal, Home Assistant   |
-| [Seguridad](https://clawksis-agent.nousresearch.com/docs/user-guide/security)                        | Aprobación de comandos, emparejamiento por DM, aislamiento en contenedor |
-| [Herramientas y Toolsets](https://clawksis-agent.nousresearch.com/docs/user-guide/features/tools)   | Más de 40 herramientas, sistema de toolsets, backends de terminal |
-| [Sistema de Habilidades](https://clawksis-agent.nousresearch.com/docs/user-guide/features/skills)   | Memoria procedimental, Skills Hub, creación de habilidades   |
-| [Memoria](https://clawksis-agent.nousresearch.com/docs/user-guide/features/memory)                   | Memoria persistente, perfiles de usuario, mejores prácticas  |
-| [Integración MCP](https://clawksis-agent.nousresearch.com/docs/user-guide/features/mcp)              | Conecta cualquier servidor MCP para capacidades extendidas   |
-| [Programación Cron](https://clawksis-agent.nousresearch.com/docs/user-guide/features/cron)           | Tareas programadas con entrega a plataforma                  |
-| [Archivos de Contexto](https://clawksis-agent.nousresearch.com/docs/user-guide/features/context-files) | Contexto de proyecto que da forma a cada conversación      |
-| [Arquitectura](https://clawksis-agent.nousresearch.com/docs/developer-guide/architecture)            | Estructura del proyecto, bucle del agente, clases principales |
-| [Contribuir](https://clawksis-agent.nousresearch.com/docs/developer-guide/contributing)              | Configuración de desarrollo, proceso de PR, estilo de código |
-| [Referencia de CLI](https://clawksis-agent.nousresearch.com/docs/reference/cli-commands)             | Todos los comandos y flags                                   |
-| [Variables de Entorno](https://clawksis-agent.nousresearch.com/docs/reference/environment-variables) | Referencia completa de variables de entorno                  |
+| [Inicio rápido](https://samuelgradientai-sys.github.io/clawksis-agent/getting-started/quickstart)              | Instalar → configurar → primera conversación en 2 minutos   |
+| [Uso de CLI](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/cli)                             | Comandos, atajos de teclado, personalidades, sesiones        |
+| [Configuración](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/configuration)               | Archivo de configuración, proveedores, modelos, todas las opciones |
+| [Gateway de Mensajería](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging)           | Telegram, Discord, Slack, WhatsApp, Signal, Home Assistant   |
+| [Seguridad](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/security)                        | Aprobación de comandos, emparejamiento por DM, aislamiento en contenedor |
+| [Herramientas y Toolsets](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/features/tools)   | Más de 40 herramientas, sistema de toolsets, backends de terminal |
+| [Sistema de Habilidades](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/features/skills)   | Memoria procedimental, Skills Hub, creación de habilidades   |
+| [Memoria](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/features/memory)                   | Memoria persistente, perfiles de usuario, mejores prácticas  |
+| [Integración MCP](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/features/mcp)              | Conecta cualquier servidor MCP para capacidades extendidas   |
+| [Programación Cron](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/features/cron)           | Tareas programadas con entrega a plataforma                  |
+| [Archivos de Contexto](https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/features/context-files) | Contexto de proyecto que da forma a cada conversación      |
+| [Arquitectura](https://samuelgradientai-sys.github.io/clawksis-agent/developer-guide/architecture)            | Estructura del proyecto, bucle del agente, clases principales |
+| [Contribuir](https://samuelgradientai-sys.github.io/clawksis-agent/developer-guide/contributing)              | Configuración de desarrollo, proceso de PR, estilo de código |
+| [Referencia de CLI](https://samuelgradientai-sys.github.io/clawksis-agent/reference/cli-commands)             | Todos los comandos y flags                                   |
+| [Variables de Entorno](https://samuelgradientai-sys.github.io/clawksis-agent/reference/environment-variables) | Referencia completa de variables de entorno                  |
 
 ---
 
@@ -157,6 +158,7 @@ Si vienes de OpenClaw, Clawksis puede importar automáticamente tu configuració
 **En cualquier momento después de instalar:**
 
 ```bash
+clawk plugins install agent-importers  # una vez: OpenClaw, Claude Code, Codex y Cursor
 clawk claw migrate              # Migración interactiva (preset completo)
 clawk claw migrate --dry-run    # Vista previa de qué se migraría
 clawk claw migrate --preset user-data   # Migrar sin secretos
@@ -182,24 +184,8 @@ Consulta `clawk claw migrate --help` para todas las opciones, o usa la habilidad
 
 ¡Las contribuciones son bienvenidas! Consulta la [Guía de Contribución](CONTRIBUTING.es.md) para la configuración del desarrollo, el estilo de código y el proceso de PR.
 
-Inicio rápido para colaboradores — clona y comienza con `setup-clawk.sh`:
-
-```bash
-git clone https://github.com/samuelgradientai-sys/clawksis-agent.git
-cd clawksis-agent
-./setup-clawk.sh     # instala uv, crea venv, instala .[all], enlaza ~/.local/bin/clawk
-./clawk              # detecta automáticamente el venv, no necesitas hacer `source` primero
-```
-
-Ruta manual (equivalente a lo anterior):
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv venv .venv --python 3.11
-source .venv/bin/activate
-uv pip install -e ".[all,dev]"
-scripts/run_tests.sh
-```
+La configuración de PM, el entorno de pruebas con Python 3.14 y los comandos
+de verificación están en [Development Setup](CONTRIBUTING.md#development-setup).
 
 ---
 
@@ -209,7 +195,7 @@ scripts/run_tests.sh
 - 📚 [Skills Hub](https://agentskills.io)
 - 🐛 [Issues](https://github.com/samuelgradientai-sys/clawksis-agent/issues)
 - 🔌 [computer-use-linux](https://github.com/avifenesh/computer-use-linux) — Servidor MCP de control de escritorio Linux para Clawksis y otros hosts MCP, con árboles de accesibilidad AT-SPI, entrada Wayland/X11, capturas de pantalla y targeting de ventanas del compositor.
-- 🔌 [ClawksisClaw](https://github.com/AaronWong1999/clawkclaw) — Puente WeChat comunitario: Ejecuta Clawksis y OpenClaw en la misma cuenta de WeChat.
+- 🔌 [ClawksisClaw](https://github.com/AaronWong1999/hermesclaw) — Puente WeChat comunitario: Ejecuta Clawksis y OpenClaw en la misma cuenta de WeChat.
 
 ---
 

@@ -1,64 +1,33 @@
 ---
-
 title: "Architecture Diagram — Dark-themed SVG architecture/cloud/infra diagrams as HTML"
-
 sidebar_label: "Architecture Diagram"
-
 description: "Dark-themed SVG architecture/cloud/infra diagrams as HTML"
-
 ---
-
-
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-
-
 # Architecture Diagram
-
-
 
 Dark-themed SVG architecture/cloud/infra diagrams as HTML.
 
-
-
 ## Skill metadata
 
-
-
 | | |
-
 |---|---|
-
 | Source | Bundled (installed by default) |
-
 | Path | `skills/creative/architecture-diagram` |
-
 | Version | `1.0.0` |
-
 | Author | Cocoon AI (hello@cocoon-ai.com), ported by Clawksis |
-
 | License | MIT |
-
 | Platforms | linux, macos, windows |
-
 | Tags | `architecture`, `diagrams`, `SVG`, `HTML`, `visualization`, `infrastructure`, `cloud` |
-
-| Related skills | [`concept-diagrams`](/docs/user-guide/skills/optional/creative/creative-concept-diagrams), [`excalidraw`](/docs/user-guide/skills/bundled/creative/creative-excalidraw) |
-
-
+| Related skills | [`concept-diagrams`](../../optional/creative/creative-concept-diagrams.md), [`excalidraw`](../../optional/creative/creative-excalidraw.md) |
 
 ## Reference: full SKILL.md
 
-
-
 :::info
-
 The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-
 :::
-
-
 
 # Architecture Diagram Skill
 
@@ -327,4 +296,3 @@ skill_view(name="architecture-diagram", file_path="templates/template.html")
 
 
 The template contains working examples of every component type (frontend, backend, database, cloud, security), arrow styles (standard, dashed, curved), security groups, region boundaries, and the legend — use it as your structural reference when generating diagrams.
-

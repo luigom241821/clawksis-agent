@@ -1,6 +1,8 @@
 ---
 name: news-briefing-cron
-description: "Set up automated daily AI-news briefings delivered to Telegram via Clawksis cron. Covers the script+agent pattern (script fetches raw news via HTTP/RSS, agent formats with emojis and sections), TTS audio generation, model selection for tool-calling, user-preferred formatting, and cost optimization."
+description: "Schedule daily AI-news briefings to Telegram via cron."
+license: MIT
+platforms: [linux, macos, windows]
 version: 1.4.0
 author: Clawksis
 metadata:

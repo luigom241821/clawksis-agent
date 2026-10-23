@@ -44,7 +44,7 @@ const ENABLED = /^(?:1|true|yes|on)$/i.test((process.env.CLAWK_DEV_PERF ?? '').t
 
 const THRESHOLD_MS = Number(process.env.CLAWK_DEV_PERF_MS ?? '2') || 0
 
-const LOG_PATH = process.env.CLAWK_DEV_PERF_LOG?.trim() || join(homedir(), '.clawk', 'perf.log')
+const LOG_PATH = process.env.CLAWK_DEV_PERF_LOG?.trim() || join(homedir(), '.clawksis', 'perf.log')
 
 
 

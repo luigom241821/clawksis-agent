@@ -1,0 +1,32 @@
+import type { Translations } from './types'
+
+type ThreadCopy = Translations['assistant']['thread']
+
+// The error card's layer fallbacks (lib/error-surface-copy.ts): used when a failure code has no own entry.
+export const esErrorLayers: Pick<ThreadCopy, 'errorLayerBodies' | 'errorLayers'> = {
+  errorLayers: {
+    auth: 'Problema de inicio de sesión',
+    billing: 'Créditos agotados',
+    disk: 'Disco lleno',
+    endpoint: 'No se puede conectar con tu servidor de modelos',
+    gateway: 'Clawksis tuvo un problema',
+    generic: 'Clawksis no pudo terminar esta respuesta',
+    provider: 'El servicio de IA devolvió un error',
+    runtime: 'Clawksis tuvo un problema',
+    streaming: 'La respuesta se cortó'
+  },
+  errorLayerBodies: {
+    auth: 'El servicio de IA rechazó tu inicio de sesión. Revisa las credenciales de este proveedor y vuelve a enviar el mensaje.',
+    billing: 'Tu cuenta no tiene créditos para este proveedor. Recarga o cambia de proveedor y vuelve a enviarlo.',
+    disk: 'Tu disco está lleno, así que Clawksis no pudo guardar esta conversación. Libera espacio y reinténtalo.',
+    endpoint:
+      'Clawksis no puede conectar con tu servidor de modelos personalizado. Comprueba que esté en ejecución y vuelve a enviar el mensaje.',
+    gateway:
+      'Clawksis tuvo un problema interno al iniciar esta respuesta. Vuelve a enviar el mensaje; si sigue ocurriendo, envía un diagnóstico.',
+    generic: 'Algo salió mal mientras Clawksis respondía. Reinténtalo o copia los detalles si sigue ocurriendo.',
+    provider: 'El servicio de IA no pudo completar esta solicitud. Reinténtalo en un momento o cambia de proveedor.',
+    runtime:
+      'Clawksis tuvo un problema interno al iniciar esta respuesta. Vuelve a enviar el mensaje; si sigue ocurriendo, envía un diagnóstico.',
+    streaming: 'La conexión se cortó antes de que terminara la respuesta. Reinténtalo para enviarla de nuevo.'
+  }
+}

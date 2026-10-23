@@ -31,7 +31,7 @@ class _TokenBucket:
     correctly handles a single request larger than the per-minute capacity.
     """
 
-    __slots__ = ("capacity", "refill_per_sec", "tokens", "_last")
+    __slots__ = ("_last", "capacity", "refill_per_sec", "tokens")
 
     def __init__(self, capacity: float, now: float) -> None:
         self.capacity = max(0.0, capacity)
@@ -44,8 +44,7 @@ class _TokenBucket:
         # Preserve the current "used" fraction loosely: clamp tokens to the new cap.
         self.capacity = capacity
         self.refill_per_sec = capacity / _WINDOW_SECONDS if capacity else 0.0
-        if self.tokens > capacity:
-            self.tokens = capacity
+        self.tokens = min(self.tokens, capacity)
         self._last = now
 
     def _refill(self, now: float) -> None:

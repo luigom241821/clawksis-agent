@@ -1,8 +1,4 @@
-"""``clawk tools`` subcommand parser.
-
-Extracted from ``clawk_cli/main.py:main()`` (god-file Phase 2 follow-up).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk tools`` subcommand parser."""
 
 from __future__ import annotations
 
@@ -14,12 +10,10 @@ def build_tools_parser(subparsers, *, cmd_tools: Callable) -> None:
     tools_parser = subparsers.add_parser(
         "tools",
         help="Configure which tools are enabled per platform",
-        description=(
-            "Enable, disable, or list tools for CLI, Telegram, Discord, etc.\n\n"
-            "Built-in toolsets use plain names (e.g. web, memory).\n"
-            "MCP tools use server:tool notation (e.g. github:create_issue).\n\n"
-            "Run 'clawk tools' with no subcommand for the interactive configuration UI."
-        ),
+        description="Enable, disable, or list tools for CLI, Telegram, Discord, etc.\n\n"
+        "Built-in toolsets use plain names (e.g. web, memory).\n"
+        "MCP tools use server:tool notation (e.g. github:create_issue).\n\n"
+        "Run 'clawk tools' with no subcommand for the interactive configuration UI.",
     )
     tools_parser.add_argument(
         "--summary",
@@ -28,21 +22,15 @@ def build_tools_parser(subparsers, *, cmd_tools: Callable) -> None:
     )
     tools_sub = tools_parser.add_subparsers(dest="tools_action")
 
-    # clawk tools list [--platform cli]
     tools_list_p = tools_sub.add_parser(
-        "list",
-        help="Show all tools and their enabled/disabled status",
+        "list", help="Show all tools and their enabled/disabled status"
     )
     tools_list_p.add_argument(
-        "--platform",
-        default="cli",
-        help="Platform to show (default: cli)",
+        "--platform", default="cli", help="Platform to show (default: cli)"
     )
 
-    # clawk tools disable <name...> [--platform cli]
     tools_disable_p = tools_sub.add_parser(
-        "disable",
-        help="Disable toolsets or MCP tools",
+        "disable", help="Disable toolsets or MCP tools"
     )
     tools_disable_p.add_argument(
         "names",
@@ -51,16 +39,10 @@ def build_tools_parser(subparsers, *, cmd_tools: Callable) -> None:
         help="Toolset name (e.g. web) or MCP tool in server:tool form",
     )
     tools_disable_p.add_argument(
-        "--platform",
-        default="cli",
-        help="Platform to apply to (default: cli)",
+        "--platform", default="cli", help="Platform to apply to (default: cli)"
     )
 
-    # clawk tools enable <name...> [--platform cli]
-    tools_enable_p = tools_sub.add_parser(
-        "enable",
-        help="Enable toolsets or MCP tools",
-    )
+    tools_enable_p = tools_sub.add_parser("enable", help="Enable toolsets or MCP tools")
     tools_enable_p.add_argument(
         "names",
         nargs="+",
@@ -68,24 +50,19 @@ def build_tools_parser(subparsers, *, cmd_tools: Callable) -> None:
         help="Toolset name or MCP tool in server:tool form",
     )
     tools_enable_p.add_argument(
-        "--platform",
-        default="cli",
-        help="Platform to apply to (default: cli)",
+        "--platform", default="cli", help="Platform to apply to (default: cli)"
     )
 
-    # clawk tools post-setup <key>
     tools_postsetup_p = tools_sub.add_parser(
         "post-setup",
         help="Run a provider's post-setup install hook (npm/pip/binary)",
-        description=(
-            "Run the install/bootstrap hook a tool backend declares — the\n"
-            "same step `clawk tools` runs after you pick a provider that\n"
-            "needs extra dependencies (browser Chromium, Camofox, cua-driver,\n"
-            "KittenTTS/Piper, ddgs, Spotify, Langfuse, xAI). Stable,\n"
-            "non-interactive target the dashboard spawns to drive backend\n"
-            "setup. Keys: agent_browser, camofox, cua_driver, kittentts,\n"
-            "piper, ddgs, spotify, langfuse, xai_grok."
-        ),
+        description="Run the install/bootstrap hook a tool backend declares — the\n"
+        "same step `clawk tools` runs after you pick a provider that\n"
+        "needs extra dependencies (browser Chromium, Camofox, cua-driver,\n"
+        "KittenTTS/Piper, ddgs, xAI, Codex). Stable,\n"
+        "non-interactive target the dashboard spawns to drive backend\n"
+        "setup. Keys: agent_browser, camofox, cua_driver, kittentts,\n"
+        "piper, ddgs, xai_grok, openai_codex.",
     )
     tools_postsetup_p.add_argument(
         "post_setup_key",

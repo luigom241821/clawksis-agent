@@ -142,7 +142,7 @@ _NETWORK_FAIL_SIGNALS = (
 )
 
 
-def _scrapling_cmd() -> Optional[List[str]]:
+def _scrapling_cmd() -> Optional[list[str]]:
     """Return the base command to invoke the scrapling CLI, or None if absent."""
     override = os.environ.get("SCRAPLING_BIN")
     if override and (shutil.which(override) or Path(override).exists()):
@@ -250,7 +250,7 @@ def _network_failure_reason(stderr: Optional[str]) -> Optional[str]:
 
 
 def _run_one(
-    base: List[str],
+    base: list[str],
     subcmd: str,
     url: str,
     ext: str,
@@ -258,7 +258,7 @@ def _run_one(
     wait_selector: Optional[str],
     proxy: Optional[str],
     timeout_s: int,
-) -> Tuple[bool, str, str, Optional[int]]:
+) -> tuple[bool, str, str, Optional[int]]:
     """Run one `scrapling extract <subcmd>`.
 
     Returns ``(ran_ok, content, stderr, returncode)`` where ``returncode`` is
@@ -293,7 +293,12 @@ def _run_one(
             cmd += ["--solve-cloudflare"]
         try:
             proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=timeout_s
+                cmd,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             return False, "", f"timed out after {timeout_s}s", None
@@ -361,7 +366,7 @@ async def _handle_scrape(args, **kw):
 
     ladder = _AUTO_LADDER if mode == "auto" else [mode]
 
-    attempts: List[str] = []
+    attempts: list[str] = []
     best_content = ""
     best_status = "empty"
     last_stderr = ""

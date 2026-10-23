@@ -86,10 +86,14 @@ def test_bedrock_stream_interrupt_not_swallowed_post_worker():
             "agent.bedrock_adapter.is_streaming_access_denied_error", return_value=False
         ),
         patch("agent.bedrock_adapter.invalidate_runtime_client", lambda *a, **k: None),
+        patch.object(cch, "_record_interrupted_provider_wait") as record_wait,
     ):
         api_kwargs = {"__bedrock_region__": "us-east-1", "__bedrock_converse__": True}
         with pytest.raises(InterruptedError):
             cch.interruptible_streaming_api_call(agent, api_kwargs)
+
+    record_wait.assert_called_once()
+    assert record_wait.call_args.kwargs["response_started"] is False
 
 
 def test_bedrock_stream_returns_normally_when_not_interrupted():
@@ -99,7 +103,21 @@ def test_bedrock_stream_returns_normally_when_not_interrupted():
     agent._interrupt_requested = False
 
     resp = SimpleNamespace(choices=[], usage=None, stop_reason="end_turn")
-    fake_client = SimpleNamespace(converse_stream=lambda **kw: {"stream": []})
+
+    class ProviderStream:
+        def __init__(self):
+            self.closed = False
+
+        def __iter__(self):
+            return iter(())
+
+        def close(self):
+            self.closed = True
+
+    provider_stream = ProviderStream()
+    fake_client = SimpleNamespace(
+        converse_stream=lambda **kw: {"stream": provider_stream}
+    )
 
     with (
         patch(
@@ -121,3 +139,4 @@ def test_bedrock_stream_returns_normally_when_not_interrupted():
         api_kwargs = {"__bedrock_region__": "us-east-1", "__bedrock_converse__": True}
         out = cch.interruptible_streaming_api_call(agent, api_kwargs)
         assert out is resp
+        assert provider_stream.closed is True

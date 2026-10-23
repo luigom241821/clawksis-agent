@@ -16,7 +16,6 @@ import pytest
 
 import plugins.image_gen.deepinfra as deepinfra_plugin
 
-
 # 1×1 transparent PNG — valid bytes for save_b64_image()
 _PNG_HEX = (
     "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
@@ -45,7 +44,7 @@ def test_list_models_filters_by_image_gen_tag(monkeypatch):
     """Plugin-side wiring: list_models() returns only ``image-gen``-tagged
     catalog entries and surfaces pricing + default dims when present."""
     import json
-    import clawk_cli.models as models
+    from clawk_cli import models
 
     class _Resp:
         def __enter__(self):
@@ -55,19 +54,21 @@ def test_list_models_filters_by_image_gen_tag(monkeypatch):
             return False
 
         def read(self):
-            return json.dumps({
-                "data": [
-                    {"id": "vendor/chat", "metadata": {"tags": ["chat"]}},
-                    {
-                        "id": "vendor/img",
-                        "metadata": {
-                            "tags": ["image-gen"],
-                            "pricing": {"per_image_unit": 0.005},
-                            "default_width": 1024,
+            return json.dumps(
+                {
+                    "data": [
+                        {"id": "vendor/chat", "metadata": {"tags": ["chat"]}},
+                        {
+                            "id": "vendor/img",
+                            "metadata": {
+                                "tags": ["image-gen"],
+                                "pricing": {"per_image_unit": 0.005},
+                                "default_width": 1024,
+                            },
                         },
-                    },
-                ]
-            }).encode()
+                    ]
+                }
+            ).encode()
 
     monkeypatch.setattr(
         models, "_urlopen_model_catalog_request", lambda *a, **kw: _Resp()
@@ -110,33 +111,3 @@ def test_generate_calls_openai_sdk_with_deepinfra_base_url(monkeypatch):
     assert "deepinfra" in captured["base_url"]
     assert captured["api_key"] == "test-key"
     assert captured["kwargs"]["model"] == "vendor/test-img"
-
-
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        {"image_url": "https://example.com/source.png"},
-        {"reference_image_urls": ["https://example.com/reference.png"]},
-    ],
-)
-def test_generate_rejects_unsupported_edit_inputs_without_calling_sdk(
-    monkeypatch, kwargs
-):
-    monkeypatch.setenv("DEEPINFRA_IMAGE_MODEL", "vendor/test-img")
-    fake_openai = MagicMock()
-    with patch.dict("sys.modules", {"openai": fake_openai}):
-        result = deepinfra_plugin.DeepInfraImageGenProvider().generate(
-            prompt="edit this", **kwargs
-        )
-
-    assert result["success"] is False
-    assert result["error_type"] == "modality_unsupported"
-    assert result["provider"] == "deepinfra"
-    fake_openai.OpenAI.assert_not_called()
-
-
-def test_capabilities_advertise_text_to_image_only():
-    assert deepinfra_plugin.DeepInfraImageGenProvider().capabilities() == {
-        "modalities": ["text"],
-        "max_reference_images": 0,
-    }

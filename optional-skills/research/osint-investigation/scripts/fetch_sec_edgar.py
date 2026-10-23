@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _http import get, get_json  # noqa: E402
+from _http import get, get_json
 
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 COLUMNS = [
@@ -131,16 +131,18 @@ def fetch(
             if acc and pdoc
             else ""
         )
-        rows.append({
-            "cik": cik,
-            "company_name": name,
-            "form_type": ftype,
-            "filing_date": fdate,
-            "accession_number": acc,
-            "primary_document": pdoc,
-            "filing_url": filing_url,
-            "reporting_period": period[i] if i < len(period) else "",
-        })
+        rows.append(
+            {
+                "cik": cik,
+                "company_name": name,
+                "form_type": ftype,
+                "filing_date": fdate,
+                "accession_number": acc,
+                "primary_document": pdoc,
+                "filing_url": filing_url,
+                "reporting_period": period[i] if i < len(period) else "",
+            }
+        )
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as fh:

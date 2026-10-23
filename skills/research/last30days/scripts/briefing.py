@@ -14,7 +14,7 @@ Usage:
 import argparse
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -26,10 +26,10 @@ BRIEFS_DIR = Path.home() / ".local" / "share" / "last30days" / "briefs"
 
 
 def _parse_sqlite_utc_timestamp(value: str) -> datetime:
-    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
 
 
-def generate_daily(since: str = None) -> dict:
+def generate_daily(since: str | None = None) -> dict:
     """Generate daily briefing data.
 
     Returns structured data for the agent to synthesize into a beautiful briefing.
@@ -68,7 +68,7 @@ def generate_daily(since: str = None) -> dict:
         if last_run:
             try:
                 run_dt = _parse_sqlite_utc_timestamp(last_run)
-                hours_ago = (datetime.now(timezone.utc) - run_dt).total_seconds() / 3600
+                hours_ago = (datetime.now(UTC) - run_dt).total_seconds() / 3600
                 stale = hours_ago > 36  # Stale if > 36 hours
             except (ValueError, TypeError):
                 stale = True
@@ -185,15 +185,17 @@ def generate_weekly() -> dict:
         else:
             engagement_change = 100 if this_engagement > 0 else 0
 
-        weekly_topics.append({
-            "name": topic["name"],
-            "this_week_count": len(this_week),
-            "last_week_count": len(last_week),
-            "this_week_engagement": this_engagement,
-            "last_week_engagement": last_engagement,
-            "engagement_change_pct": round(engagement_change, 1),
-            "top_findings": this_week[:5],  # Top 5 by engagement (already sorted)
-        })
+        weekly_topics.append(
+            {
+                "name": topic["name"],
+                "this_week_count": len(this_week),
+                "last_week_count": len(last_week),
+                "this_week_engagement": this_engagement,
+                "last_week_engagement": last_engagement,
+                "engagement_change_pct": round(engagement_change, 1),
+                "top_findings": this_week[:5],  # Top 5 by engagement (already sorted)
+            }
+        )
 
     result = {
         "status": "ok",
@@ -207,7 +209,7 @@ def generate_weekly() -> dict:
     return result
 
 
-def show_briefing(date: str = None) -> dict:
+def show_briefing(date: str | None = None) -> dict:
     """Load a saved briefing by date."""
     if not date:
         date = datetime.now().strftime("%Y-%m-%d")

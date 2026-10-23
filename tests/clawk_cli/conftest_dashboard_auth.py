@@ -188,18 +188,22 @@ class StubAuthProvider(DashboardAuthProvider):
             org_id="stub-org-1",
             provider=self.name,
             expires_at=exp,
-            access_token=_sign({
-                "sub": "stub-user-1",
-                "email": "stub@example.test",
-                "name": "Stub User",
-                "org_id": "stub-org-1",
-                "exp": exp,
-            }),
-            refresh_token=_sign({
-                "sub": "stub-user-1",
-                "kind": "refresh",
-                "exp": now + 30 * 86400,
-            }),
+            access_token=_sign(
+                {
+                    "sub": "stub-user-1",
+                    "email": "stub@example.test",
+                    "name": "Stub User",
+                    "org_id": "stub-org-1",
+                    "exp": exp,
+                }
+            ),
+            refresh_token=_sign(
+                {
+                    "sub": "stub-user-1",
+                    "kind": "refresh",
+                    "exp": now + 30 * 86400,
+                }
+            ),
         )
 
     def verify_session(self, *, access_token: str):
@@ -248,18 +252,22 @@ class StubAuthProvider(DashboardAuthProvider):
             org_id="stub-org-1",
             provider=self.name,
             expires_at=exp,
-            access_token=_sign({
-                "sub": payload["sub"],
-                "email": "stub@example.test",
-                "name": "Stub User",
-                "org_id": "stub-org-1",
-                "exp": exp,
-            }),
-            refresh_token=_sign({
-                "sub": payload["sub"],
-                "kind": "refresh",
-                "exp": now + 30 * 86400,
-            }),
+            access_token=_sign(
+                {
+                    "sub": payload["sub"],
+                    "email": "stub@example.test",
+                    "name": "Stub User",
+                    "org_id": "stub-org-1",
+                    "exp": exp,
+                }
+            ),
+            refresh_token=_sign(
+                {
+                    "sub": payload["sub"],
+                    "kind": "refresh",
+                    "exp": now + 30 * 86400,
+                }
+            ),
         )
 
     def revoke_session(self, *, refresh_token: str) -> None:

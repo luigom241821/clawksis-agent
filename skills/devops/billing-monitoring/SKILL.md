@@ -1,6 +1,8 @@
 ---
 name: billing-monitoring
-description: "Monitor API provider balances and usage across DeepSeek, OpenAI, and OpenRouter. Set up daily billing reports delivered to Telegram via Clawksis cron. Covers the script+agent pattern, provider-specific billing APIs, known limitations (e.g. OpenAI project keys can't access org billing), and report formatting."
+description: "Monitor API credit balances with daily Telegram reports."
+license: MIT
+platforms: [linux, macos, windows]
 version: 1.0.0
 author: Clawksis
 tags: [billing, monitoring, deepseek, openai, openrouter, cron, costs, devops, telegram]

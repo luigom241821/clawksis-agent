@@ -13,9 +13,13 @@ Luego `git merge-file --diff3`. Si NO hay conflicto y el resultado compila y no
 introduce acople Nous nuevo, se aplica (con el EOL del fork). Si hay conflicto,
 no compila o mete Nous, se deja para subagente.
 
+Con --ruff los tres lados se formatean antes con `ruff format` (misma config),
+lo que neutraliza el reformateo masivo del fork; el resultado sale formateado.
+
 Uso:
   python tools/upstream/merge3.py --list lista.txt            # dry-run
   python tools/upstream/merge3.py --list lista.txt --apply
+  python tools/upstream/merge3.py --list lista.txt --ruff --apply
 """
 
 from __future__ import annotations
@@ -30,10 +34,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import json  # noqa: E402
-from sync import ROOT, STATE_FILE, match_eol, rebrand, show  # noqa: E402
-from mkbase import unmap_path  # noqa: E402
-from automerge import NOUS_ACTIVE  # noqa: E402
+import json
+from sync import ROOT, STATE_FILE, match_eol, rebrand, show
+from mkbase import unmap_path
+from automerge import NOUS_ACTIVE
 
 PENDING = HERE / "pending"
 
@@ -52,6 +56,20 @@ def denoise(b: bytes) -> bytes:
     b = b"\n".join(line.rstrip() for line in b.split(b"\n"))
     b = _BLANKS.sub(b"\n\n", b)
     return b
+
+
+def ruff_canon(b: bytes) -> bytes:
+    """Formatea con `ruff format` (config del repo) para que el reformateo
+    masivo del fork (ruff format sobre todo el arbol) no compita como cambio
+    real en el merge. Si ruff no puede (sintaxis invalida), devuelve el input."""
+    res = subprocess.run(
+        ["ruff", "format", "--stdin-filename", "x.py", "-"],
+        input=b.replace(b"\r\n", b"\n"),
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+    )
+    return res.stdout if res.returncode == 0 and res.stdout else b
 
 
 def compiles(b: bytes) -> bool:
@@ -87,6 +105,7 @@ def three_way(base: bytes, ours: bytes, theirs: bytes) -> tuple[bytes | None, in
                 str(dp / "t"),
             ],
             capture_output=True,
+            check=False,
         )
         if res.returncode < 0:
             return None, -1
@@ -99,7 +118,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", required=True)
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument(
+        "--ruff",
+        action="store_true",
+        help="canonicalizar base/ours/theirs con ruff format antes del merge",
+    )
     args = ap.parse_args()
+    canon = (lambda b: denoise(ruff_canon(b))) if args.ruff else denoise
 
     base_rev = merge_base()
     files = [
@@ -124,7 +149,7 @@ def main() -> int:
             skip.append(fp)
             continue
         ours = dest.read_bytes()
-        out, rc = three_way(denoise(base), denoise(ours), denoise(theirs))
+        out, rc = three_way(canon(base), canon(ours), canon(theirs))
         if out is None:
             skip.append(fp)
             continue

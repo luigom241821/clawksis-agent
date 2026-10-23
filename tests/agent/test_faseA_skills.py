@@ -48,7 +48,7 @@ class TestSkillSupportDirs:
 
 class TestCuratorConsolidateGate:
     def test_get_consolidate_default_off(self, monkeypatch):
-        monkeypatch.setattr(cur, "_load_config", lambda: {})
+        monkeypatch.setattr(cur, "_load_config", dict)
         assert cur.get_consolidate() is False
 
     def test_get_consolidate_config_on(self, monkeypatch):
@@ -66,7 +66,7 @@ class TestCuratorConsolidateGate:
                 "reactivated": 0,
             },
         )
-        monkeypatch.setattr(cur, "load_state", lambda: {})
+        monkeypatch.setattr(cur, "load_state", dict)
         monkeypatch.setattr(cur, "save_state", lambda s: None)
         import agent.curator_backup as cb
 

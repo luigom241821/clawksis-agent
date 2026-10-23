@@ -191,6 +191,7 @@ def test_symlinked_allowlisted_file_not_chowned(
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         combined = r.stdout + r.stderr
         assert "refusing" in combined and "auth.json" in combined, (
@@ -203,6 +204,7 @@ def test_symlinked_allowlisted_file_not_chowned(
                 ["docker", "rm", "-f", container_name],
                 capture_output=True,
                 timeout=10,
+                check=False,
             )
             subprocess.run(
                 [
@@ -219,6 +221,7 @@ def test_symlinked_allowlisted_file_not_chowned(
                 ],
                 capture_output=True,
                 timeout=15,
+                check=False,
             )
             try:
                 host_data.rmdir()

@@ -48,23 +48,25 @@ _DEFAULT_PROMPT = (
 # Colon-only schemes (no "//") that scrapegraphai can never fetch. Anything
 # else — including no scheme at all, or a "host:port" like example.com:8080 —
 # is treated as a bare host and gets https:// prepended as before.
-_NON_HTTP_SCHEMES = frozenset({
-    "mailto",
-    "javascript",
-    "data",
-    "tel",
-    "sms",
-    "file",
-    "about",
-    "blob",
-    "view-source",
-    "chrome",
-    "chrome-extension",
-    "vscode",
-    "ftp",
-    "ws",
-    "wss",
-})
+_NON_HTTP_SCHEMES = frozenset(
+    {
+        "mailto",
+        "javascript",
+        "data",
+        "tel",
+        "sms",
+        "file",
+        "about",
+        "blob",
+        "view-source",
+        "chrome",
+        "chrome-extension",
+        "vscode",
+        "ftp",
+        "ws",
+        "wss",
+    }
+)
 
 
 def _is_non_http_scheme(url: str) -> bool:
@@ -211,7 +213,7 @@ async def _handle_scrapegraph(args, **kw):
             urls=urls,
             error=classify_scrapegraph_error(TimeoutError("timed out")),
         )
-    except Exception as exc:  # noqa: BLE001 — classify and surface user-friendly error
+    except Exception as exc:
         logger.warning("scrapegraph extraction failed: %s", exc)
         hint = classify_scrapegraph_error(exc)
         return tool_result(ok=False, urls=urls, error=hint)

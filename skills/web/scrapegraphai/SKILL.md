@@ -1,8 +1,13 @@
 ---
 name: scrapegraphai
-description: "Extract structured data from web pages using ScrapeGraphAI + the agent's own LLM — no paid scraping API. Use when you need structured JSON from a page (tables, prices, listings, contacts, specs) described in plain language, and prefer local infra over Firecrawl/Browserbase. ES: extraer datos estructurados de una página web, convertir HTML a JSON, scraping con IA sin API paga."
+description: "Extract structured JSON from web pages with ScrapeGraphAI."
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 version: "1.9"
 metadata:
+  clawk:
+    tags: [scraping, web, extraction, json, llm, scrapegraphai]
   openclaw:
     emoji: "🧩"
     requires:
@@ -27,6 +32,13 @@ Two surfaces use this module:
 2. ScrapeGraphAI renders the page (headless Chromium for dynamic JS, simple HTTP for static)
 3. The agent's own LLM (via `build_llm_config()`) extracts structured data matching the prompt
 4. Returns clean JSON — no need for CSS selectors or parsing code
+
+## When to Use
+
+You need structured JSON from a page (tables, prices, listings, contacts, specs) described in
+plain language, using the agent's own LLM and local infra instead of a paid scraping API
+(Firecrawl/Browserbase). Spanish requests too: extraer datos estructurados de una página web,
+convertir HTML a JSON, scraping con IA sin API paga.
 
 ## When to use this vs `scrape` (Scrapling)
 

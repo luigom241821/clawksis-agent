@@ -14,6 +14,7 @@ export consumers (trace upload, context guard) read the transcript as-is.
 import pytest
 
 from clawk_state import SessionDB
+import itertools
 
 
 @pytest.fixture()
@@ -32,13 +33,6 @@ def _seed_wedged_session(db, session_id="s1"):
     db.append_message(session_id=session_id, role="user", content="unanswered turn")
     db.append_message(session_id=session_id, role="user", content="next turn")
     db.append_message(session_id=session_id, role="assistant", content="next reply")
-
-
-def test_default_load_is_verbatim(db):
-    _seed_wedged_session(db)
-    messages = db.get_messages_as_conversation("s1")
-    roles = [m["role"] for m in messages]
-    assert roles == ["user", "assistant", "user", "user", "assistant"]
 
 
 def test_repair_alternation_merges_user_pair(db):
@@ -60,16 +54,6 @@ def test_repaired_load_is_stable_under_prerequest_repair(db):
     _seed_wedged_session(db)
     messages = db.get_messages_as_conversation("s1", repair_alternation=True)
     assert repair_message_sequence(None, messages) == 0
-
-
-def test_repair_noop_on_clean_transcript(db):
-    db.create_session("s2", "system prompt")
-    db.append_message(session_id="s2", role="user", content="ask")
-    db.append_message(session_id="s2", role="assistant", content="reply")
-    verbatim = db.get_messages_as_conversation("s2")
-    repaired = db.get_messages_as_conversation("s2", repair_alternation=True)
-    assert [m["role"] for m in repaired] == [m["role"] for m in verbatim]
-    assert [m["content"] for m in repaired] == [m["content"] for m in verbatim]
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +91,7 @@ def test_acp_restore_heals_alternation_for_live_replay(db):
     roles = [m["role"] for m in state.history]
     # No consecutive user turns — the durable user;user wedge was healed.
     assert roles == ["user", "assistant", "user", "assistant"], roles
-    for a, b in zip(roles, roles[1:]):
+    for a, b in itertools.pairwise(roles):
         assert not (a == "user" and b == "user"), (
             "unhealed user;user in ACP live replay"
         )

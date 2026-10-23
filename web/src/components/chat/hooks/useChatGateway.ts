@@ -1045,6 +1045,7 @@ export function useChatGateway(): UseChatGatewayResult {
         sessionMessagesCacheRef.current.get(visualKey) ??
         sessionMessagesCacheRef.current.get(targetId);
 
+      // eslint-disable-next-line react-hooks/immutability -- monotonic switch counter in a ref
       const mySeq = ++switchSeqRef.current;
       setMessages(cachedMessages ? [...cachedMessages] : []);
       setBusy(false);
@@ -1180,7 +1181,7 @@ export function useChatGateway(): UseChatGatewayResult {
         // siendo liveSid para que prompt.submit/slash.exec no fallen.
         const infoForTokens = info as Record<string, unknown>;
 
-        let restoredTokensUsed =
+        const restoredTokensUsed =
           Number(
             infoForTokens.tokens_used ??
               infoForTokens.total_tokens ??
@@ -1188,7 +1189,7 @@ export function useChatGateway(): UseChatGatewayResult {
               0,
           ) || 0;
 
-        let restoredTokensMax =
+        const restoredTokensMax =
           Number(
             infoForTokens.tokens_max ??
               infoForTokens.context_max ??

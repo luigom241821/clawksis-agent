@@ -98,21 +98,25 @@ def cmd_remove(args):
     removed = store.remove_topic(args.topic)
     if not removed:
         print(
-            json.dumps({
-                "action": "not_found",
-                "topic": args.topic,
-                "message": f'Topic not found: "{args.topic}"',
-            })
+            json.dumps(
+                {
+                    "action": "not_found",
+                    "topic": args.topic,
+                    "message": f'Topic not found: "{args.topic}"',
+                }
+            )
         )
         return
     remaining = store.list_topics()
     print(
-        json.dumps({
-            "action": "removed",
-            "topic": args.topic,
-            "message": f'Removed "{args.topic}" from watchlist.',
-            "remaining": len(remaining),
-        })
+        json.dumps(
+            {
+                "action": "removed",
+                "topic": args.topic,
+                "message": f'Removed "{args.topic}" from watchlist.',
+                "remaining": len(remaining),
+            }
+        )
     )
 
 
@@ -160,11 +164,13 @@ def cmd_run_all(args):
     results = []
     for topic in topics:
         if store.get_daily_cost() >= budget_limit:
-            results.append({
-                "topic": topic["name"],
-                "status": "skipped",
-                "reason": f"Budget exceeded: ${store.get_daily_cost():.2f}/${budget_limit:.2f}",
-            })
+            results.append(
+                {
+                    "topic": topic["name"],
+                    "status": "skipped",
+                    "reason": f"Budget exceeded: ${store.get_daily_cost():.2f}/${budget_limit:.2f}",
+                }
+            )
             continue
         results.append(_run_topic(topic))
 
@@ -204,6 +210,7 @@ def _run_topic(topic: dict) -> dict:
             capture_output=True,
             text=True,
             timeout=300,
+            check=False,
         )
         duration = time.time() - start_time
         if result.returncode != 0:
@@ -269,21 +276,25 @@ def cmd_config(args):
     if args.key == "budget":
         store.set_setting("daily_budget", str(args.value))
         print(
-            json.dumps({
-                "action": "config",
-                "key": "daily_budget",
-                "value": str(args.value),
-            })
+            json.dumps(
+                {
+                    "action": "config",
+                    "key": "daily_budget",
+                    "value": str(args.value),
+                }
+            )
         )
         return
     if args.key == "delivery":
         store.set_setting("delivery_channel", str(args.value))
         print(
-            json.dumps({
-                "action": "config",
-                "key": "delivery_channel",
-                "value": str(args.value),
-            })
+            json.dumps(
+                {
+                    "action": "config",
+                    "key": "delivery_channel",
+                    "value": str(args.value),
+                }
+            )
         )
         return
     raise SystemExit(f"Unknown config key: {args.key}")

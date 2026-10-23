@@ -5,8 +5,8 @@ Usage:
     python generate_meme.py <template_id_or_name> <output_path> <text1> [text2] [text3] [text4]
 
 Example:
-    python generate_meme.py drake /tmp/meme.png "Writing tests" "Shipping to prod and hoping"
-    python generate_meme.py "Disaster Girl" /tmp/meme.png "Top text" "Bottom text"
+    python generate_meme.py drake ~/.clawksis/cache/scratch/meme.png "Writing tests" "Shipping to prod and hoping"
+    python generate_meme.py "Disaster Girl" ~/.clawksis/cache/scratch/meme.png "Top text" "Bottom text"
     python generate_meme.py --list                    # show curated templates
     python generate_meme.py --search "distracted"     # search all imgflip templates
 
@@ -88,13 +88,15 @@ def _default_fields(box_count: int) -> list:
     fields = []
     for i in range(box_count):
         y = 0.08 + (0.84 * i / (box_count - 1)) if box_count > 1 else 0.5
-        fields.append({
-            "name": f"text{i + 1}",
-            "x_pct": 0.5,
-            "y_pct": round(y, 2),
-            "w_pct": 0.90,
-            "align": "center",
-        })
+        fields.append(
+            {
+                "name": f"text{i + 1}",
+                "x_pct": 0.5,
+                "y_pct": round(y, 2),
+                "w_pct": 0.90,
+                "align": "center",
+            }
+        )
     return fields
 
 
@@ -206,12 +208,12 @@ def find_font(size: int) -> ImageFont.FreeTypeFont:
         if os.path.exists(path):
             try:
                 return ImageFont.truetype(path, size)
-            except (OSError, IOError):
+            except OSError:
                 continue
     # Last resort: Pillow default
     try:
         return ImageFont.truetype("DejaVuSans-Bold", size)
-    except (OSError, IOError):
+    except OSError:
         return ImageFont.load_default()
 
 
@@ -439,12 +441,9 @@ def search_templates(query: str):
         if query_lower in meme["name"].lower():
             slug = _slugify(meme["name"])
             has_custom = "curated" if slug in curated_slugs else "default"
-            matches.append((
-                meme["name"],
-                meme["id"],
-                meme.get("box_count", 2),
-                has_custom,
-            ))
+            matches.append(
+                (meme["name"], meme["id"], meme.get("box_count", 2), has_custom)
+            )
 
     if not matches:
         print(f"No templates found matching '{query}'")

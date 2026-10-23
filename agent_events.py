@@ -43,7 +43,7 @@ _RETENTION_ROWS = 4000
 _PRUNE_EVERY = 200  # rows written between prune passes
 _SUMMARY_MAX = 200
 
-_q: "queue.Queue[Optional[dict]]" = queue.Queue(maxsize=_QUEUE_MAX)
+_q: queue.Queue[Optional[dict]] = queue.Queue(maxsize=_QUEUE_MAX)
 _worker: Optional[threading.Thread] = None
 _worker_lock = threading.Lock()
 _disabled = os.environ.get("CLAWK_DISABLE_AGENT_EVENTS", "").strip().lower() in {
@@ -195,16 +195,18 @@ def emit_tool_start(
     context: Optional[str] = None,
 ) -> None:
     """Record that an agent began running a tool. Non-blocking, never raises."""
-    _enqueue({
-        "ts": time.time(),
-        "session_id": session_id or "",
-        "task_id": task_id,
-        "tool_call_id": tool_call_id,
-        "kind": "start",
-        "tool_name": tool_name or "",
-        "summary": _truncate(context),
-        "ok": None,
-    })
+    _enqueue(
+        {
+            "ts": time.time(),
+            "session_id": session_id or "",
+            "task_id": task_id,
+            "tool_call_id": tool_call_id,
+            "kind": "start",
+            "tool_name": tool_name or "",
+            "summary": _truncate(context),
+            "ok": None,
+        }
+    )
 
 
 def emit_tool_complete(
@@ -217,16 +219,18 @@ def emit_tool_complete(
     summary: Optional[str] = None,
 ) -> None:
     """Record that an agent finished running a tool. Non-blocking, never raises."""
-    _enqueue({
-        "ts": time.time(),
-        "session_id": session_id or "",
-        "task_id": task_id,
-        "tool_call_id": tool_call_id,
-        "kind": "complete",
-        "tool_name": tool_name or "",
-        "summary": _truncate(summary),
-        "ok": (1 if ok else 0) if ok is not None else None,
-    })
+    _enqueue(
+        {
+            "ts": time.time(),
+            "session_id": session_id or "",
+            "task_id": task_id,
+            "tool_call_id": tool_call_id,
+            "kind": "complete",
+            "tool_name": tool_name or "",
+            "summary": _truncate(summary),
+            "ok": (1 if ok else 0) if ok is not None else None,
+        }
+    )
 
 
 def emit_subagent_event(
@@ -246,20 +250,22 @@ def emit_subagent_event(
     parent→child link lines) for EVERY agent, not just the dashboard chat (which
     already gets these over the WS feed). Non-blocking, never raises.
     """
-    _enqueue({
-        "ts": time.time(),
-        "session_id": session_id or "",
-        "task_id": None,
-        "tool_call_id": None,
-        "kind": event_type or "subagent.tool",
-        "tool_name": tool_name or "",
-        "summary": _truncate(text or goal),
-        "ok": None,
-        "subagent_id": subagent_id,
-        "parent_id": parent_id,
-        "depth": depth if isinstance(depth, int) else None,
-        "goal": _truncate(goal),
-    })
+    _enqueue(
+        {
+            "ts": time.time(),
+            "session_id": session_id or "",
+            "task_id": None,
+            "tool_call_id": None,
+            "kind": event_type or "subagent.tool",
+            "tool_name": tool_name or "",
+            "summary": _truncate(text or goal),
+            "ok": None,
+            "subagent_id": subagent_id,
+            "parent_id": parent_id,
+            "depth": depth if isinstance(depth, int) else None,
+            "goal": _truncate(goal),
+        }
+    )
 
 
 def read_recent(limit: int = 300, since_id: Optional[int] = None) -> list:

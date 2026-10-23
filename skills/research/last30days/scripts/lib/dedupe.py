@@ -6,30 +6,32 @@ import re
 
 from . import schema
 
-STOPWORDS = frozenset({
-    "the",
-    "a",
-    "an",
-    "to",
-    "for",
-    "how",
-    "is",
-    "in",
-    "of",
-    "on",
-    "and",
-    "with",
-    "from",
-    "by",
-    "at",
-    "this",
-    "that",
-    "it",
-    "what",
-    "are",
-    "do",
-    "can",
-})
+STOPWORDS = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "to",
+        "for",
+        "how",
+        "is",
+        "in",
+        "of",
+        "on",
+        "and",
+        "with",
+        "from",
+        "by",
+        "at",
+        "this",
+        "that",
+        "it",
+        "what",
+        "are",
+        "do",
+        "can",
+    }
+)
 
 
 def normalize_text(text: str) -> str:

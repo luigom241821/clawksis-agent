@@ -14,7 +14,7 @@ import argparse
 import json
 import sqlite3
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -132,34 +132,38 @@ INSERT OR IGNORE INTO settings (key, value) VALUES ('briefing_format', 'concise'
 INSERT OR IGNORE INTO settings (key, value) VALUES ('default_schedule', '0 8 * * *');
 """
 
-_UPDATABLE_RUN_COLUMNS = frozenset({
-    "source_mode",
-    "prompt_tokens",
-    "completion_tokens",
-    "token_cost",
-    "duration_seconds",
-    "status",
-    "error_message",
-    "findings_new",
-    "findings_updated",
-})
+_UPDATABLE_RUN_COLUMNS = frozenset(
+    {
+        "source_mode",
+        "prompt_tokens",
+        "completion_tokens",
+        "token_cost",
+        "duration_seconds",
+        "status",
+        "error_message",
+        "findings_new",
+        "findings_updated",
+    }
+)
 
-_UPDATABLE_FINDING_COLUMNS = frozenset({
-    "source",
-    "source_url",
-    "source_title",
-    "author",
-    "content",
-    "summary",
-    "engagement_score",
-    "relevance_score",
-    "last_seen",
-    "sighting_count",
-    "dismissed",
-})
+_UPDATABLE_FINDING_COLUMNS = frozenset(
+    {
+        "source",
+        "source_url",
+        "source_title",
+        "author",
+        "content",
+        "summary",
+        "engagement_score",
+        "relevance_score",
+        "last_seen",
+        "sighting_count",
+        "dismissed",
+    }
+)
 
 # Future migrations keyed by version number
-MIGRATIONS: Dict[int, str] = {
+MIGRATIONS: dict[int, str] = {
     2: """
 CREATE TABLE IF NOT EXISTS finding_sightings (
     id INTEGER PRIMARY KEY,
@@ -228,9 +232,9 @@ def _run_migrations(conn: sqlite3.Connection):
 
 def add_topic(
     name: str,
-    search_queries: Optional[List[str]] = None,
+    search_queries: Optional[list[str]] = None,
     schedule: str = "0 8 * * *",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Add a topic to the watchlist. Returns the topic dict."""
     init_db()
     conn = _connect()
@@ -271,7 +275,7 @@ def remove_topic(name: str) -> bool:
         conn.close()
 
 
-def list_topics() -> List[Dict[str, Any]]:
+def list_topics() -> list[dict[str, Any]]:
     """List all topics with stats."""
     init_db()
     conn = _connect()
@@ -290,7 +294,7 @@ def list_topics() -> List[Dict[str, Any]]:
         conn.close()
 
 
-def get_topic(name: str) -> Optional[Dict[str, Any]]:
+def get_topic(name: str) -> Optional[dict[str, Any]]:
     """Get a topic by name."""
     init_db()
     conn = _connect()
@@ -354,7 +358,7 @@ def update_run(run_id: int, **kwargs):
         conn.close()
 
 
-def get_latest_completed_runs(topic_id: int, limit: int = 2) -> List[Dict[str, Any]]:
+def get_latest_completed_runs(topic_id: int, limit: int = 2) -> list[dict[str, Any]]:
     """Return newest completed runs for a topic."""
     conn = _connect()
     try:
@@ -376,11 +380,11 @@ def get_latest_completed_runs(topic_id: int, limit: int = 2) -> List[Dict[str, A
 def store_findings(
     run_id: int,
     topic_id: int,
-    findings: List[Dict[str, Any]],
-) -> Dict[str, int]:
+    findings: list[dict[str, Any]],
+) -> dict[str, int]:
     """Store findings with URL-based dedup. Returns counts of new/updated."""
     # Collect findings that have a URL, preserving order.
-    with_urls: List[tuple[str, Dict[str, Any]]] = []
+    with_urls: list[tuple[str, dict[str, Any]]] = []
     for f in findings:
         url = f.get("source_url") or f.get("url")
         if url:
@@ -409,31 +413,35 @@ def store_findings(
         ).fetchall()
         existing_by_url = {row["source_url"]: row for row in rows}
 
-        update_rows: List[tuple] = []
-        insert_rows: List[tuple] = []
+        update_rows: list[tuple] = []
+        insert_rows: list[tuple] = []
 
         for url, f in with_urls:
             existing = existing_by_url.get(url)
             new_engagement = f.get("engagement_score", 0)
             if existing:
-                update_rows.append((
-                    max(new_engagement, existing["engagement_score"] or 0),
-                    run_id,
-                    existing["id"],
-                ))
+                update_rows.append(
+                    (
+                        max(new_engagement, existing["engagement_score"] or 0),
+                        run_id,
+                        existing["id"],
+                    )
+                )
             else:
-                insert_rows.append((
-                    run_id,
-                    topic_id,
-                    f.get("source", "unknown"),
-                    url,
-                    f.get("source_title") or f.get("title", ""),
-                    f.get("author", ""),
-                    f.get("content") or f.get("text", ""),
-                    f.get("summary", ""),
-                    new_engagement,
-                    f.get("relevance_score", 0),
-                ))
+                insert_rows.append(
+                    (
+                        run_id,
+                        topic_id,
+                        f.get("source", "unknown"),
+                        url,
+                        f.get("source_title") or f.get("title", ""),
+                        f.get("author", ""),
+                        f.get("content") or f.get("text", ""),
+                        f.get("summary", ""),
+                        new_engagement,
+                        f.get("relevance_score", 0),
+                    )
+                )
 
         if update_rows:
             conn.executemany(
@@ -472,8 +480,8 @@ def _record_sightings(
     conn: sqlite3.Connection,
     run_id: int,
     topic_id: int,
-    findings_with_urls: List[tuple[str, Dict[str, Any]]],
-    existing_by_url: Optional[Dict[str, sqlite3.Row]] = None,
+    findings_with_urls: list[tuple[str, dict[str, Any]]],
+    existing_by_url: Optional[dict[str, sqlite3.Row]] = None,
 ) -> None:
     """Record the findings observed during this run.
 
@@ -501,16 +509,18 @@ def _record_sightings(
         row = rows_by_url.get(url)
         if row is None:
             continue
-        sighting_rows.append((
-            row["id"],
-            run_id,
-            topic_id,
-            finding.get("source", "unknown"),
-            url,
-            finding.get("source_title") or finding.get("title", ""),
-            finding.get("engagement_score", 0),
-            finding.get("relevance_score", 0),
-        ))
+        sighting_rows.append(
+            (
+                row["id"],
+                run_id,
+                topic_id,
+                finding.get("source", "unknown"),
+                url,
+                finding.get("source_title") or finding.get("title", ""),
+                finding.get("engagement_score", 0),
+                finding.get("relevance_score", 0),
+            )
+        )
 
     if not sighting_rows:
         return
@@ -531,7 +541,7 @@ def _record_sightings(
     )
 
 
-def get_sightings_for_run(topic_id: int, run_id: int) -> List[Dict[str, Any]]:
+def get_sightings_for_run(topic_id: int, run_id: int) -> list[dict[str, Any]]:
     """Return findings observed for a topic during a specific run."""
     conn = _connect()
     try:
@@ -546,7 +556,7 @@ def get_sightings_for_run(topic_id: int, run_id: int) -> List[Dict[str, Any]]:
         conn.close()
 
 
-def compute_topic_delta(topic_id: int) -> Dict[str, Any]:
+def compute_topic_delta(topic_id: int) -> dict[str, Any]:
     """Compare the latest completed watchlist run with the previous run."""
     runs = get_latest_completed_runs(topic_id, limit=2)
     topic = _get_topic_by_id(topic_id)
@@ -587,7 +597,7 @@ def compute_topic_delta(topic_id: int) -> Dict[str, Any]:
     }
 
 
-def _get_topic_by_id(topic_id: int) -> Optional[Dict[str, Any]]:
+def _get_topic_by_id(topic_id: int) -> Optional[dict[str, Any]]:
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM topics WHERE id = ?", (topic_id,)).fetchone()
@@ -596,7 +606,7 @@ def _get_topic_by_id(topic_id: int) -> Optional[Dict[str, Any]]:
         conn.close()
 
 
-def _sightings_by_url(sightings: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+def _sightings_by_url(sightings: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Index sightings by stable URL identity for run-to-run delta comparisons.
 
     URL-less sightings are intentionally excluded because there is no stable
@@ -610,13 +620,15 @@ def _sightings_by_url(sightings: List[Dict[str, Any]]) -> Dict[str, Dict[str, An
 
 
 def _delta_source_counts(
-    findings: Dict[str, List[Dict[str, Any]]],
-) -> Dict[str, Dict[str, int]]:
-    sources = sorted({
-        finding.get("source") or "unknown"
-        for group in findings.values()
-        for finding in group
-    })
+    findings: dict[str, list[dict[str, Any]]],
+) -> dict[str, dict[str, int]]:
+    sources = sorted(
+        {
+            finding.get("source") or "unknown"
+            for group in findings.values()
+            for finding in group
+        }
+    )
     counts = {source: {"new": 0, "continued": 0, "dropped": 0} for source in sources}
     for group_name, group in findings.items():
         for finding in group:
@@ -628,7 +640,7 @@ def _delta_source_counts(
 def get_new_findings(
     topic_id: int,
     since: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Get findings for a topic, optionally since a date."""
     conn = _connect()
     try:
@@ -651,7 +663,7 @@ def get_new_findings(
         conn.close()
 
 
-def search_findings(query: str, limit: int = 20) -> List[Dict[str, Any]]:
+def search_findings(query: str, limit: int = 20) -> list[dict[str, Any]]:
     """FTS5 search across all findings with BM25 ranking."""
     conn = _connect()
     try:
@@ -710,7 +722,7 @@ def get_daily_cost(date: Optional[str] = None) -> float:
     conn = _connect()
     try:
         if not date:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date = datetime.now(UTC).strftime("%Y-%m-%d")
         row = conn.execute(
             """SELECT COALESCE(SUM(token_cost), 0) as total
                FROM research_runs
@@ -759,7 +771,7 @@ def set_setting(key: str, value: str):
 # --- Stats ---
 
 
-def get_stats() -> Dict[str, Any]:
+def get_stats() -> dict[str, Any]:
     """Get overall database stats."""
     conn = _connect()
     try:
@@ -768,7 +780,7 @@ def get_stats() -> Dict[str, Any]:
         ).fetchone()[0]
         finding_count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
 
-        week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+        week_ago = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%d")
         runs_7d = conn.execute(
             "SELECT COUNT(*) FROM research_runs WHERE run_date >= ?", (week_ago,)
         ).fetchone()[0]
@@ -810,11 +822,11 @@ def get_stats() -> Dict[str, Any]:
         conn.close()
 
 
-def get_trending(days: int = 7) -> List[Dict[str, Any]]:
+def get_trending(days: int = 7) -> list[dict[str, Any]]:
     """Get topics ranked by recent finding activity."""
     conn = _connect()
     try:
-        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        since = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
         rows = conn.execute(
             """SELECT t.name, t.id,
                       COUNT(f.id) as new_findings,
@@ -831,7 +843,7 @@ def get_trending(days: int = 7) -> List[Dict[str, Any]]:
         conn.close()
 
 
-def finding_from_candidate(candidate: schema.Candidate) -> Dict[str, Any]:
+def finding_from_candidate(candidate: schema.Candidate) -> dict[str, Any]:
     """Convert a ranked candidate into a persisted finding."""
     primary_item = schema.candidate_primary_item(candidate)
     corroborating_sources = [
@@ -867,7 +879,7 @@ def findings_from_report(
     report: schema.Report,
     *,
     limit: Optional[int] = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Convert report into persisted findings.
 
     Uses ranked candidates (post-rerank) when available for quality scores and explanations.
@@ -894,16 +906,18 @@ def findings_from_report(
         for item in report.items_by_source[source_name]:
             if item.url in seen_urls:
                 continue
-            findings.append({
-                "source": source_name,
-                "source_url": item.url,
-                "source_title": item.title,
-                "author": item.author or "",
-                "content": item.body or "",
-                "summary": item.snippet or (item.body[:500] if item.body else ""),
-                "engagement_score": item.engagement_score or 0.0,
-                "relevance_score": item.local_relevance or 0.5,
-            })
+            findings.append(
+                {
+                    "source": source_name,
+                    "source_url": item.url,
+                    "source_title": item.title,
+                    "author": item.author or "",
+                    "content": item.body or "",
+                    "summary": item.snippet or (item.body[:500] if item.body else ""),
+                    "engagement_score": item.engagement_score or 0.0,
+                    "relevance_score": item.local_relevance or 0.5,
+                }
+            )
             seen_urls.add(item.url)
 
     return findings[:limit] if limit is not None else findings
@@ -924,7 +938,7 @@ def _cli_query(args):
         # Parse duration like "7d", "30d". Use UTC to match SQLite's
         # datetime('now') which writes first_seen in UTC.
         days = int(args.since.rstrip("d"))
-        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        since = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
 
     findings = get_new_findings(topic["id"], since)
     print(

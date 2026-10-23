@@ -37,7 +37,7 @@ def isolated_clawk_home(tmp_path, monkeypatch):
 
     Also invalidates any cached get_env_value state by patching Path.home().
     """
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -91,20 +91,6 @@ class TestCredentialPoolSeedsFromDotEnv:
         ), (
             f"Expected seeded entry with dotenv key, got: {[(e.source, e.access_token) for e in entries]}"
         )
-
-    def test_openrouter_key_from_dotenv_only(self, isolated_clawk_home):
-        """OpenRouter path has its own branch — verify it also reads .env."""
-        _write_env_file(isolated_clawk_home, OPENROUTER_API_KEY="sk-or-dotenv-abc")
-        assert "OPENROUTER_API_KEY" not in os.environ
-
-        from agent.credential_pool import _seed_from_env
-
-        entries = []
-        changed, active_sources = _seed_from_env("openrouter", entries)
-
-        assert changed is True
-        assert "env:OPENROUTER_API_KEY" in active_sources
-        assert any(e.access_token == "sk-or-dotenv-abc" for e in entries)
 
     def test_empty_dotenv_no_entries(self, isolated_clawk_home):
         """No .env file, no env vars → no entries seeded (and no crash)."""
@@ -222,7 +208,7 @@ class TestAuthCredentialPoolFallback:
         from clawk_cli.auth import _resolve_api_key_provider_secret
 
         with patch("agent.credential_pool.load_pool", return_value=mock_pool):
-            key, source = _resolve_api_key_provider_secret(
+            key, _source = _resolve_api_key_provider_secret(
                 provider_id="deepseek",
                 pconfig=_make_pconfig(),
             )

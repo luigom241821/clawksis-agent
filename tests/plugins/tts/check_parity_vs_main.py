@@ -226,6 +226,7 @@ def _run_scenario(
         capture_output=True,
         text=True,
         timeout=60,
+        check=False,
     )
     if out.returncode != 0:
         return {

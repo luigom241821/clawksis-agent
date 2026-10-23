@@ -1,12 +1,14 @@
 ---
 name: mcp-server-auth
-description: "Authenticate MCP servers that use browser-based sessions (cookies, OAuth, interactive login) on headless/remote environments."
+description: "Authenticate browser-login MCP servers on headless hosts."
+license: MIT
+platforms: [linux, macos, windows]
 version: 1.0.0
 author: Clawksis
 metadata:
   clawk:
     tags: [mcp, auth, browser, cookies, vnc, cloudflare-tunnel]
-    related_skills: [clawksis-provider-management, clawksis-dashboard]
+    related_skills: [cloudflare-tunnel]
 ---
 
 # MCP Server Browser-Based Authentication
@@ -201,4 +203,4 @@ The MCP detects container runtimes (`linux-amd64-container`) and may refuse to s
 ## References
 
 - `references/linkedin-mcp-cookie-bootstrap.md` — Full Playwright bootstrap script for LinkedIn
-- `clawksis-dashboard` skill — Cloudflare tunnel basics
+- `cloudflare-tunnel` skill — Cloudflare tunnel basics

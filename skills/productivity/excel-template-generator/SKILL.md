@@ -1,12 +1,16 @@
 ---
 name: excel-template-generator
-description: "USE THIS to create professional Excel .xlsx templates and workbooks for business operations, inventory, sales, post-sale tracking, costs, customers, dashboards, and structured operational spreadsheets. Trigger on ES+EN: 'crear Excel', 'plantilla Excel', 'generar xlsx', 'crear plantilla de inventario', 'plantilla de ventas', 'plantilla postventa', 'spreadsheet template', 'Excel template', 'inventory workbook', 'sales workbook'."
+description: "Create Excel .xlsx business templates and workbooks."
+version: 1.0.0
+platforms: [linux, macos, windows]
 argument-hint: 'excel-template-generator --template inventory|sales|postventa --output <file.xlsx>'
 allowed-tools: Bash, Read, Write
 author: Clawksis Gradient AI
 license: MIT
 user-invocable: true
 metadata:
+  clawk:
+    tags: [excel, xlsx, templates, spreadsheet, inventory, sales, openpyxl]
   clawksis:
     emoji: "📊"
   openclaw:
@@ -21,6 +25,11 @@ metadata:
 Esta skill crea archivos .xlsx seguros y editables para operaciones de negocio.
 
 Usala cuando el usuario pida crear plantillas Excel, generar archivos .xlsx, crear formatos de inventario, ventas, clientes, costos, postventa o preparar hojas de seguimiento operativo.
+
+Frases típicas (ES + EN): 'crear Excel', 'plantilla Excel', 'generar xlsx', 'crear plantilla
+de inventario', 'plantilla de ventas', 'plantilla postventa', 'spreadsheet template', 'Excel
+template', 'inventory workbook', 'sales workbook'. También dashboards y hojas de costos o
+clientes.
 
 ## Seguridad
 

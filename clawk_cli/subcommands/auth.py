@@ -1,8 +1,4 @@
-"""``clawk auth`` subcommand parser.
-
-Extracted verbatim from ``clawk_cli/main.py:main()`` (god-file Phase 2).
-Handler injected to avoid importing ``main``.
-"""
+"""``clawk auth`` subcommand parser."""
 
 from __future__ import annotations
 
@@ -12,8 +8,7 @@ from typing import Callable
 def build_auth_parser(subparsers, *, cmd_auth: Callable) -> None:
     """Attach the ``auth`` subcommand to ``subparsers``."""
     auth_parser = subparsers.add_parser(
-        "auth",
-        help="Manage pooled provider credentials",
+        "auth", help="Manage pooled provider credentials"
     )
     auth_subparsers = auth_parser.add_subparsers(dest="auth_action")
     auth_add = auth_subparsers.add_parser("add", help="Add a pooled credential")
@@ -29,6 +24,12 @@ def build_auth_parser(subparsers, *, cmd_auth: Callable) -> None:
     )
     auth_add.add_argument("--label", help="Optional display label")
     auth_add.add_argument(
+        "--priority",
+        type=int,
+        help="Place the new credential at this priority (0 = tried first under fill_first); "
+        "appends last when omitted",
+    )
+    auth_add.add_argument(
         "--api-key", help="API key value (otherwise prompted securely)"
     )
     auth_add.add_argument("--portal-url", help="Nous portal base URL")
@@ -39,6 +40,13 @@ def build_auth_parser(subparsers, *, cmd_auth: Callable) -> None:
         "--no-browser",
         action="store_true",
         help="Do not auto-open a browser for OAuth login",
+    )
+    auth_add.add_argument(
+        "--browser",
+        action="store_true",
+        help="openai-codex only: sign in with the browser authorization-code (PKCE) flow on "
+        "http://localhost:1455/auth/callback instead of the default device-code flow; falls back "
+        "to device code when that port is busy (config: auth.codex_login_flow)",
     )
     auth_add.add_argument(
         "--timeout", type=float, help="OAuth/network timeout in seconds"
@@ -59,9 +67,36 @@ def build_auth_parser(subparsers, *, cmd_auth: Callable) -> None:
         "target", help="Credential index, entry id, or exact label"
     )
     auth_reset = auth_subparsers.add_parser(
-        "reset", help="Clear exhaustion status for all credentials for a provider"
+        "reset",
+        help="Clear exhaustion status for a provider's credentials (all, or one target)",
     )
     auth_reset.add_argument("provider", help="Provider id")
+    auth_reset.add_argument(
+        "target",
+        nargs="?",
+        help="Optional credential index, entry id, or exact label; clears every credential when omitted",
+    )
+    auth_priority = auth_subparsers.add_parser(
+        "priority",
+        help="Move a pooled credential to a priority (0 = tried first under fill_first)",
+    )
+    auth_priority.add_argument("provider", help="Provider id")
+    auth_priority.add_argument(
+        "target", help="Credential index, entry id, or exact label"
+    )
+    auth_priority.add_argument(
+        "priority", type=int, help="New priority; others are renumbered"
+    )
+    auth_refresh = auth_subparsers.add_parser(
+        "refresh",
+        help="Refresh a pooled OAuth credential's tokens and clear its cooldown",
+    )
+    auth_refresh.add_argument("provider", help="Provider id")
+    auth_refresh.add_argument(
+        "target",
+        nargs="?",
+        help="Credential index, entry id, or exact label (required when the pool holds more than one)",
+    )
     auth_status = auth_subparsers.add_parser(
         "status", help="Show auth status for a provider"
     )
@@ -70,29 +105,15 @@ def build_auth_parser(subparsers, *, cmd_auth: Callable) -> None:
         "logout", help="Log out a provider and clear stored auth state"
     )
     auth_logout.add_argument("provider", help="Provider id")
-    auth_spotify = auth_subparsers.add_parser(
-        "spotify", help="Authenticate Clawksis with Spotify via PKCE"
+    auth_upgrade = auth_subparsers.add_parser(
+        "upgrade", help="Sign in with a Nous account, keeping your connectors"
     )
-    auth_spotify.add_argument(
-        "spotify_action",
-        nargs="?",
-        choices=["login", "status", "logout"],
-        default="login",
-    )
-    auth_spotify.add_argument(
-        "--client-id", help="Spotify app client_id (or set CLAWK_SPOTIFY_CLIENT_ID)"
-    )
-    auth_spotify.add_argument(
-        "--redirect-uri",
-        help="Allow-listed localhost redirect URI for your Spotify app",
-    )
-    auth_spotify.add_argument("--scope", help="Override requested Spotify scopes")
-    auth_spotify.add_argument(
+    auth_upgrade.add_argument(
         "--no-browser",
         action="store_true",
-        help="Do not attempt to open the browser automatically",
+        help="Do not auto-open a browser for sign-in",
     )
-    auth_spotify.add_argument(
-        "--timeout", type=float, help="Callback/token exchange timeout in seconds"
+    auth_upgrade.add_argument(
+        "--timeout", type=float, help="Network timeout in seconds"
     )
     auth_parser.set_defaults(func=cmd_auth)

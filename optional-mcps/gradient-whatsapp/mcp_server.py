@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Optional
 
 import httpx
@@ -188,7 +188,7 @@ def _check_window(conversation_id: str) -> dict:
 
     conv = convs[0]
     last_at_str = conv.get("last_message_at")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if not last_at_str:
         return {
@@ -257,7 +257,7 @@ def _meta_post(url: str, token: str, payload: dict, retries: int = 3):
             logger.warning("Timeout Meta API attempt %s", i + 1)
             time.sleep(delay)
             delay *= 2
-        except Exception as exc:  # noqa: BLE001 - surfaced to the caller as an error dict
+        except Exception as exc:
             logger.error("Meta API error: %s", exc)
             return None, {"error": {"message": str(exc)}}
     return None, {"error": {"message": "Max retries reached"}}
@@ -290,12 +290,12 @@ def _register_message(
             "conversations",
             {
                 "last_message_preview": (text or "")[:100],
-                "last_message_at": datetime.now(timezone.utc).isoformat(),
+                "last_message_at": datetime.now(UTC).isoformat(),
             },
             {"id": conversation_id},
         )
         return True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("register_message failed: %s", exc)
         return False
 
@@ -468,7 +468,7 @@ def list_templates(user_id: Optional[str] = None, sync_from_meta: bool = False) 
                 "source": "meta",
                 "templates": resp.json().get("data", []),
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"success": False, "error": str(exc)}
 
     params = {
@@ -770,7 +770,7 @@ def close_conversation(conversation_id: str) -> dict:
     try:
         _sb_patch("conversations", {"status": "closed"}, {"id": conversation_id})
         return {"success": True}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"success": False, "error": str(exc)}
 
 

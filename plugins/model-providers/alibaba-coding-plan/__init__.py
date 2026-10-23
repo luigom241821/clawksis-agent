@@ -1,13 +1,27 @@
-"""Alibaba Cloud Coding Plan provider profile.
+"""Alibaba Cloud Coding Plan provider profiles (intl + CN): a dedicated endpoint
+and key tier separate from ``alibaba``. Names match models.dev catalog keys.
 
-Separate from the standard `alibaba` profile because it hits a different
-endpoint (coding-intl.dashscope.aliyuncs.com) with a dedicated API key tier.
+The CN profile checks its own key first and keeps the shared vars as ordered
+fallbacks so existing CN users configured with the shared key keep working.
 """
 
+from typing import Any
+
+from agent.reasoning_effort import dashscope_preserve_thinking_extras
 from providers import register_provider
 from providers.base import ProviderProfile
 
-alibaba_coding_plan = ProviderProfile(
+
+class DashScopeProfile(ProviderProfile):
+    """DashScope compatible-mode: ask the server to keep replayed prior-turn reasoning."""
+
+    def build_api_kwargs_extras(
+        self, *, model: str | None = None, **context: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        return dashscope_preserve_thinking_extras(model), {}
+
+
+alibaba_coding_plan = DashScopeProfile(
     name="alibaba-coding-plan",
     aliases=("alibaba_coding", "alibaba-coding", "dashscope-coding"),
     display_name="Alibaba Cloud (Coding Plan)",
@@ -22,4 +36,21 @@ alibaba_coding_plan = ProviderProfile(
     auth_type="api_key",
 )
 
+alibaba_coding_plan_cn = DashScopeProfile(
+    name="alibaba-coding-plan-cn",
+    aliases=("alibaba-coding-cn", "dashscope-coding-cn"),
+    display_name="Alibaba Cloud (Coding Plan, China)",
+    description="Alibaba Cloud Coding Plan, mainland-China endpoint",
+    signup_url="https://help.aliyun.com/zh/model-studio/",
+    env_vars=(
+        "ALIBABA_CODING_PLAN_CN_API_KEY",
+        "ALIBABA_CODING_PLAN_API_KEY",
+        "DASHSCOPE_API_KEY",
+        "ALIBABA_CODING_PLAN_CN_BASE_URL",
+    ),
+    base_url="https://coding.dashscope.aliyuncs.com/v1",
+    auth_type="api_key",
+)
+
 register_provider(alibaba_coding_plan)
+register_provider(alibaba_coding_plan_cn)

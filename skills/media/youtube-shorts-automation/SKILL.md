@@ -1,6 +1,10 @@
 ---
 name: youtube-shorts-automation
-description: "Automated YouTube Shorts production pipeline: niche research → AI script → local video assembly (ffmpeg + moviepy + Pillow) → YouTube API upload → Clawksis cron scheduling. Build and operate your own faceless channels."
+description: "Produce and upload faceless YouTube Shorts on a schedule."
+version: 1.0.0
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 tags: [youtube, shorts, automation, faceless, video, ffmpeg, moviepy, cron, youtube-api, content-creation]
 ---
 

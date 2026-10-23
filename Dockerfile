@@ -1,13 +1,50 @@
-FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie@sha256:b3c543b6c4f23a5f2df22866bd7857e5d304b67a564f4feab6ac22044dde719b AS uv_source
-# Node 22 LTS source stage. Debian trixie's bundled nodejs is pinned to 20.x
-# which reached EOL in April 2026 — we copy node + npm + corepack from the
-# upstream node:22 image instead so we can stay on a supported LTS without
-# waiting for Debian 14 (forky, ~mid-2027).  Bookworm-based slim image used
-# so the produced binary links against glibc 2.36, which runs cleanly on
-# our Debian 13 (trixie, glibc 2.41) runtime.  Bumping to a new Node major
-# is a one-line ARG change; see #4977.
-FROM node:22-bookworm-slim@sha256:7af03b14a13c8cdd38e45058fd957bf00a72bbe17feac43b1c15a689c029c732 AS node_source
-FROM debian:13.4
+# Debian 13 still ships SQLite 3.46.1, which contains the upstream WAL-reset
+# corruption bug. Build a pinned shared library for the runtime image instead
+# of relying on a distro backport that trixie does not currently provide.
+# See #70480 and https://sqlite.org/wal.html#walresetbug.
+# Pinned by the multi-arch index digest: uv and node already come from pm's
+# sha-verified lock, and a tag alone would let the base drift under them.
+
+FROM debian:trixie-20261020@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308 AS sqlite_build
+ARG SQLITE_AUTOCONF_VERSION=3530400
+ARG SQLITE_SHA256=0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c
+RUN apt-get -o Acquire::Retries=3 update && \
+    apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+        build-essential ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    (curl -fsSL --retry 1 --retry-all-errors --connect-timeout 15 --max-time 60 \
+        -o /tmp/sqlite.tar.gz \
+        "https://sqlite.org/2026/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz" || \
+     curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
+        -o /tmp/sqlite.tar.gz \
+        "https://sources.buildroot.net/sqlite/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz") && \
+    printf '%s  %s\n' "${SQLITE_SHA256}" /tmp/sqlite.tar.gz > /tmp/sqlite.sha256 && \
+    sha256sum -c /tmp/sqlite.sha256 && \
+    tar -xzf /tmp/sqlite.tar.gz -C /tmp && \
+    cd "/tmp/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}" && \
+    CFLAGS="-O2 \
+        -DSQLITE_ENABLE_FTS3 \
+        -DSQLITE_ENABLE_FTS3_PARENTHESIS \
+        -DSQLITE_ENABLE_FTS4 \
+        -DSQLITE_ENABLE_FTS5 \
+        -DSQLITE_ENABLE_RTREE \
+        -DSQLITE_ENABLE_GEOPOLY \
+        -DSQLITE_ENABLE_COLUMN_METADATA \
+        -DSQLITE_ENABLE_UNLOCK_NOTIFY \
+        -DSQLITE_ENABLE_DBSTAT_VTAB \
+        -DSQLITE_ENABLE_DBPAGE_VTAB \
+        -DSQLITE_ENABLE_MATH_FUNCTIONS \
+        -DSQLITE_ENABLE_PREUPDATE_HOOK \
+        -DSQLITE_ENABLE_SESSION \
+        -DSQLITE_SECURE_DELETE \
+        -DSQLITE_THREADSAFE=1 \
+        -DSQLITE_MAX_VARIABLE_NUMBER=250000" \
+        ./configure --prefix=/opt/sqlite-fixed --disable-static && \
+    make -j"$(nproc)" && \
+    make install
+
+# Same digest as sqlite_build: the built libsqlite must match this libc.
+FROM debian:trixie-20261020@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308 AS runtime_base
 
 # Disable Python stdout buffering to ensure logs are printed immediately.
 # Do not write .pyc files at runtime: /opt/clawksis is immutable in the
@@ -15,9 +52,14 @@ FROM debian:13.4
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Store Playwright browsers outside the volume mount so the build-time
-# install survives the /opt/data volume overlay at runtime.
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/clawksis/.playwright
+# The pm-pinned full Chromium lives in the managed tool store at
+# /opt/clawksis/tools — outside the /opt/data volume mount, so the
+# build-time install survives the volume overlay at runtime. pm's
+# chromium package fact exports the same value (PLAYWRIGHT_BROWSERS_PATH
+# at the store root); the image ENV names the same directory so
+# Playwright and the browser tool resolve the pinned build even before pm
+# composes tool env.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/clawksis/tools
 
 # Install system dependencies in one layer, clear APT cache.
 # tini was previously PID 1 to reap orphaned zombie processes (MCP stdio
@@ -26,10 +68,53 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/clawksis/.playwright
 # replaces tini with s6-overlay's /init (PID 1 = s6-svscan), which reaps
 # zombies non-blockingly on SIGCHLD and additionally supervises the main
 # clawk process, the dashboard, and per-profile gateways.
+# The second package list is the shared libraries the pinned Chromium links
+# against. `npx playwright install --with-deps` used to apt-install them as
+# a side effect; pm stages the pinned browser instead (below), so the libs
+# must be declared here. The list is the `ldd ... | grep "not found"` set of
+# the pinned chrome binary in this base image, mapped to trixie package
+# names (see .clawk/plans/termux-removal-commit-spec.md).
 RUN apt-get -o Acquire::Retries=3 update && \
     apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-    ca-certificates curl iputils-ping python3 python-is-python3 ripgrep ffmpeg gcc g++ make cmake python3-dev python3-venv libffi-dev libolm-dev procps git openssh-client docker-cli xz-utils && \
+    ca-certificates curl iputils-ping python3 python-is-python3 gcc g++ make cmake python3-dev python3-venv libffi-dev libolm-dev libatomic1 procps git openssh-client docker-cli xz-utils \
+    libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 libcairo2 libcups2t64 libdbus-1-3 libgbm1 libglib2.0-0t64 libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 && \
     rm -rf /var/lib/apt/lists/*
+
+# Bot Screen (opt-in): PACKAGES["apt"] from tools/bot_desktop/runtime.py plus apt
+# `chromium` for the restricted-userns sandbox fallback. PM already stages
+# pinned full Chromium for both variants; no separate Playwright install.
+# Nothing starts
+# at boot. docker.yml builds both variants and publishes these packages under
+# the `-desktop` tags: hosted sandboxes pull a prebuilt image and never run a
+# build, and cannot apt at run time either (unprivileged, no sudo). Only this
+# build step needs root —
+# Xvnc is a userspace X server, so the runtime user can drive it.
+#   docker build --build-arg CLAWK_BOT_DESKTOP=1 .
+ARG CLAWK_BOT_DESKTOP=0
+RUN if [ "$CLAWK_BOT_DESKTOP" = "1" ]; then \
+        apt-get -o Acquire::Retries=3 update && \
+        DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+        tigervnc-standalone-server xfce4-panel xfwm4 xfdesktop4 xfce4-settings xfce4-terminal \
+        dbus-x11 x11-xserver-utils x11-utils x11-xkb-utils xauth fonts-dejavu-core chromium && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# Prefer the fixed SQLite over Debian's vulnerable libsqlite3.so.0. Keep the
+# public library name stable so both the system interpreter and the uv-created
+# venv resolve the replacement without changing Python import paths.
+COPY --from=sqlite_build /opt/sqlite-fixed/lib/libsqlite3.so.3.53.4 /usr/local/lib/
+RUN ln -sf libsqlite3.so.3.53.4 /usr/local/lib/libsqlite3.so.0 && \
+    ln -sf libsqlite3.so.3.53.4 /usr/local/lib/libsqlite3.so && \
+    printf '/usr/local/lib\n' > /etc/ld.so.conf.d/000-sqlite-fixed.conf && \
+    ldconfig && \
+    python3 -c "import sqlite3, sys; \
+v = sqlite3.sqlite_version_info; \
+sys.exit(f'linked SQLite {sqlite3.sqlite_version} still has the WAL-reset bug') if v < (3, 51, 3) else None; \
+db = sqlite3.connect(':memory:'); \
+db.execute(\"CREATE VIRTUAL TABLE docs USING fts5(content, tokenize='trigram')\"); \
+db.execute(\"INSERT INTO docs VALUES ('clawk')\"); \
+sys.exit('SQLite FTS5 trigram self-test failed') if db.execute(\"SELECT count(*) FROM docs WHERE docs MATCH 'erm'\").fetchone()[0] != 1 else None; \
+db.close()"
 
 # ---------- s6-overlay install ----------
 # s6-overlay provides supervision for the main clawk process, the dashboard,
@@ -90,57 +175,63 @@ COPY --chmod=0755 docker/tini-shim.sh /usr/bin/tini
 # Non-root user for runtime; UID can be overridden via CLAWK_UID at runtime
 RUN useradd -u 10000 -m -d /opt/data clawk
 
-COPY --chmod=0755 --from=uv_source /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
-
-# Node 22 LTS: copy the node binary plus the bundled npm + corepack JS
-# installs from the upstream image.  npm and npx are recreated as symlinks
-# because they're symlinks in the source image (and need to live on PATH).
-# See node_source stage at the top of the file for the version-bump
-# rationale (#4977).
-COPY --chmod=0755 --from=node_source /usr/local/bin/node /usr/local/bin/
-COPY --from=node_source /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
-COPY --from=node_source /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/corepack
-RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
-    ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
-    ln -sf /usr/local/lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack
 
 WORKDIR /opt/clawksis
 
-# ---------- Layer-cached dependency install ----------
-# Copy only package manifests first so npm install + Playwright are cached
-# unless the lockfiles themselves change.
+# ---------- Pinned toolchain from pm/lock.json (single authority) ----------
+# The image used to assemble uv from a second authority — an astral image
+# tag (ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie) that had already
+# drifted to 0.11.6 while pm/lock.json pinned uv 0.12.3. That is exactly
+# the two-authorities failure the pm design exists to end. The image is now
+# a pin consumer: the stdlib-only pm provisioner reads pm/lock.json and
+# stages the pinned uv + full Chromium (sha256-verified at
+# download — the same code path pm.sh/pm.ps1 and the desktop payload use)
+# into the image's own runtime dir, a self-contained store baked under
+# /opt/clawksis, outside the /opt/data volume so it survives the overlay.
+# PM alone resolves the pinned uv for dependency preparation; build consumers
+# receive Python environments, never an installer executable.
 #
-# ui-tui/packages/clawk-ink/ is copied IN FULL (not just its manifests)
-# because it is referenced as a `file:` workspace dependency from
-# ui-tui/package.json.  Copying the tree up front lets npm resolve the
-# workspace to real content instead of stopping at a bare package.json.
-COPY package.json package-lock.json ./
-COPY web/package.json web/
-COPY ui-tui/package.json ui-tui/
-COPY ui-tui/packages/clawk-ink/ ui-tui/packages/clawk-ink/
-# apps/shared/ is copied IN FULL because web/package.json references it as a
-# `file:` workspace dependency (same pattern as clawk-ink above).
-COPY apps/shared/ apps/shared/
+# Full Chromium supports both headed and headless sessions. It is staged
+# here rather than by `npx playwright install`,
+# which fetched whatever revision the npm-resolved playwright wanted,
+# unverified, and recorded no fact. The resolved browser binary path is
+# baked to /etc/clawk/agent-browser-executable-path for stage2-hook.sh:
+# the layout differs per arch (chrome-linux64/chrome on amd64,
+# chromium-linux-arm64/chromium on arm64), so it is resolved at build time
+# and never hunted at boot.
+ENV CLAWK_RUNTIME_DIR=/opt/clawksis/tools
+COPY pm/ pm/
+# pm's lazy imports resolve get_default_clawk_root()/project_venv_dir()
+# from clawk_constants (stdlib-only) at install time — a sealed-stage
+# `python3 -m pm.cli install` fails with "No module named
+# 'clawk_constants'" without it on the path. Copy the module next to pm.
+COPY clawk_constants.py clawk_constants.py
+# PM imports the shared stdlib locking owner before deps exist.
+COPY clawk_cli/__init__.py clawk_cli/runtime_state.py clawk_cli/
+COPY scripts/bundles/payload.py scripts/bundles/payload.py
+RUN set -eu; \
+    python3 -c 'from pm import ensure; [ensure(name, explicit=True) for name in ("uv", "chromium", "npm", "ffmpeg", "ripgrep")]'; \
+    python3 -c 'from pathlib import Path; from pm import installed_package; [Path("/usr/local/bin", command).symlink_to(installed_package(package).binary) for command, package in (("python3", "python"), ("node", "node"), ("npm", "npm"), ("ffmpeg", "ffmpeg"), ("rg", "ripgrep"))]; Path("/usr/local/bin/ffprobe").symlink_to(installed_package("ffmpeg").binary.with_name("ffprobe"))'; \
+    ffmpeg -version >/dev/null; ffprobe -version >/dev/null; rg --version >/dev/null; \
+    python3 -c 'import shutil; from pathlib import Path; from pm import env_for; Path("/usr/local/bin/npx").symlink_to(shutil.which("npx", path=env_for("npm", base_env={})["PATH"]))'; \
+    node --version; npm --version; \
+    browser_bin="$(python3 -c 'from pm import installed_package; print(installed_package("chromium").binary)')"; \
+    test -n "$browser_bin"; \
+    "$browser_bin" --version; \
+    mkdir -p /etc/clawk; \
+    printf '%s' "$browser_bin" > /etc/clawk/agent-browser-executable-path
 
-# `npm_config_install_links=false` forces npm to install `file:` deps as
-# symlinks instead of copies.  This is the default since npm 10+, which is
-# what the image ships now (via the node:22 source stage).  We set it
-# explicitly anyway as defense-in-depth: the previous Debian-bundled npm
-# 9.x defaulted to install-as-copy, which produced a hidden
-# node_modules/.package-lock.json that permanently disagreed with the root
-# lock on the @clawk/ink entry, tripped the TUI launcher's
-# `_tui_need_npm_install()` check on every startup, and triggered a
-# runtime `npm install` that then failed with EACCES.  Keeping the env
-# guards against a future regression if the source npm version changes.
-ENV npm_config_install_links=false
+# PM is resident too: never borrow application libraries or create its worker
+# environment under /root (unreachable to the runtime UID).
+RUN python3 -c 'from pathlib import Path; from pm import stage_manager_runtime; from scripts.bundles.payload import seal_pm_runtime; root = Path("/opt/clawksis"); python = Path("/usr/local/bin/python3").resolve(); stage_manager_runtime(python=python, destination=root / "pm-runtime", project=root / "pm"); seal_pm_runtime(root, python)'
 
-RUN npm install --prefer-offline --no-audit --fetch-retries=5 && \
-    for i in 1 2 3; do \
-        npx playwright install --with-deps chromium --only-shell && break || \
-        { [ "$i" = 3 ] && exit 1; echo "playwright install failed (attempt $i); retrying in 10s"; sleep 10; }; \
-    done && \
-    npm cache clean --force
+# JS build helpers use the prepared interpreter without an installer parent.
+ENV CLAWK_PYTHON=/usr/local/bin/python3
+# The standalone interpreter records its builder's clang toolchain;
+# native extensions must use the compiler installed in this image.
+ENV CC=gcc CXX=g++
 
+FROM runtime_base AS python_deps
 # ---------- Layer-cached Python dependency install ----------
 # Copy only pyproject.toml + uv.lock so the Python dep resolve + wheel
 # download + native-extension compile layer is cached unless those inputs
@@ -152,25 +243,22 @@ RUN npm install --prefer-offline --no-audit --fetch-retries=5 && \
 # frontend stats the readme path during dep resolution, so we `touch` an
 # empty placeholder — the real README is restored by `COPY . .` below.
 #
-# `uv sync --frozen --no-install-project --extra all --extra messaging`
+# `pm.build_env --no-install-project --extra all --extra messaging --extra otlp`
 # installs the deps reachable through the composite `[all]` extra
-# (handpicked set intended for the production image — excludes `[dev]`),
+# (handpicked set intended for the production image; dependency groups are not selected),
 # plus gateway messaging adapters that should work in the published image
 # without a first-boot lazy install.  We do NOT use `--all-extras`:
 # that would pull in `[rl]` (atroposlib + tinker + torch + wandb from
-# git), `[yc-bench]` (another git dep), and `[termux-all]` (Android
-# redundancy), none of which belong in the published container.
+# git) and `[yc-bench]` (another git dep), neither of which belongs in
+# the published container.
 #
 # Provider packages (anthropic, bedrock, azure-identity) are included
 # so Docker users can use these providers without requiring runtime
 # lazy-install access to PyPI (often blocked in containerized envs).
 #
-# The hindsight memory provider's client (hindsight-client) is baked in
-# for the same reason: it lazy-installs into /opt/clawksis/.venv at first
-# use, which lives inside the (immutable) image layer rather than the
-# mounted /opt/data volume, so it is lost on every container recreate /
-# image update and recall/retain then fails with
-# `ModuleNotFoundError: No module named 'hindsight_client'` (#38128).
+# The [otlp] extra contains the SDK/exporter imported by Clawksis when Gateway
+# Health export is enabled. Collector and observability-backend dependencies
+# remain external and are not part of the Clawksis production image.
 #
 # The Matrix gateway's deps ([matrix] extra) are baked in because
 # python-olm (transitive via mautrix[encryption]) builds from source on
@@ -179,19 +267,95 @@ RUN npm install --prefer-offline --no-audit --fetch-retries=5 && \
 # avoids the cross-platform failures that kept [matrix] out of [all]
 # while still making Matrix work in the published container. Fixes #30399.
 #
-# The editable link is created after the source copy below.
+# Google Chat's [google-chat] extra (google-cloud-pubsub + Chat API clients)
+# is baked so hosted/immutable images can enable the adapter without writing
+# the sealed venv.
+#
+# --record-selection writes these extras to the store's facts.json as the venv
+# selection, as a bundle build does. Without it, the first opt-in extra a
+# container installs on use (FAL, a plugin's deps) records a selection of
+# just that extra, and every later boot runs a generation without the extras
+# baked here (aiohttp, so no API server). stage2's dependency refresh
+# restores this baseline into volumes that already lost it.
+#
+# Source binding is created after the source copy below.
 COPY pyproject.toml uv.lock ./
 RUN touch ./README.md
-RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra anthropic --extra bedrock --extra azure-identity --extra hindsight --extra matrix
+# --cache puts uv's cache at /opt/clawksis/uv-cache, the seed path that
+# pm.packages.uv_cache_dir() merges into $CLAWK_HOME/cache/uv on first use.
+# Do not leave the cache at its default: CLAWK_HOME is not set yet in this
+# stage, so the default is /root/.clawksis/cache/uv, which nothing reads. A plugin
+# install then runs with an empty cache and builds python-olm from source.
+RUN python3 -m pm.build_env --source /opt/clawksis --python /usr/local/bin/python3 \
+    --cache /opt/clawksis/uv-cache \
+    --out /opt/clawksis/.venv --no-install-project --sealed --record-selection \
+    --extra all --extra messaging --extra otlp --extra anthropic --extra bedrock \
+    --extra azure-identity --extra matrix --extra google-chat
 
-# ---------- Frontend build (cached independently from Python source) ----------
-# Copy only the frontend source trees first so that Python-only changes don't
-# invalidate the (relatively slow) web + ui-tui build layer.
+# Icons render on the runtime environment: Pillow and resvg-py are core
+# dependencies. A stage of its own so the frontend stage keeps building its
+# Node dependencies in parallel with the Python ones.
+FROM python_deps AS icons
+# Clawksis: the web icons are the fork's own and are committed in web/public.
+# Upstream renders them from the Nous brand art (assets/nous-girl-*.svg), which
+# the fork does not ship, so the prepared-icons dir only carries the favicon
+# that scripts/build/web.mjs requires.
+COPY web/public/favicon.ico /tmp/clawk-icons/web/public/favicon.ico
+
+# Frontend dependencies never enter the runtime layers.
+FROM runtime_base AS frontend_build
+COPY package.json package-lock.json ./
+COPY web/package.json web/
+COPY ui-tui/package.json ui-tui/
+COPY ui-tui/packages/clawk-ink/ ui-tui/packages/clawk-ink/
+COPY apps/shared/ apps/shared/
+COPY scripts/build/node-deps.mjs scripts/build/electron-runtime.mjs scripts/build/
+ENV npm_config_install_links=false
+RUN node scripts/build/node-deps.mjs --source /opt/clawksis --workspace ui-tui --workspace web
+
+COPY pyproject.toml uv.lock ./
 COPY web/ web/
 COPY ui-tui/ ui-tui/
-COPY apps/shared/ apps/shared/
-RUN cd web && npm run build && \
-    cd ../ui-tui && npm run build
+COPY scripts/build/*.mjs scripts/build/
+COPY scripts/generate-icons.mjs scripts/generate_icons.py scripts/
+COPY assets/ assets/
+COPY --from=icons /tmp/clawk-icons /tmp/clawk-icons
+RUN node scripts/build/tui.mjs --source /opt/clawksis --out /opt/products/tui && \
+    node scripts/build/web.mjs --source /opt/clawksis --icons /tmp/clawk-icons --out /opt/products/web
+
+FROM python_deps AS runtime
+# Standalone TypeScript linting is a runtime feature; Vite/esbuild are not.
+COPY --from=frontend_build /opt/clawksis/node_modules/typescript /opt/clawksis/node_modules/typescript
+RUN mkdir -p /opt/clawksis/node_modules/.bin && \
+    ln -s ../typescript/bin/tsc /opt/clawksis/node_modules/.bin/tsc
+
+# ---------- Photon iMessage sidecar deps (baked, NS-606) ----------
+# The photon plugin's Node sidecar needs its own node_modules
+# (spectrum-ts). The install tree is immutable at runtime, so a lazy
+# `npm ci` on first connect would hit EROFS — bake the deps here instead
+# (deterministic installs, NS-559). The patch script is copied alongside
+# the manifests because package.json's postinstall runs it, which also
+# means the spectrum-ts patch is applied at build time. Layer-cached:
+# only re-runs when the sidecar manifests/patch change.
+COPY plugins/platforms/photon/sidecar/package.json \
+     plugins/platforms/photon/sidecar/package-lock.json \
+     plugins/platforms/photon/sidecar/patch-spectrum-mixed-attachments.mjs \
+     plugins/platforms/photon/sidecar/
+RUN cd plugins/platforms/photon/sidecar && \
+    npm ci --no-audit --fetch-retries=5 && \
+    npm cache clean --force
+
+# Shared product outputs are independent of application dependency assembly.
+COPY --from=frontend_build /opt/products/tui /opt/clawksis/ui-tui
+COPY --from=frontend_build /opt/products/web /opt/clawksis/clawk_cli/web_dist
+# ---------- Bot Screen X socket directory ----------
+# Xvnc would create this itself (/tmp is 1777); pre-creating it keeps ownership
+# deterministic when CLAWK_UID is remapped between boots.
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+
+# XDG_RUNTIME_DIR (set below) sits under a predictable name in world-writable /tmp.
+# Shipping it root-owned means stage2 finds a directory it trusts and chowns it.
+RUN mkdir -p /tmp/clawk-runtime && chmod 0700 /tmp/clawk-runtime
 
 # ---------- Source code ----------
 # .dockerignore excludes node_modules, so the installs above survive.
@@ -203,20 +367,17 @@ RUN cd web && npm run build && \
 # write so the build steps below don't need chmod u+w dances.
 COPY --link --chmod=a+rX,go-w . .
 
-# ---------- Permissions ----------
-# Link clawksis-agent itself (editable). Deps are already installed in the
-# cached layer above; `--no-deps` makes this a fast egg-link creation with no
-# resolution or downloads.
-RUN uv pip install --no-cache-dir --no-deps -e "."
+# The shared assembler binds the prepared environment and frontend products.
+RUN /opt/clawksis/.venv/bin/python -m docker.build_agent
 
 # Wire the exec shim and install-method stamp.  Files under /opt/clawksis are
-# already root-owned (COPY, uv sync, npm install all run as root) and
+# already root-owned (COPY, dep assembly, npm install all run as root) and
 # read-only for the clawk user (go-w from the --chmod above).
 
 USER root
 RUN mkdir -p /opt/clawksis/bin && \
     cp /opt/clawksis/docker/clawk-exec-shim.sh /opt/clawksis/bin/clawk && \
-    chmod 0755 /opt/clawksis/bin/clawk && \
+    chmod 0755 /opt/clawksis /opt/clawksis/bin/clawk && \
     printf 'docker\n' > /opt/clawksis/.install_method
 # The ``.install_method`` stamp is baked next to the running code (the install
 # tree), NOT into $CLAWK_HOME. $CLAWK_HOME (/opt/data) is a shared data
@@ -229,27 +390,34 @@ RUN mkdir -p /opt/clawksis/bin && \
 # `s6-setuidgid clawk` in its run script. If CLAWK_UID is unset, services
 # run as the default clawk user (UID 10000).
 
-# ---------- Bake build-time git revision ----------
-# .dockerignore excludes .git, so `git rev-parse HEAD` from inside the
-# container always returns nothing — meaning `clawk dump` reports
-# "(unknown)" and the startup banner drops its `· upstream <sha>` suffix.
-# That makes support triage from container bug reports impossible:
-# we can't tell which commit the user is actually running.
+# ---------- Image provenance + install stamp ----------
+# CI (.github/workflows/docker.yml) runs scripts/write_install_stamp.py
+# before `docker build`, so the bulk `COPY . .` above already placed a
+# full-provenance /opt/clawksis/install-stamp.json next to the code.
+# .dockerignore excludes .git, so the stamp is the only commit channel the
+# image carries: clawk_cli/version_info.py reads it at runtime (stamp
+# first, live git second, unknown third), and both `clawk dump` and
+# banner.get_git_banner_state() consume it through version_info.
 #
-# Fix: write the commit SHA passed via the CLAWK_GIT_SHA build-arg to
-# /opt/clawksis/.clawk_build_sha at build time, and have
-# clawk_cli/build_info.py read it at runtime.  Both `clawk dump` and
-# banner.get_git_banner_state() try the baked SHA first, then fall back
-# to live `git rev-parse` for source installs (unchanged behaviour).
+# A local `docker build` without CI gets the minimal all-zero fallback
+# stamp below; version_info skips the placeholder commit, so dump honestly
+# reports "(unknown)". updateMechanism is `external`: the image is rebuilt
+# and re-pulled, it never updates itself.
 #
-# The arg is optional — local `docker build` without --build-arg simply
-# omits the file, and the runtime falls back to live-git lookup.  CI
-# (.github/workflows/docker.yml) passes ${{ github.sha }} so
-# every published image has it.
-ARG CLAWK_GIT_SHA=
-RUN if [ -n "${CLAWK_GIT_SHA}" ]; then \
-        printf '%s\n' "${CLAWK_GIT_SHA}" > /opt/clawksis/.clawk_build_sha; \
-    fi
+# The versioned, non-secret provenance marker is the authoritative runtime
+# signal that this filesystem came from an immutable image.  It deliberately
+# lives outside both /opt/clawksis (which operators sometimes bind-mount as a
+# checkout) and /opt/data (the mutable CLAWK_HOME volume).  Its `revision`
+# is read from the install stamp; the fallback stamp's all-zero commit maps
+# to null.
+RUN set -eu; \
+    if [ ! -f /opt/clawksis/install-stamp.json ]; then \
+        printf '{"schemaVersion":2,"commit":"0000000000000000000000000000000000000000","distribution":"docker","source":"fallback","updateMechanism":"external"}\n' \
+            > /opt/clawksis/install-stamp.json; \
+    fi; \
+    python3 -c 'import json; from pathlib import Path; path = Path("/opt/clawksis/install-stamp.json"); stamp = json.loads(path.read_text()); stamp["pmRuntime"] = "/opt/clawksis/pm-runtime"; path.write_text(json.dumps(stamp) + "\n")'; \
+    mkdir -p /etc/clawk; \
+    python3 -c 'import json, pathlib, tomllib; project = tomllib.loads(pathlib.Path("/opt/clawksis/pyproject.toml").read_text(encoding="utf-8"))["project"]; stamp = json.loads(pathlib.Path("/opt/clawksis/install-stamp.json").read_text(encoding="utf-8")); commit = stamp.get("commit"); revision = commit if commit and set(commit) != {"0"} else None; marker = pathlib.Path("/etc/clawk/image-provenance.json"); marker.write_text(json.dumps({"schema": 1, "deployment_kind": "image", "manager": "docker", "image": "nousresearch/clawksis-agent", "version": project["version"], "revision": revision}, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"); marker.chmod(0o444)'
 
 # ---------- s6-overlay service wiring ----------
 # Static services declared at build time: main-clawk + dashboard.
@@ -295,20 +463,16 @@ ENV CLAWK_WEB_DIST=/opt/clawksis/clawk_cli/web_dist
 ENV CLAWK_TUI_DIR=/opt/clawksis/ui-tui
 ENV CLAWK_HOME=/opt/data
 ENV CLAWK_WRITE_SAFE_ROOT=/opt/data
-ENV CLAWK_DISABLE_LAZY_INSTALLS=1
-# The published image seals /opt/clawksis (root-owned, read-only) so a runtime
-# lazy install can't mutate the agent's own venv and brick it. But opt-in
-# backends (Firecrawl web search, Exa, Feishu, …) keep their SDKs in
-# tools/lazy_deps.py — deliberately NOT baked into [all] (see pyproject.toml
-# policy 2026-05-12: one quarantined release must not break every install).
-# Redirect those lazy installs to a writable dir on the durable data volume.
-# lazy_deps appends this dir to the END of sys.path, so a package installed
-# here can only ADD modules — it can never shadow or downgrade a core module,
-# so the sealed-venv guarantee holds even with installs re-enabled. The dir
-# is seeded + chowned to the clawk user by docker/stage2-hook.sh and lives
-# on the /opt/data volume, so it persists across container recreates / image
-# updates (an ABI stamp invalidates it if a rebuild bumps the interpreter).
-ENV CLAWK_LAZY_INSTALL_TARGET=/opt/data/lazy-packages
+# Opt-in backend SDKs install on first use into PM dependency generations under
+# /opt/data/installs (the sealed /opt/clawksis/.venv is never written); stage2
+# re-resolves them against each new image. security.allow_lazy_installs: false
+# turns this off.
+
+# Xfce, dbus and the display-allocation lock need one; containers have no logind
+# to create /run/user/<uid>. The default fallback ($HOME/.cache) is the /opt/data
+# volume, which a host-side install may share — two instances would then contend
+# for one lock. Container-scoped instead; seeded 0700 by docker/stage2-hook.sh.
+ENV XDG_RUNTIME_DIR=/tmp/clawk-runtime
 
 # `docker exec` privilege-drop shim. When operators run
 # `docker exec <c> clawk ...` they default to root, and any file the
@@ -321,6 +485,8 @@ ENV CLAWK_LAZY_INSTALL_TARGET=/opt/data/lazy-packages
 # Recursion is impossible because the shim exec's the venv binary by
 # absolute path (/opt/clawksis/.venv/bin/clawk). See the shim source for
 # the opt-out env var (CLAWK_DOCKER_EXEC_AS_ROOT=1).
+COPY --chmod=0755 docker/clawk-exec-shim.sh /opt/clawksis/bin/clawk
+COPY --chmod=0755 docker/entrypoint-dispatch.sh /opt/clawksis/docker/entrypoint-dispatch.sh
 
 # Pre-s6 entrypoint.sh did `source .venv/bin/activate` which exported
 # the venv bin onto PATH; Architecture B's main-wrapper.sh does the
@@ -334,30 +500,47 @@ ENV CLAWK_LAZY_INSTALL_TARGET=/opt/data/lazy-packages
 # binary by absolute path, so this PATH ordering is transparent to
 # every other consumer.
 ENV PATH="/opt/clawksis/bin:/opt/clawksis/.venv/bin:/opt/data/.local/bin:${PATH}"
-RUN mkdir -p /opt/data
+# PM's atomic writer creates private facts for source installs. In the
+# image these are shared, non-secret package metadata, read by UID 10000.
+# uv's environment locks are build-only and may be world-writable. Remove
+# them after all builds; never relax permissions on mutable PM/home state.
+RUN mkdir -p /opt/data && chmod 0644 /opt/clawksis/tools/facts.json && \
+    rm -f /opt/clawksis/.venv/.lock /opt/clawksis/pm-runtime/.lock
+# Build helpers use system Python above; TUI gateway children need the sealed runtime.
+ENV CLAWK_PYTHON=/opt/clawksis/.venv/bin/python
 VOLUME [ "/opt/data" ]
 
-# s6-overlay's /init is PID 1. It sets up the supervision tree, runs
-# /etc/cont-init.d/* (our stage2 hook), starts s6-rc services
-# declared in /etc/s6-overlay/s6-rc.d/, then exec's its remaining
-# argv as the container's "main program" with stdin/stdout/stderr
-# inherited (this is what makes interactive --tui work). When the
-# main program exits, /init begins stage 3 shutdown and the container
-# exits with the program's exit code. Replaces tini — see Phase 2 of
-# docs/plans/2026-05-07-s6-overlay-dynamic-subagent-gateways.md.
+# The image ENTRYPOINT is a tiny dispatcher rather than `/init` directly.
+# When the image really owns PID 1 (normal Docker / Podman), the dispatcher
+# execs `/init` and preserves the full s6 supervision tree. When a platform
+# wraps the image entrypoint under its own PID-1 init (Fly Machines,
+# `docker run --init`, some schedulers), `/init` would abort with
+# `can only run as pid 1`; in that case the dispatcher falls back to
+# `stage2-hook.sh` + `main-wrapper.sh` directly so foreground commands still
+# work. See #38349.
+#
+# On the PID-1 path, s6-overlay's /init sets up the supervision tree, runs
+# /etc/cont-init.d/* (our stage2 hook), starts s6-rc services declared in
+# /etc/s6-overlay/s6-rc.d/, then exec's its remaining argv as the container's
+# "main program" with stdin/stdout/stderr inherited (this is what makes
+# interactive --tui work). When the main program exits, /init begins stage 3
+# shutdown and the container exits with the program's exit code. Replaces
+# tini — see Phase 2 of docs/plans/2026-05-07-s6-overlay-dynamic-subagent-gateways.md.
 #
 # We use the ENTRYPOINT+CMD split rather than CMD alone so the
 # wrapper is prepended to user-supplied args automatically:
 #
-#   docker run <image>                  → /init main-wrapper.sh   (CMD default)
-#   docker run <image> chat -q "hi"     → /init main-wrapper.sh chat -q hi
-#   docker run <image> sleep infinity   → /init main-wrapper.sh sleep infinity
-#   docker run <image> --tui            → /init main-wrapper.sh --tui
+#   docker run <image>                  → entrypoint-dispatch.sh   (CMD default)
+#   docker run <image> chat -q "hi"     → entrypoint-dispatch.sh chat -q hi
+#   docker run <image> sleep infinity   → entrypoint-dispatch.sh sleep infinity
+#   docker run <image> --tui            → entrypoint-dispatch.sh --tui
 #
 # main-wrapper.sh handles arg routing (bare-exec vs. clawk
 # subcommand vs. no-args), drops to the clawk user via s6-setuidgid,
 # and exec's the final program so its exit code becomes the container
-# exit code. Without the wrapper-as-ENTRYPOINT, leading-dash args
-# like `--version` would be intercepted by /init's POSIX shell.
-ENTRYPOINT [ "/init", "/opt/clawksis/docker/main-wrapper.sh" ]
+# exit code. The dispatcher preserves that contract across both the
+# supervised PID-1 path and the non-PID-1 fallback path. Without the
+# wrapper-as-ENTRYPOINT, leading-dash args like `--version` would be
+# intercepted by /init's POSIX shell.
+ENTRYPOINT [ "/opt/clawksis/docker/entrypoint-dispatch.sh" ]
 CMD [ ]

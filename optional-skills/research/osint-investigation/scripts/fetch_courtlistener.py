@@ -18,7 +18,7 @@ import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _http import get_json  # noqa: E402
+from _http import get_json
 
 BASE = "https://www.courtlistener.com/api/rest/v4/search/"
 
@@ -72,7 +72,7 @@ def fetch(
     while next_url and len(rows) < limit:
         try:
             payload = get_json(next_url, headers=headers)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"CourtListener error: {e}", file=sys.stderr)
             break
         if not isinstance(payload, dict):
@@ -81,28 +81,30 @@ def fetch(
         for r in results:
             if len(rows) >= limit:
                 break
-            rows.append({
-                "case_name": r.get("caseName", "") or r.get("case_name", "") or "",
-                "court": r.get("court", "") or "",
-                "court_id": r.get("court_id", "") or "",
-                "date_filed": (r.get("dateFiled", "") or r.get("date_filed", "") or "")[
-                    :10
-                ],
-                "docket_number": r.get("docketNumber", "")
-                or r.get("docket_number", "")
-                or "",
-                "judge": r.get("judge", "") or "",
-                "citation": "; ".join(r.get("citation", []) or [])
-                if isinstance(r.get("citation"), list)
-                else (r.get("citation") or ""),
-                "result_type": search_type,
-                "snippet": (r.get("snippet", "") or "").replace("\n", " ")[:500],
-                "absolute_url": (
-                    f"https://www.courtlistener.com{r.get('absolute_url', '')}"
-                    if r.get("absolute_url", "").startswith("/")
-                    else r.get("absolute_url", "")
-                ),
-            })
+            rows.append(
+                {
+                    "case_name": r.get("caseName", "") or r.get("case_name", "") or "",
+                    "court": r.get("court", "") or "",
+                    "court_id": r.get("court_id", "") or "",
+                    "date_filed": (
+                        r.get("dateFiled", "") or r.get("date_filed", "") or ""
+                    )[:10],
+                    "docket_number": r.get("docketNumber", "")
+                    or r.get("docket_number", "")
+                    or "",
+                    "judge": r.get("judge", "") or "",
+                    "citation": "; ".join(r.get("citation", []) or [])
+                    if isinstance(r.get("citation"), list)
+                    else (r.get("citation") or ""),
+                    "result_type": search_type,
+                    "snippet": (r.get("snippet", "") or "").replace("\n", " ")[:500],
+                    "absolute_url": (
+                        f"https://www.courtlistener.com{r.get('absolute_url', '')}"
+                        if r.get("absolute_url", "").startswith("/")
+                        else r.get("absolute_url", "")
+                    ),
+                }
+            )
         next_url = payload.get("next")
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)

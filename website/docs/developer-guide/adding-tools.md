@@ -13,8 +13,8 @@ This page is for adding a **built-in Clawksis tool** to the repository itself.
 If you want a personal, project-local, or otherwise custom tool without
 modifying Clawksis core, use the plugin route instead:
 
-- [Plugins](/user-guide/features/plugins)
-- [Build a Clawksis Plugin](/developer-guide/plugins)
+- [Plugins](../user-guide/features/plugins.md)
+- [Build a Clawksis Plugin](./plugins/index.md)
 
 Default to plugins for most custom tool creation. Only follow this page when
 you explicitly want to ship a new built-in tool in `tools/` and `toolsets.py`.
@@ -50,14 +50,12 @@ logger = logging.getLogger(__name__)
 
 # --- Availability check ---
 
-
 def check_weather_requirements() -> bool:
     """Return True if the tool's dependencies are available."""
     return bool(os.getenv("WEATHER_API_KEY"))
 
 
 # --- Handler ---
-
 
 def weather_tool(location: str, units: str = "metric") -> str:
     """Fetch weather for a location. Returns JSON string."""
@@ -81,17 +79,17 @@ WEATHER_SCHEMA = {
         "properties": {
             "location": {
                 "type": "string",
-                "description": "City name or coordinates (e.g. 'London' or '51.5,-0.1')",
+                "description": "City name or coordinates (e.g. 'London' or '51.5,-0.1')"
             },
             "units": {
                 "type": "string",
                 "enum": ["metric", "imperial"],
                 "description": "Temperature units (default: metric)",
-                "default": "metric",
-            },
+                "default": "metric"
+            }
         },
-        "required": ["location"],
-    },
+        "required": ["location"]
+    }
 }
 
 
@@ -104,8 +102,8 @@ registry.register(
     toolset="weather",
     schema=WEATHER_SCHEMA,
     handler=lambda args, **kw: weather_tool(
-        location=args.get("location", ""), units=args.get("units", "metric")
-    ),
+        location=args.get("location", ""),
+        units=args.get("units", "metric")),
     check_fn=check_weather_requirements,
     requires_env=["WEATHER_API_KEY"],
 )
@@ -153,7 +151,6 @@ async def weather_tool_async(location: str) -> str:
         ...
     return json.dumps(result)
 
-
 registry.register(
     name="weather",
     toolset="weather",
@@ -184,7 +181,7 @@ registry.register(
 
 ## Agent-Loop Intercepted Tools
 
-Some tools (`todo`, `memory`, `session_search`, `delegate_task`) need access to per-session agent state. These are intercepted by `run_agent.py` before reaching the registry. The registry still holds their schemas, but `dispatch()` returns a fallback error if the intercept is bypassed.
+Some tools (`todo_list`, `memory`, `session_search`, `delegate_task`) need access to per-session agent state. These are intercepted by the agent loop (`agent/tool_executor.py`, called from `agent/conversation_loop.py`) before reaching the registry. The registry still holds their schemas, but `dispatch()` returns a fallback error if the intercept is bypassed.
 
 ## Optional: Setup Wizard Integration
 

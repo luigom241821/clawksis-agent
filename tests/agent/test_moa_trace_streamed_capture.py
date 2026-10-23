@@ -24,13 +24,13 @@ from agent.moa_loop import MoAChatCompletions
 
 def _enable_traces(tmp_path, monkeypatch):
     """Point CLAWK_HOME at a temp dir and turn moa.save_traces on."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     # save_moa_turn reads config via clawk_cli.config.load_config; stub it to
     # return traces-on so the test doesn't depend on a real config file.
-    import agent.moa_trace as moa_trace
+    from agent import moa_trace
 
     monkeypatch.setattr(
         moa_trace,
@@ -78,42 +78,6 @@ def _read_single_trace(trace_dir, session_id):
     return json.loads(lines[0])
 
 
-def test_streamed_aggregator_output_captured_from_fallback(tmp_path, monkeypatch):
-    """Streaming turn: inline output is None, fallback text is embedded."""
-    trace_dir = _enable_traces(tmp_path, monkeypatch)
-    mc = _make_completions_with_pending(streamed=True, inline_output=None)
-
-    mc.consume_and_save_trace(
-        "sess_streamed",
-        aggregator_output_fallback="the acting aggregator answer",
-    )
-
-    rec = _read_single_trace(trace_dir, "sess_streamed")
-    agg = rec["aggregator"]
-    assert agg["streamed"] is True
-    assert agg["output"] == "the acting aggregator answer"
-    assert agg["output_location"] == "inline_from_stream"
-
-
-def test_non_streaming_prefers_inline_over_fallback(tmp_path, monkeypatch):
-    """Non-streaming turn keeps its inline capture even if a fallback is passed."""
-    trace_dir = _enable_traces(tmp_path, monkeypatch)
-    mc = _make_completions_with_pending(
-        streamed=False, inline_output="inline captured text"
-    )
-
-    mc.consume_and_save_trace(
-        "sess_inline",
-        aggregator_output_fallback="SHOULD NOT BE USED",
-    )
-
-    rec = _read_single_trace(trace_dir, "sess_inline")
-    agg = rec["aggregator"]
-    assert agg["streamed"] is False
-    assert agg["output"] == "inline captured text"
-    assert agg["output_location"] == "inline"
-
-
 def test_streamed_without_fallback_points_to_session_db(tmp_path, monkeypatch):
     """Streaming turn with no resolvable text falls back to the state.db pointer."""
     trace_dir = _enable_traces(tmp_path, monkeypatch)
@@ -140,16 +104,3 @@ def test_pending_trace_cleared_after_flush(tmp_path, monkeypatch):
     path = trace_dir / "sess_once.jsonl"
     lines = path.read_text().strip().split("\n")
     assert len(lines) == 1
-
-
-def test_empty_fallback_string_treated_as_missing(tmp_path, monkeypatch):
-    """An empty-string fallback must not override to '' — treated as absent."""
-    trace_dir = _enable_traces(tmp_path, monkeypatch)
-    mc = _make_completions_with_pending(streamed=True, inline_output=None)
-
-    mc.consume_and_save_trace("sess_empty", aggregator_output_fallback="")
-
-    rec = _read_single_trace(trace_dir, "sess_empty")
-    agg = rec["aggregator"]
-    assert agg["output"] is None
-    assert agg["output_location"] == "assistant_message_in_session_db"

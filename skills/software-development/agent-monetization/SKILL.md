@@ -1,6 +1,10 @@
 ---
 name: agent-monetization
-description: Monetizar coding agents (OpenCode, Claude Code, Codex) mediante publicidad durante los ciclos de "thinking" — wrapper de terminal, integración con Kickbacks, servidor VS Code Web, y modelo de impresiones.
+description: "Monetiza coding agents con anuncios durante el thinking."
+version: 1.0.0
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 category: software-development
 triggers:
   - "quiero ganar dinero con AI coding agents"
@@ -8,6 +12,9 @@ triggers:
   - "kickbacks"
   - "ads en espera de agente"
   - "publicidad en coding agents"
+metadata:
+  clawk:
+    tags: [monetization, ads, coding-agents, opencode, claude-code, codex, kickbacks]
 ---
 
 # Agent Monetization

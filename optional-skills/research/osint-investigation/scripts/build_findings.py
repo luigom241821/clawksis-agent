@@ -85,20 +85,22 @@ def build_findings(
             }
             for r in rows
         ]
-        findings.append({
-            "id": finding_id,
-            "title": f"Entity match: {best.get('left_name', '')} ↔ {best.get('right_name', '')}",
-            "severity": "MEDIUM" if best.get("confidence") == "high" else "LOW",
-            "confidence": best.get("confidence", "low"),
-            "summary": (
-                f"{len(rows)} cross-link record(s) tie "
-                f"'{best.get('left_name', '')}' to "
-                f"'{best.get('right_name', '')}' "
-                f"(best tier: {best.get('match_type', '')})."
-            ),
-            "evidence": evidence,
-            "sources": ["cross_links.csv"],
-        })
+        findings.append(
+            {
+                "id": finding_id,
+                "title": f"Entity match: {best.get('left_name', '')} ↔ {best.get('right_name', '')}",
+                "severity": "MEDIUM" if best.get("confidence") == "high" else "LOW",
+                "confidence": best.get("confidence", "low"),
+                "summary": (
+                    f"{len(rows)} cross-link record(s) tie "
+                    f"'{best.get('left_name', '')}' to "
+                    f"'{best.get('right_name', '')}' "
+                    f"(best tier: {best.get('match_type', '')})."
+                ),
+                "evidence": evidence,
+                "sources": ["cross_links.csv"],
+            }
+        )
 
     # 2. Bundled-donations findings (if cross_links carries donor↔candidate pattern).
     #    Heuristic: many distinct left names sharing the same right name.
@@ -115,60 +117,64 @@ def build_findings(
             continue
         rows = by_right_rows[right_norm]
         right_raw = rows[0].get("right_name", "")
-        findings.append({
-            "id": f"F{next_id:04d}",
-            "title": f"Bundled cross-links: {len(lefts)} distinct left entities ↔ '{right_raw}'",
-            "severity": "HIGH",
-            "confidence": "medium",
-            "summary": (
-                f"{len(lefts)} distinct left-side entities link to "
-                f"'{right_raw}'. Pattern suggests coordinated relationship "
-                f"(e.g. bundled donations, multi-vendor employer)."
-            ),
-            "evidence": [
-                {
-                    "source": "cross_links.csv",
-                    "row": int(r.get("__row__", "0")),
-                    "fields": {
-                        "left_name": r.get("left_name", ""),
-                        "match_type": r.get("match_type", ""),
-                    },
-                }
-                for r in rows
-            ],
-            "sources": ["cross_links.csv"],
-        })
+        findings.append(
+            {
+                "id": f"F{next_id:04d}",
+                "title": f"Bundled cross-links: {len(lefts)} distinct left entities ↔ '{right_raw}'",
+                "severity": "HIGH",
+                "confidence": "medium",
+                "summary": (
+                    f"{len(lefts)} distinct left-side entities link to "
+                    f"'{right_raw}'. Pattern suggests coordinated relationship "
+                    f"(e.g. bundled donations, multi-vendor employer)."
+                ),
+                "evidence": [
+                    {
+                        "source": "cross_links.csv",
+                        "row": int(r.get("__row__", "0")),
+                        "fields": {
+                            "left_name": r.get("left_name", ""),
+                            "match_type": r.get("match_type", ""),
+                        },
+                    }
+                    for r in rows
+                ],
+                "sources": ["cross_links.csv"],
+            }
+        )
         next_id += 1
 
     # 3. Timing-based findings.
     if timing_path and Path(timing_path).exists():
-        timing = json.loads(Path(timing_path).read_text())
+        timing = json.loads(Path(timing_path).read_text(encoding="utf-8"))
         for r in timing.get("results", []):
             if not r.get("significant"):
                 continue
-            findings.append({
-                "id": f"F{next_id:04d}",
-                "title": (
-                    f"Donation timing significantly clusters near awards: "
-                    f"{r['donor']} ↔ {r['recipient']}"
-                ),
-                "severity": "HIGH" if r["p_value"] < 0.01 else "MEDIUM",
-                "confidence": "medium",
-                "summary": (
-                    f"Mean nearest-award distance {r['observed_mean_days']} days "
-                    f"(null {r['null_mean_days']} days). p={r['p_value']}, "
-                    f"effect size {r['effect_size_sd']} SD. "
-                    f"{r['n_donations']} donations, {r['n_award_dates']} awards."
-                ),
-                "evidence": [
-                    {
-                        "source": "timing.json",
-                        "row": None,
-                        "fields": r,
-                    }
-                ],
-                "sources": ["timing.json"],
-            })
+            findings.append(
+                {
+                    "id": f"F{next_id:04d}",
+                    "title": (
+                        f"Donation timing significantly clusters near awards: "
+                        f"{r['donor']} ↔ {r['recipient']}"
+                    ),
+                    "severity": "HIGH" if r["p_value"] < 0.01 else "MEDIUM",
+                    "confidence": "medium",
+                    "summary": (
+                        f"Mean nearest-award distance {r['observed_mean_days']} days "
+                        f"(null {r['null_mean_days']} days). p={r['p_value']}, "
+                        f"effect size {r['effect_size_sd']} SD. "
+                        f"{r['n_donations']} donations, {r['n_award_dates']} awards."
+                    ),
+                    "evidence": [
+                        {
+                            "source": "timing.json",
+                            "row": None,
+                            "fields": r,
+                        }
+                    ],
+                    "sources": ["timing.json"],
+                }
+            )
             next_id += 1
 
     # Sort: severity → confidence → id.
@@ -189,7 +195,7 @@ def build_findings(
         },
         "findings": findings,
     }
-    Path(out_path).write_text(json.dumps(payload, indent=2))
+    Path(out_path).write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload
 
 
