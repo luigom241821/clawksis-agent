@@ -41,9 +41,9 @@ def _fake_completion(text):
 
 @pytest.fixture
 def db_agent(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
-    db = SessionDB(db_path=tmp_path / ".clawk" / "state.db")
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
+    db = SessionDB(db_path=tmp_path / ".clawksis" / "state.db")
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),

@@ -3913,7 +3913,7 @@ tips:
   t357: "clawk setup은 처음 사용하는 분을 제공자, 키, 플랫폼 연결까지 하나의 대화형 흐름으로 안내해요."
   t358: "clawk status --deep은 모든 구성 요소에 대해 전체 상태 점검을 실행해요. 그냥 clawk status는 빠른 요약 보기예요."
   t359: "CLAWK_AGENT_TIMEOUT=0은 실행 중인 에이전트에 대한 게이트웨이 비활성 종료를 비활성화해요 — 긴 리서치 작업에 쓰세요."
-  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1은 ./.clawk/plugins/의 저장소 로컬 플러그인을 자동으로 불러와요 — 설계상 신뢰 확인을 거쳐요."
+  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1은 ./.clawksis/plugins/의 저장소 로컬 플러그인을 자동으로 불러와요 — 설계상 신뢰 확인을 거쳐요."
   t361: "CLAWK_DISABLE_FILE_STATE_GUARD=1은 patch와 write_file의 '읽은 후 파일이 변경됨' 보호를 꺼요."
   t362: "CLAWK_ALLOW_PRIVATE_URLS=true는 웹 도구가 localhost와 사설 네트워크에 접근할 수 있게 해요 — 게이트웨이 모드에서는 기본적으로 꺼져 있어요."
   t363: "CLAWK_OPTIONAL_SKILLS=name1,name2는 프로필별 첫 실행 시 선택 카탈로그의 추가 스킬을 자동으로 설치해요."

@@ -33,7 +33,7 @@ from clawk_cli.active_sessions import (
 
 @pytest.fixture(autouse=True)
 def _isolated_registry(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
 
 _owner_seq = itertools.count()

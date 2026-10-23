@@ -50,7 +50,7 @@ sys.path.insert(0, os.path.join(HARNESS, "..", "core_tool_deferral"))
 from sandbox import isolate_host
 
 tmp_root = tempfile.mkdtemp(prefix=f"prd-{ARM}-{TASK_ID}-")
-clawk_home = os.path.join(tmp_root, ".clawk")
+clawk_home = os.path.join(tmp_root, ".clawksis")
 workspace = os.path.join(tmp_root, "ws")
 os.makedirs(clawk_home)
 os.makedirs(workspace)

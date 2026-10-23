@@ -9,7 +9,7 @@ import tools.process_registry as pr
 
 @pytest.fixture
 def sleeper(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     session = pr.process_registry.spawn_local(

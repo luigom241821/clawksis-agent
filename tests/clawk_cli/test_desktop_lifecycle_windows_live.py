@@ -103,8 +103,8 @@ def test_live_supervised_serve_suppresses_cold_start(sleeper, monkeypatch, tmp_p
     from clawk_cli import gateway_windows
     from clawk_cli import update_cmd
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
 
     serve = sleeper()
     _write_ledger([_entry(serve)])
@@ -128,8 +128,8 @@ def test_live_supervised_serve_suppresses_cold_start(sleeper, monkeypatch, tmp_p
 def test_holder_scan_fallback_respects_token_classifier(sleeper, monkeypatch, tmp_path):
     from clawk_cli import update_cmd
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
     _write_ledger([])  # force the fallback rung
 
     # Real process whose argv carries genuine serve shape, visible to psutil.

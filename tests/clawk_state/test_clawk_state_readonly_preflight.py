@@ -37,7 +37,7 @@ pytestmark = [
 @pytest.fixture()
 def clawk_home(tmp_path, monkeypatch):
     """Isolated CLAWK_HOME so the repair scope covers tmp DBs."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home

@@ -21,7 +21,7 @@ def test_clean_config_prints_nothing(capsys):
 
 
 def test_stale_records_warned_with_reason_texts(tmp_path, capsys, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     gone = tmp_path / "gone"

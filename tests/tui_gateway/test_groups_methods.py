@@ -16,7 +16,7 @@ def home(tmp_path, monkeypatch):
     class DurableRunStore:
         durable = True
 
-    path = tmp_path / ".clawk"
+    path = tmp_path / ".clawksis"
     path.mkdir()
     (path / "profiles" / "ops").mkdir(parents=True)
     (path / "profiles" / "ops" / "config.yaml").write_text(

@@ -359,7 +359,7 @@ class TestFileSync:
     def test_cleanup_syncs_back_snapshots_closes_and_is_idempotent(
         self, make_env, vercel_module, vercel_sdk, monkeypatch, tmp_path
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         src = tmp_path / "token.txt"
         src.write_text("host-token")
@@ -562,7 +562,7 @@ class TestSnapshotPersistence:
     def test_create_restores_from_saved_snapshot(
         self, make_env, vercel_module, vercel_sdk, monkeypatch, tmp_path
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         vercel_module._store_snapshot("task-123", "snap_saved")
         restored = _FakeSandbox(cwd="/restored")
@@ -580,7 +580,7 @@ class TestSnapshotPersistence:
     def test_restore_failure_prunes_snapshot_and_falls_back_to_fresh_sandbox(
         self, make_env, vercel_module, vercel_sdk, monkeypatch, tmp_path
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         vercel_module._store_snapshot("task-123", "snap_stale")
         fresh = _FakeSandbox(cwd="/fresh")
@@ -599,7 +599,7 @@ class TestSnapshotPersistence:
     def test_cleanup_stops_when_snapshot_fails_without_storing_metadata(
         self, make_env, vercel_module, vercel_sdk, monkeypatch, tmp_path
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         env = make_env()
         sandbox = vercel_sdk.current
@@ -615,7 +615,7 @@ class TestSnapshotPersistence:
     def test_non_persistent_cleanup_stops_without_snapshot(
         self, make_env, vercel_module, vercel_sdk, monkeypatch, tmp_path
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         env = make_env(persistent_filesystem=False)
         sandbox = vercel_sdk.current
@@ -630,7 +630,7 @@ class TestSnapshotPersistence:
     def test_persistent_cleanup_without_task_id_stops_without_snapshot(
         self, make_env, vercel_module, vercel_sdk, monkeypatch, tmp_path
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         env = make_env(task_id="")
         sandbox = vercel_sdk.current
@@ -679,7 +679,7 @@ class TestImageSelection:
         )
         assert (pinned["image"], pinned["runtime"]) == (None, "node22")
 
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         vercel_module._store_snapshot("task-123", "snap_saved")
         make_env(runtime="node22")
         restore = vercel_sdk.create_kwargs[-1]

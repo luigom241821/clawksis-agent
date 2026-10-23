@@ -1,7 +1,7 @@
 """Lane-private harness for the dashboard (``clawk dashboard``) E2E suite.
 
 Every scenario drives the REAL web server as a child process: ``python -m clawk_cli.main dashboard
---no-open --skip-build --port 0`` with HOME=<tmp>/home and CLAWK_HOME=<tmp>/home/.clawk (profiles
+--no-open --skip-build --port 0`` with HOME=<tmp>/home and CLAWK_HOME=<tmp>/home/.clawksis (profiles
 resolve under $HOME, never the real install), every credential env var stripped, the LLM vendor
 replaced by ``tests.fakes.fake_llm_provider.FakeLLMServer``. The client side speaks only what the SPA
 speaks: it reads the session token out of the served ``index.html`` (the browser's bootstrap), sends
@@ -101,7 +101,7 @@ def hermetic_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, s
     """Child env: fake HOME (profile-root anchor) + CLAWK_HOME under it, nothing credential-shaped."""
     home = home.resolve()
     assert home != real_user_home() and not str(home).startswith(
-        str(real_user_home() / ".clawk" / "profiles")
+        str(real_user_home() / ".clawksis" / "profiles")
     ), home
     env = {
         k: v
@@ -282,7 +282,7 @@ def make_sandbox(
 ) -> Sandbox:
     """Launch profile at HOME/.clawk, the rest under profiles/<name>; each owns a started provider
     that accepts only its own key, so every recorded request proves WHO sent it."""
-    clawk_home = root / "home" / ".clawk"
+    clawk_home = root / "home" / ".clawksis"
     profiles: dict[str, Profile] = {}
     _reaper.adopt_orphans()  # before any spawn: every detached descendant stays reapable
     for name in names:

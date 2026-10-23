@@ -168,7 +168,7 @@ def test_lock_owned_serve_pids_sees_root_home_locks_from_a_profile_home(
     profile's live SSH backend on every profile switch (#89811)."""
     import clawk_constants
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     profile_home = root / "profiles" / "flocki"
     profile_home.mkdir(parents=True)
     oid = "f" * 32

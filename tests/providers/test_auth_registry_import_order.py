@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def test_tui_import_exposes_auth_registry_to_provider_plugins(tmp_path):
     """Provider discovery must not see a partially initialized auth module."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     plugin_dir = clawk_home / "plugins" / "model-providers" / "import-order-probe"
     plugin_dir.mkdir(parents=True)
     (plugin_dir / "__init__.py").write_text(

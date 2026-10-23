@@ -36,7 +36,7 @@ def _stub_fetch(monkeypatch, handler):
 
 
 def test_save_url_forwards_headers_and_streams_to_cache(monkeypatch, tmp_path):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     calls = []
 
     import httpx
@@ -63,7 +63,7 @@ def test_save_url_forwards_headers_and_streams_to_cache(monkeypatch, tmp_path):
 
 
 def test_save_url_strict_content_type_rejects_non_video(monkeypatch, tmp_path):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     import httpx
 
     _stub_fetch(
@@ -88,7 +88,7 @@ def test_save_url_redirect_scopes_caller_headers_to_first_hop_and_fails_closed(
     """Caller auth headers (provider base_url fetches) go to the first hop only — a
     redirect target must never receive them — and a 3xx without ``Location`` is an
     error, never a cached body."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     calls = []
 
     import httpx
@@ -131,7 +131,7 @@ def test_save_url_trusted_origin_skips_private_check_on_first_hop_only(
     import threading
     from http.server import BaseHTTPRequestHandler, HTTPServer
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.delenv("CLAWK_ALLOW_PRIVATE_URLS", raising=False)
     hits = []
 

@@ -53,7 +53,7 @@ def _isolate_op_token(monkeypatch):
 
 def test_op_env_autoloads_bootstrap_token_in_cron_context(tmp_path, monkeypatch):
     """A fresh interpreter (no inherited shell state) picks up the token."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     # .env carries user secrets / op:// references but NOT the bootstrap token.
     (home / ".env").write_text("FOO=bar\n", encoding="utf-8")

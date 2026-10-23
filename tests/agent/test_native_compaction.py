@@ -419,7 +419,7 @@ class TestAgentInitConfig:
     ):
         from run_agent import AIAgent
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         lines = ["compression:", "  codex_responses_native: true"]
         if threshold_yaml is not None:

@@ -15,7 +15,7 @@ import pytest
 @pytest.fixture
 def isolated_home(tmp_path, monkeypatch):
     """Fresh CLAWK_HOME with an empty local skills dir."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "skills").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
 

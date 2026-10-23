@@ -15,7 +15,7 @@ bash -n "$SCRIPT" && echo "syntax OK" || exit 1
 if command -v cygpath >/dev/null 2>&1; then ROOT="$(cygpath -m "$(mktemp -d)")"; else ROOT="$(mktemp -d)"; fi
 export HOME="$ROOT/home"; mkdir -p "$HOME"
 export GIT_CONFIG_GLOBAL="$ROOT/gitconfig-test"; : > "$GIT_CONFIG_GLOBAL"
-export CLAWK_HOME="$ROOT/home/.clawk"
+export CLAWK_HOME="$ROOT/home/.clawksis"
 export CLAWK_DESKTOP_USER_DATA_DIR="$ROOT/electron-user-data"
 export CLAWK_STOP_LOG="$ROOT/gateway-stop.log"
 

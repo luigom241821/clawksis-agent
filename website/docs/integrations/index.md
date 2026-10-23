@@ -118,7 +118,7 @@ Each platform's setup page walks through what to do once you're there.
 
 ## Plugins
 
-- **[Plugin System](../user-guide/features/plugins.md)** — Extend Clawksis with custom tools, lifecycle hooks, and CLI commands without modifying core code. Plugins are discovered from `~/.clawksis/plugins/`, project-local `.clawk/plugins/`, and pip-installed entry points.
+- **[Plugin System](../user-guide/features/plugins.md)** — Extend Clawksis with custom tools, lifecycle hooks, and CLI commands without modifying core code. Plugins are discovered from `~/.clawksis/plugins/`, project-local `.clawksis/plugins/`, and pip-installed entry points.
 - **[Build a Plugin](../developer-guide/plugins/index.md)** — Step-by-step guide for creating Clawksis plugins with tools, hooks, and CLI commands.
 
 ## Training & Evaluation

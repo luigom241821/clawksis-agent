@@ -2,7 +2,7 @@
 
 
 def _write_env(monkeypatch, tmp_path, content):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / ".env").write_text(content, encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))

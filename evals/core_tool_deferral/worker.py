@@ -46,7 +46,7 @@ os.environ.pop("CLAWK_PROFILE", None)
 from sandbox import isolate_host
 
 tmp_root = tempfile.mkdtemp(prefix=f"ab-{ARM}-{TASK_ID}-")
-clawk_home = os.path.join(tmp_root, ".clawk")
+clawk_home = os.path.join(tmp_root, ".clawksis")
 workspace = os.path.join(tmp_root, "ws")
 os.makedirs(clawk_home)
 os.makedirs(workspace)

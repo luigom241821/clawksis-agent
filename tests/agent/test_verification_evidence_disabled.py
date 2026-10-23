@@ -16,7 +16,7 @@ from agent.verification_evidence import (
 
 @pytest.fixture
 def project(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.delenv("CLAWK_VERIFY_ON_STOP", raising=False)
     root = tmp_path / "project"
     root.mkdir()
@@ -27,7 +27,7 @@ def project(tmp_path, monkeypatch):
 
 
 def test_disabled_guard_never_touches_the_ledger(project, tmp_path):
-    db = tmp_path / ".clawk" / "verification_evidence.db"
+    db = tmp_path / ".clawksis" / "verification_evidence.db"
 
     assert (
         record_terminal_result(
@@ -53,4 +53,4 @@ def test_enabled_guard_records_into_the_ledger(project, tmp_path, monkeypatch):
         command="npm test", cwd=project, session_id="s1", exit_code=0
     )
     assert verification_status(session_id="s1", cwd=project)["status"] == "passed"
-    assert Path(tmp_path / ".clawk" / "verification_evidence.db").exists()
+    assert Path(tmp_path / ".clawksis" / "verification_evidence.db").exists()

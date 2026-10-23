@@ -194,7 +194,7 @@ def test_residency_cap_prices_a_split_against_the_card(tmp_path, monkeypatch):
     from clawk_cli.local_runtime import presets
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     mdir = tmp_path / "models"
     mdir.mkdir()
     # A 48 GiB split laid out the reported way: part 1 a metadata stub, the weights in part 2.
@@ -223,7 +223,7 @@ def test_a_truncated_header_skips_the_model_instead_of_raising(tmp_path, monkeyp
     from clawk_cli.local_runtime import presets
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     parts = _split(
         tmp_path,
         "cut-head",

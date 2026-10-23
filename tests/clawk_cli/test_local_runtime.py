@@ -342,7 +342,7 @@ def test_llamacpp_endpoint_resolution_prefers_managed(
 ):
     """provider: llamacpp with a live managed server resolves to it,
     api-key included."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     port, _handler = stub_server
     from clawk_cli.local_runtime import endpoint as ep
     from clawk_cli.local_runtime.supervisor import state_path
@@ -362,7 +362,7 @@ def test_llamacpp_endpoint_stale_state_falls_through(tmp_path, monkeypatch):
     not blackhole requests: state ignored -> detection (none here) -> None."""
     import socket
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         dead_port = s.getsockname()[1]
@@ -398,7 +398,7 @@ def test_llamacpp_dead_server_raises_friendly_error(tmp_path, monkeypatch):
     disabled = the user turned it off."""
     import pytest
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
     from clawk_cli import runtime_provider as rp
 
@@ -436,7 +436,7 @@ def test_llamacpp_endpoint_starting_server_resolves(tmp_path, monkeypatch):
     race threw the app back to onboarding on the first restart test)."""
     import socket
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         not_listening = s.getsockname()[1]
@@ -472,7 +472,7 @@ def test_llamacpp_endpoint_waits_for_boot_in_flight(tmp_path, monkeypatch):
     import threading
     import time as _time
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import endpoint as ep
     from clawk_cli.local_runtime.supervisor import state_path
 
@@ -519,7 +519,7 @@ def test_resolution_kicks_boot_when_no_thread_is_booting(tmp_path, monkeypatch):
     boot writes."""
     import time as _time
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import bootstrap as bs
     from clawk_cli.local_runtime import endpoint as ep
     from clawk_cli.local_runtime.supervisor import state_path
@@ -557,7 +557,7 @@ def test_boot_in_flight_real_gate(tmp_path, monkeypatch):
     monkeypatched it — and the real one threw TypeError on every call,
     silently disabling the boot wait). Enabled + an installed PM engine for
     the CONFIGURED backend -> True; either missing -> False."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import endpoint as ep
 
     installed: set[str] = set()
@@ -596,7 +596,7 @@ def test_idle_sweep_unloads_idle_models(tmp_path, monkeypatch, stub_server):
     handler.requests_processing = 0
     handler.unloaded = []
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime.supervisor import LlamaServerSupervisor
 
     sup = LlamaServerSupervisor(tmp_path / "i", tmp_path / "m", port=port)
@@ -620,7 +620,7 @@ def test_idle_sweep_busy_model_resets_clock(tmp_path, monkeypatch, stub_server):
     port, handler = stub_server
     handler.models = {"data": [{"id": "side-m", "status": {"value": "loaded"}}]}
     handler.unloaded = []
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime.supervisor import LlamaServerSupervisor
 
     sup = LlamaServerSupervisor(tmp_path / "i", tmp_path / "m", port=port)
@@ -643,7 +643,7 @@ def test_idle_sweep_probe_failure_keeps_clock(tmp_path, monkeypatch, stub_server
     handler.models = {"data": [{"id": "stuck-m", "status": {"value": "loaded"}}]}
     handler.slots = []
     handler.unloaded = []
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime.supervisor import LlamaServerSupervisor
 
     sup = LlamaServerSupervisor(tmp_path / "i", tmp_path / "m", port=port)
@@ -666,7 +666,7 @@ def test_idle_sweep_busy_after_probe_failure_still_resets_clock(
     port, handler = stub_server
     handler.models = {"data": [{"id": "m", "status": {"value": "loaded"}}]}
     handler.unloaded = []
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime.supervisor import LlamaServerSupervisor
 
     sup = LlamaServerSupervisor(tmp_path / "i", tmp_path / "m", port=port)
@@ -690,7 +690,7 @@ def test_staged_models_requires_every_split_part(tmp_path, monkeypatch):
     staged_models(), and a first part with missing continuations is not
     servable. Single files and complete splits count; continuation parts
     never count as their own model."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     import clawk_cli.local_runtime.bootstrap as bs
 
     mdir = bs.models_dir()
@@ -709,7 +709,7 @@ def test_staged_models_requires_every_split_part(tmp_path, monkeypatch):
 def test_bootstrap_skips_boot_with_no_staged_models(tmp_path, monkeypatch):
     """Residency: enabled + installed but zero staged models -> no server
     boot (nothing to serve; the walked-away story)."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     import clawk_cli.local_runtime.bootstrap as bs
 
     monkeypatch.setattr(bs, "_SUPERVISOR", None)
@@ -732,7 +732,7 @@ def test_endpoint_identity_stable_across_supervisor_instances(tmp_path, monkeypa
     every resumed session (connection error / HTTP 401)."""
     import socket as _socket
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import supervisor as sup_mod
     from clawk_cli.local_runtime.supervisor import LlamaServerSupervisor
 
@@ -749,7 +749,7 @@ def test_endpoint_identity_stable_across_supervisor_instances(tmp_path, monkeypa
     assert len(first.api_key) >= 16
     assert first.port == second.port == test_port
     # The key is persisted, not per-process state.
-    key_file = tmp_path / ".clawk" / "runtimes" / "llamacpp" / ".api_key"
+    key_file = tmp_path / ".clawksis" / "runtimes" / "llamacpp" / ".api_key"
     assert key_file.exists()
     assert key_file.read_text(encoding="utf-8").strip() == first.api_key
 
@@ -759,7 +759,7 @@ def test_llamacpp_endpoint_no_wait_when_not_enabled(tmp_path, monkeypatch):
     None promptly instead of burning the wait budget."""
     import time as _time
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import endpoint as ep
 
     monkeypatch.setattr(ep, "_boot_in_flight", lambda config: False)
@@ -775,7 +775,7 @@ def test_switch_model_explicit_llamacpp_provider(tmp_path, monkeypatch, stub_ser
     desktop-review symptom). E2E through the real pipeline against a stub server."""
     port, handler = stub_server
     handler.models = {"data": [{"id": "stub-model-a", "owned_by": "llamacpp"}]}
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime.supervisor import state_path
 
     _write_current_process_state(
@@ -799,7 +799,7 @@ def test_switch_model_explicit_llamacpp_provider(tmp_path, monkeypatch, stub_ser
 def test_runtime_provider_seam_llamacpp_alias(tmp_path, monkeypatch, stub_server):
     """End to end through the REAL resolver: provider='llamacpp' with no
     base_url lands on the managed endpoint with source='local-runtime'."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     port, _handler = stub_server
     from clawk_cli.local_runtime.supervisor import state_path
 
@@ -819,7 +819,7 @@ def test_runtime_provider_seam_llamacpp_alias(tmp_path, monkeypatch, stub_server
 
 def test_configured_llamacpp_provider_wins_over_managed_alias(tmp_path, monkeypatch):
     """A providers.llamacpp endpoint is explicit configuration, not a managed-runtime request (#116143)."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setattr(
         "clawk_cli.config.load_config",
         lambda: {
@@ -854,7 +854,7 @@ def test_configured_llamacpp_provider_wins_over_managed_alias(tmp_path, monkeypa
 def test_runtime_provider_seam_explicit_base_url_wins(tmp_path, monkeypatch):
     """A user-specified base_url must never be overridden by the managed
     endpoint — pointing at a specific server means that server."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime.supervisor import state_path
 
     state_path().parent.mkdir(parents=True, exist_ok=True)
@@ -890,8 +890,8 @@ def test_staged_local_model_resolves_without_a_running_server(tmp_path, monkeypa
     runs — selection starts it through the runtime seam). Selecting one must reach that seam instead
     of dying at the provider gate with "Unknown provider 'llamacpp'": the row's id and the resolver's
     are one definition, so an id the picker offers always resolves (#116249)."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    _stage_local_model(tmp_path / ".clawk", "Qwen3.8-27B-IQ3_S-mtp")
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    _stage_local_model(tmp_path / ".clawksis", "Qwen3.8-27B-IQ3_S-mtp")
     monkeypatch.setattr("clawk_cli.local_runtime.detect.DEFAULT_PROBE_PORTS", ())
 
     from clawk_cli.providers import LLAMACPP_PROVIDER_ID, resolve_provider_full
@@ -930,7 +930,7 @@ def test_external_server_on_a_configured_detect_port_is_used(
         "default_generation_settings": {"n_ctx": 4096},
     }
     handler.models = {"data": [{"id": "ext-model", "owned_by": "llamacpp"}]}
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     monkeypatch.setenv("CLAWK_HOME", str(home))
     _stage_local_model(home, "ext-model")
     (home / "config.yaml").write_text(
@@ -956,7 +956,7 @@ def test_external_server_on_a_configured_detect_port_is_used(
 
 
 def test_bootstrap_disabled_is_noop(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import bootstrap
 
     monkeypatch.setattr(bootstrap, "_SUPERVISOR", None)
@@ -968,7 +968,7 @@ def test_bootstrap_disabled_is_noop(tmp_path, monkeypatch):
 def test_bootstrap_reuses_running_server(tmp_path, monkeypatch, stub_server):
     """A live state file (another process supervising) short-circuits the
     install/spawn path entirely."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     port, _handler = stub_server
     from clawk_cli.local_runtime import bootstrap
     from clawk_cli.local_runtime.supervisor import state_path
@@ -998,7 +998,7 @@ def test_bootstrap_reuses_running_server(tmp_path, monkeypatch, stub_server):
 def test_bootstrap_failure_never_raises(tmp_path, monkeypatch):
     """Session start must survive a broken runtime: failures log + return
     None, chat falls back to configured providers."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import bootstrap
 
     monkeypatch.setattr(bootstrap, "_SUPERVISOR", None)
@@ -1022,7 +1022,7 @@ def test_ensure_local_runtime_serializes_racing_callers(tmp_path, monkeypatch):
     separate OS processes would) — only the cross-process file lock can serialize them."""
     import time as _time
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import bootstrap
     from clawk_cli.local_runtime import supervisor as sup_mod
 
@@ -1090,7 +1090,7 @@ def test_ensure_local_runtime_proceeds_when_boot_lock_is_unwritable(
 ):
     """The boot lock lives outside the body's ``try/except``: an unwritable runtimes dir must
     degrade to a warning and an unlocked boot, never an OSError out of session start."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import bootstrap
 
     monkeypatch.setattr(bootstrap, "_SUPERVISOR", None)
@@ -1121,7 +1121,7 @@ def test_boot_prices_the_engine_it_serves(tmp_path, monkeypatch):
     engine being booted, never re-read from whichever profile's config the thread happens to see."""
     from types import SimpleNamespace
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli.local_runtime import bootstrap, hardware
 
     monkeypatch.setattr(bootstrap, "_SUPERVISOR", None)

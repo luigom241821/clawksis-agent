@@ -32,7 +32,7 @@ GUARD_MESSAGE = "CONTRIBUTOR TIER: this model may train on your data."
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     # The profile write now validates through ``switch_model`` (catalog + credentials); these

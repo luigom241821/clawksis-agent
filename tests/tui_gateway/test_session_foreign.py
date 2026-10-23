@@ -12,7 +12,7 @@ def test_foreign_rpc_preview_import_and_profile_isolation(tmp_path, monkeypatch)
     from tui_gateway import server
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.delenv("CLAWK_DESKTOP", raising=False)
     folder = tmp_path / ".claude" / "projects" / "project"
     folder.mkdir(parents=True)
@@ -36,7 +36,7 @@ def test_foreign_rpc_preview_import_and_profile_isolation(tmp_path, monkeypatch)
     ]
     log.write_text("\n".join(map(json.dumps, lines)), encoding="utf-8")
     original = log.read_bytes()
-    db = SessionDB(tmp_path / ".clawk" / "state.db")
+    db = SessionDB(tmp_path / ".clawksis" / "state.db")
     monkeypatch.setattr(server, "_get_db", lambda: db)
     monkeypatch.setattr(server, "_profile_home", lambda profile: None)
 
@@ -82,7 +82,7 @@ def test_foreign_pages_confine_handles_and_failed_import_rolls_back(
     from clawk_state import SessionDB
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     folder = tmp_path / ".codex" / "sessions"
     folder.mkdir(parents=True)
     for index in range(3):
@@ -115,7 +115,7 @@ def test_foreign_pages_confine_handles_and_failed_import_rolls_back(
     # A fabricated well-shaped handle cannot become a file-read request.
     with pytest.raises(ValueError):
         browser.resolve_foreign_session("0" * 64)
-    db = SessionDB(tmp_path / ".clawk" / "state.db")
+    db = SessionDB(tmp_path / ".clawksis" / "state.db")
     insert = db._insert_message_rows
 
     def failing_insert(*args, **kwargs):

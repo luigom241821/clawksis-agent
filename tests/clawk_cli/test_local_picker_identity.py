@@ -21,7 +21,7 @@ STAGED = {"Qwen-A-UD-Q4_K_M", "Qwen-B-UD-Q4_K_M"}
 
 @pytest.fixture
 def ctx(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     import clawk_cli.inventory as inv
 
     monkeypatch.setattr(

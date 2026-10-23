@@ -268,7 +268,7 @@ class TestThirdPartyAnthropicGateway:
         agent and the policy loads config itself."""
         import textwrap
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             textwrap.dedent(
@@ -439,7 +439,7 @@ class TestCustomProviderOpenAIWireCapability:
     ):
         import textwrap
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             textwrap.dedent(

@@ -82,7 +82,7 @@ class TestPreUpdateBackupIntegrityGuard:
         from pathlib import Path
         import sys
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         root.mkdir()
         (root / "config.yaml").write_text("model:\n  provider: openrouter\n")
         db = root / "state.db"

@@ -26,7 +26,7 @@ import pytest
 
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home
@@ -99,7 +99,7 @@ class TestDumpSubagentTimeoutDiagnostic:
         # (simulates permission-denied). Helper must not raise.
         from tools.delegate_tool import _dump_subagent_timeout_diagnostic
 
-        bogus = tmp_path / "does-not-exist" / ".clawk"
+        bogus = tmp_path / "does-not-exist" / ".clawksis"
         monkeypatch.setenv("CLAWK_HOME", str(bogus))
         child = _StubChild()
 

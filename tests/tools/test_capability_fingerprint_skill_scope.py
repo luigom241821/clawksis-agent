@@ -20,7 +20,7 @@ from tools import bot_mode_probe
 
 @pytest.fixture
 def home(tmp_path):
-    h = tmp_path / ".clawk"
+    h = tmp_path / ".clawksis"
     h.mkdir()
     return h
 

@@ -90,7 +90,7 @@ def _install_platform_plugin(
 def test_platform_names_are_published_or_proven_by_the_installer_record(
     tmp_path, monkeypatch
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     monkeypatch.setenv("CLAWK_HOME", str(home))
     cleanup = [
         _install_platform_plugin(

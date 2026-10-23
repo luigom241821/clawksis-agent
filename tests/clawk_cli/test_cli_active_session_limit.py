@@ -6,7 +6,7 @@ from clawk_cli.active_sessions import (
 
 
 def test_cli_claim_active_session_respects_global_limit(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     cfg = {"max_concurrent_sessions": 1}
     held, message = try_acquire_active_session(
         session_id="held-session",

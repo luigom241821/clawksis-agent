@@ -244,7 +244,7 @@ class TestIterBackupFiles:
         this test pins the contract."""
         from clawk_cli.backup import _iter_backup_files
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         root.mkdir()
         _make_clawk_tree(root)
 
@@ -272,7 +272,7 @@ class TestIterBackupFiles:
         at the root or under ``profiles/<name>/``; a skill's same-named dir is user data (#117346)."""
         from clawk_cli.backup import _iter_backup_files
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         root.mkdir()
         files = {
             "browser_profiles/browser-use-default/Default/Login Data": False,
@@ -294,7 +294,7 @@ class TestIterBackupFiles:
     def test_prunes_regenerable_caches_but_keeps_durable_and_nested(self, tmp_path):
         from clawk_cli.backup import _iter_backup_files
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         root.mkdir()
         files = {
             "cache/model_catalog.json": False,
@@ -327,7 +327,7 @@ class TestIterBackupFiles:
     def test_skipped_dirs_collected_for_summary(self, tmp_path):
         from clawk_cli.backup import _iter_backup_files
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         root.mkdir()
         _make_clawk_tree(root)
         (root / "models").mkdir()
@@ -342,7 +342,7 @@ class TestIterBackupFiles:
     def test_skips_unix_sockets(self, tmp_path, monkeypatch):
         from clawk_cli.backup import _iter_backup_files
 
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         root.mkdir()
         # AF_UNIX paths are capped at ~108 bytes; pytest's tmp_path overflows that under the
         # test runner's deep temp root, so bind by a relative name from inside ``root``.
@@ -455,7 +455,7 @@ class TestBackup:
         """A quick snapshot left under state-snapshots/ must not be re-shipped
         by the full backup — each snapshot already holds a copy of state.db, so
         nesting them multiplies the archive by (1 + retained snapshots)."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         _make_clawk_tree(clawk_home)
         with sqlite3.connect(clawk_home / "state.db") as conn:
@@ -533,7 +533,7 @@ class TestImport:
         (the install-then-import dead-gateway bug)."""
         import clawk_cli.gateway as gateway_mod
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -559,7 +559,7 @@ class TestImport:
         """A live gateway is left alone — no reinstall churn during import."""
         import clawk_cli.gateway as gateway_mod
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -586,7 +586,7 @@ class TestImport:
     ):
         """If the service helpers can't even be reached, import still completes
         and prints the manual fallback."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -635,7 +635,7 @@ class TestImport:
         zip_path.write_bytes(bytes(raw))
 
     def _home_for_corrupt_import(self, tmp_path, monkeypatch) -> Path:
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text("model: live\n")
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -756,7 +756,7 @@ class TestImport:
         """A member that could not be written is a partial restore: the CLI must not print
         "restored" or exit 0, or a script and the dashboard's "done" badge carry on over it.
         Runtime files the import deliberately keeps are not failures."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         locked = clawk_home / "skills" / "demo"
         locked.mkdir(parents=True)
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -1049,7 +1049,7 @@ class TestBackupEdgeCases:
     ):
         """A file that cannot be read is skipped, the zip still lands, and the CLI exits 1: a
         cron/systemd timer must never see a partial archive as success (#101096)."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         _make_clawk_tree(clawk_home)
         unreadable = clawk_home / "skills" / "locked.md"
@@ -1213,7 +1213,7 @@ class TestImportAtomicWrites:
 
     def test_failed_member_leaves_existing_file_intact(self, tmp_path, monkeypatch):
         """A dying member must not destroy the file it was replacing."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         original = "model: original\napi_key: keep-me\n"
         (clawk_home / "config.yaml").write_text(original)
@@ -1274,7 +1274,7 @@ class TestImportAtomicWrites:
         detach dotfiles-managed deployments (GitHub #16743). ``atomic_replace``
         resolves the link first.
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         store = clawk_home / "store"
         store.mkdir()
@@ -1339,7 +1339,7 @@ class TestImportAtomicWrites:
         replaced has to survive the publish, or Docker/NAS installs that rely
         on broader permissions break on restore.
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         target = clawk_home / "config.yaml"
         target.write_text("model: original\n")
@@ -1366,7 +1366,7 @@ class TestImportAtomicWrites:
         CLAWK_HOME would hand every restored file to root. The uid/gid is
         forced so the assertion does not require running as root.
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         target = clawk_home / "config.yaml"
         target.write_text("model: original\n")
@@ -1397,7 +1397,7 @@ class TestImportAtomicWrites:
 
     def test_mode_is_applied_before_the_replace(self, tmp_path, monkeypatch):
         """Publish the correct native permission bits with no permissive window."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         target = clawk_home / "config.yaml"
         target.write_text("model: original\n")
@@ -1447,7 +1447,7 @@ class TestImportAtomicWrites:
         discards exactly the bits at issue, so this failure is invisible to
         them.
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         target = clawk_home / "helper.sh"
         target.write_text("#!/bin/sh\necho original\n")
@@ -1963,7 +1963,7 @@ class TestFailedZipMemberRecovery:
     def test_incomplete_pre_update_backup_does_not_rotate_last_complete(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text("model: test\n")
 
@@ -2313,7 +2313,7 @@ class TestRestoreCronPromptFieldsIfDegraded:
         """The reported incident: 6 jobs before, 6 after, every prompt == name."""
         from clawk_cli.backup_cron_prompts import restore_cron_prompt_fields_if_degraded
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(
             jobs_path,
@@ -2358,7 +2358,7 @@ class TestRestoreCronPromptFieldsIfDegraded:
         """Missing/blank prompt on a live agent job is equally unusable."""
         from clawk_cli.backup_cron_prompts import restore_cron_prompt_fields_if_degraded
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(
             jobs_path, [{"id": "a", "name": "Cleanup", "prompt": "Clean the tmp dir."}]
@@ -2380,7 +2380,7 @@ class TestRestoreCronPromptFieldsIfDegraded:
         """Script jobs have no prompt — never restored, never stomped."""
         from clawk_cli.backup_cron_prompts import restore_cron_prompt_fields_if_degraded
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(
             jobs_path,
@@ -2425,7 +2425,7 @@ class TestRestoreCronPromptFieldsIfDegraded:
         is the user's edit during the window, not degradation."""
         from clawk_cli.backup_cron_prompts import restore_cron_prompt_fields_if_degraded
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(
             jobs_path, [{"id": "a", "name": "Old", "prompt": "Old prompt text."}]
@@ -2456,7 +2456,7 @@ class TestRestoreCronPromptFieldsIfDegraded:
         means the snapshot has nothing better — restore nothing."""
         from clawk_cli.backup_cron_prompts import restore_cron_prompt_fields_if_degraded
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         # Snapshot job had a blank prompt (hand-edited oddity).
         self._seed_jobs(jobs_path, [{"id": "a", "name": "Ping", "prompt": ""}])
@@ -2473,7 +2473,7 @@ class TestRestoreCronPromptFieldsIfDegraded:
         """Jobs the snapshot does not know are new since the snapshot — theirs."""
         from clawk_cli.backup_cron_prompts import restore_cron_prompt_fields_if_degraded
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(jobs_path, [{"id": "a", "name": "A", "prompt": "A prompt."}])
         snap_id = self._make_snapshot(clawk_home)
@@ -2497,7 +2497,7 @@ class TestRestoreCronPromptFieldsIfDegraded:
     def test_healthy_file_is_untouched(self, tmp_path):
         from clawk_cli.backup_cron_prompts import restore_cron_prompt_fields_if_degraded
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(jobs_path, [{"id": "a", "name": "A", "prompt": "A prompt."}])
         snap_id = self._make_snapshot(clawk_home)
@@ -2551,7 +2551,7 @@ class TestRestoreConfigModelSettingsIfRewritten:
         import clawk_yaml as yaml
         from clawk_cli.backup import restore_config_model_settings_if_rewritten
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         cfg = self._seed(clawk_home)
         snap_id = self._make_snapshot(clawk_home)
         assert snap_id
@@ -2585,7 +2585,7 @@ class TestRestoreConfigModelSettingsIfRewritten:
     def test_noop_when_config_untouched(self, tmp_path):
         from clawk_cli.backup import restore_config_model_settings_if_rewritten
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         cfg = self._seed(clawk_home)
         snap_id = self._make_snapshot(clawk_home)
         before = cfg.read_text(encoding="utf-8")
@@ -2602,7 +2602,7 @@ class TestRestoreConfigModelSettingsIfRewritten:
         import clawk_yaml as yaml
         from clawk_cli.backup import restore_config_model_settings_if_rewritten
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         cfg = self._seed(clawk_home)
         snap_id = self._make_snapshot(clawk_home)
 
@@ -2627,7 +2627,7 @@ class TestRestoreConfigModelSettingsIfRewritten:
         if the update writes those keys fresh — nothing of the user's was lost."""
         from clawk_cli.backup import restore_config_model_settings_if_rewritten
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir(parents=True)
         cfg = clawk_home / "config.yaml"
         cfg.write_text("_config_version: 39\nagent: {}\n", encoding="utf-8")
@@ -2646,7 +2646,7 @@ class TestRestoreConfigModelSettingsIfRewritten:
         the safety net leaves it alone (mirrors the cron net's posture)."""
         from clawk_cli.backup import restore_config_model_settings_if_rewritten
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         cfg = self._seed(clawk_home)
         snap_id = self._make_snapshot(clawk_home)
 
@@ -2662,7 +2662,7 @@ class TestRestoreConfigModelSettingsIfRewritten:
 
         assert (
             restore_config_model_settings_if_rewritten(
-                "", clawk_home=tmp_path / ".clawk"
+                "", clawk_home=tmp_path / ".clawksis"
             )
             is None
         )
@@ -2919,7 +2919,7 @@ class TestImportLiveSessionDatabase:
             zf.write(db_path, "state.db")
 
     def _prepare(self, tmp_path, monkeypatch, live=(3, 4), backup=(2, 2)):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(home))
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -3007,7 +3007,7 @@ class TestImportLiveSessionDatabase:
         """A fresh install has no inode to preserve; the member still lands."""
         from clawk_cli.backup import run_import
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(home))
         monkeypatch.setattr(Path, "home", lambda: tmp_path)

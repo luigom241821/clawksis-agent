@@ -25,7 +25,7 @@ class TestSandboxFailureHint:
 
 class TestLiveSandboxHint:
     def test_bad_import_produces_hint_field(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         r = json.loads(
             execute_code(
                 "from clawk_tools import totally_fake_tool\nprint('unreachable')",
@@ -37,7 +37,7 @@ class TestLiveSandboxHint:
         assert "totally_fake_tool" in r["hint"]
 
     def test_successful_script_has_no_hint(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         r = json.loads(execute_code("print('fine')", task_id="t-sbhint"))
         assert r["status"] == "success"
         assert "hint" not in r

@@ -54,11 +54,13 @@ def _checkout(tmp_path, monkeypatch, *, parent: Path | None = None) -> Path:
     # ``%LOCALAPPDATA%\clawk`` (``Path.home`` only backs an unset ``LOCALAPPDATA``), and no
     # ``LOCALAPPDATA`` value spells ``<tmp>/.clawk``, so pin the default itself.
     monkeypatch.setattr(
-        clawk_constants, "_get_platform_default_clawk_home", lambda: tmp_path / ".clawk"
+        clawk_constants,
+        "_get_platform_default_clawk_home",
+        lambda: tmp_path / ".clawksis",
     )
     monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
     monkeypatch.delenv("CLAWK_RUNTIME_DIR", raising=False)
-    root = (parent or tmp_path / ".clawk") / "clawksis-agent"
+    root = (parent or tmp_path / ".clawksis") / "clawksis-agent"
     root.mkdir(parents=True)
     (root / ".git").mkdir()
     (root / "pyproject.toml").write_text(
@@ -96,7 +98,7 @@ def test_a_fresh_install_and_a_custom_root_keep_their_own_store(tmp_path, monkey
     # `install.sh --clawk-home /data/h` owns its tree even if the default root once
     # borrowed it and kept state of its own.
     _state(tmp_path / "data" / "h", root)
-    _state(tmp_path / ".clawk", root)
+    _state(tmp_path / ".clawksis", root)
     assert owning_home_root(root) is None
     assert store_root(root) == tmp_path / "data" / "h" / "tools"
 
@@ -112,7 +114,7 @@ def test_a_borrowers_own_dependency_state_never_makes_it_the_owner(
     monkeypatch.delenv("CLAWK_HOME", raising=False)
     assert owning_home_root(root) == custom
 
-    _state(tmp_path / ".clawk", root)  # the borrowing launch's own sync
+    _state(tmp_path / ".clawksis", root)  # the borrowing launch's own sync
     assert owning_home_root(root) == custom
     assert store_root(root) == custom / "tools"
 
@@ -126,7 +128,7 @@ def test_a_borrower_holding_the_checkout_never_becomes_its_owner(tmp_path, monke
     import pm
     from clawk_cli import _launchers
 
-    default = tmp_path / ".clawk"
+    default = tmp_path / ".clawksis"
     holder = tmp_path / "data" / "dir"
     root = _checkout(tmp_path, monkeypatch, parent=holder)
     entry = default / "tools" / "python-owner"
@@ -191,11 +193,11 @@ def test_a_borrowing_launch_syncs_its_own_dependencies_and_nothing_of_the_checko
     from clawk_cli import _launchers
 
     root = _checkout(tmp_path, monkeypatch)
-    _state(tmp_path / ".clawk", root)
+    _state(tmp_path / ".clawksis", root)
     _home(monkeypatch, tmp_path / "tmp" / "clawk-flash-compat-x" / "a")
     # The owner's store, so no tool store is downloaded into the temporary home.
-    assert owning_home_root(root) == tmp_path / ".clawk"
-    assert store_root(root) == tmp_path / ".clawk" / "tools"
+    assert owning_home_root(root) == tmp_path / ".clawksis"
+    assert store_root(root) == tmp_path / ".clawksis" / "tools"
     stamp = (root / "install-stamp.json").read_bytes()
     owner_marker = root / ".update-incomplete"
     owner_marker.write_text("owner's update\n", encoding="utf-8")
@@ -207,7 +209,7 @@ def test_a_borrowing_launch_syncs_its_own_dependencies_and_nothing_of_the_checko
         borrowed_facts.parent.mkdir(parents=True, exist_ok=True)
         borrowed_facts.write_text("{}", encoding="utf-8")
 
-    python = tmp_path / ".clawk" / "tools" / "python" / "bin" / "python3"
+    python = tmp_path / ".clawksis" / "tools" / "python" / "bin" / "python3"
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: borrowed_facts.is_file())
     monkeypatch.setattr(pm, "sync_venv", sync)
     monkeypatch.setattr(_launchers, "resolve_store_python", lambda _: python)
@@ -240,7 +242,7 @@ def test_the_owner_still_owes_and_runs_its_tail(tmp_path, monkeypatch, completio
     from clawk_cli import _launchers
 
     root = _checkout(tmp_path, monkeypatch)
-    facts = _state(tmp_path / ".clawk", root)
+    facts = _state(tmp_path / ".clawksis", root)
     monkeypatch.delenv("CLAWK_HOME", raising=False)
     facts.unlink()
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: facts.is_file())

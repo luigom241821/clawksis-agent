@@ -52,7 +52,7 @@ def test_partial_config_import_cannot_invert_config_and_module_locks(tmp_path):
         root = Path(os.environ["STATE_CONFIG_TEST_ROOT"]) / "cold-import"
         root.mkdir()
         os.environ["HOME"] = str(root)
-        os.environ["CLAWK_HOME"] = str(root / ".clawk")
+        os.environ["CLAWK_HOME"] = str(root / ".clawksis")
         database = root / "state.db"
         with sqlite3.connect(database) as connection:
             connection.execute("CREATE TABLE retained (value TEXT)")
@@ -85,7 +85,7 @@ def test_partial_config_import_cannot_invert_config_and_module_locks(tmp_path):
         env={
             **os.environ,
             "HOME": str(tmp_path),
-            "CLAWK_HOME": str(tmp_path / ".clawk"),
+            "CLAWK_HOME": str(tmp_path / ".clawksis"),
             "STATE_CONFIG_TEST_ROOT": str(tmp_path),
         },
         capture_output=True,
@@ -109,7 +109,7 @@ def test_existing_database_does_not_wait_for_config_writer(
     tmp_path, monkeypatch, caplog, mode, require_wal, vulnerable
 ):
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setattr(wal, "is_sqlite_wal_reset_vulnerable", lambda: vulnerable)
     config.save_config({"database": {"journal_mode": mode}, "marker": "before"})
@@ -179,7 +179,7 @@ def test_existing_database_does_not_wait_for_config_writer(
 def test_unestablished_or_strict_modes_still_wait_for_real_policy(
     tmp_path, monkeypatch, state
 ):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setattr(wal, "is_sqlite_wal_reset_vulnerable", lambda: False)
@@ -214,7 +214,7 @@ def test_unestablished_or_strict_modes_still_wait_for_real_policy(
 
 
 def test_deferred_mode_change_is_applied_after_writer_finishes(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setattr(wal, "is_sqlite_wal_reset_vulnerable", lambda: False)

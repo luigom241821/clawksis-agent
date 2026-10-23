@@ -16,7 +16,7 @@ import pytest
 @pytest.fixture
 def backup_env(monkeypatch, tmp_path):
     """Isolate CLAWK_HOME + reload modules so every test starts clean."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "skills").mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))

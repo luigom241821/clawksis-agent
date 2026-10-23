@@ -31,7 +31,7 @@ def _set(monkeypatch, clawk_home, key, value, force=False):
 
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     # A config that already has a top-level platforms block (connection keys)
     # AND a display.platforms block, mirroring the real-world report.
     cfg = {
@@ -74,7 +74,7 @@ class TestPerPlatformDisplayRedirect:
     def test_no_top_level_platforms_created_when_missing(self, tmp_path, monkeypatch):
         """When there is no pre-existing top-level platforms block, a display
         setting write must not invent one."""
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         _write_config(home, {"model": {"default": "m"}})
         _set(monkeypatch, home, "platforms.telegram.streaming", "true")
         result = yaml.safe_load((home / "config.yaml").read_text())

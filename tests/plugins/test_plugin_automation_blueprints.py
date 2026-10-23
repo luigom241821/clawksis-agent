@@ -57,7 +57,7 @@ def homes(tmp_path, monkeypatch):
     """Default profile home (active) plus a second profile home, both isolated."""
     from clawk_cli import profiles
 
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
     profiles_root = default_home / "profiles"
     other_home = profiles_root / "other"
     for home in (default_home, other_home):

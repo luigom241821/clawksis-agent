@@ -69,7 +69,7 @@ def test_all_profiles_register():
 def test_user_plugin_overrides_bundled(tmp_path, monkeypatch):
     """A user plugin with the same name must override the bundled profile."""
     # Point CLAWK_HOME at a fresh temp dir
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     # get_clawk_home() may be module-cached depending on codebase; ensure the

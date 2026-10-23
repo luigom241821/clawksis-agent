@@ -27,7 +27,7 @@ _PROBE = (
 @pytest.fixture
 def mux_homes(tmp_path, monkeypatch):
     """Launch home A (its .env mirrored into os.environ, as the multiplexer loads it) and served home B."""
-    a = tmp_path / ".clawk"
+    a = tmp_path / ".clawksis"
     b = a / "profiles" / "b"
     b.mkdir(parents=True)
     (a / ".env").write_text(

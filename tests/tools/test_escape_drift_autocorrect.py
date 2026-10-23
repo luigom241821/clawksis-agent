@@ -17,7 +17,7 @@ from tools.escape_drift_autocorrect import (
 
 @pytest.fixture
 def workdir(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     return tmp_path
 
 

@@ -52,7 +52,7 @@ def _seen_by_child(env: dict) -> set[str]:
 @pytest.fixture
 def homes(tmp_path, monkeypatch):
     """Launch home A (the process's CLAWK_HOME) and routed home B; gates in the process env only."""
-    a = tmp_path / ".clawk"
+    a = tmp_path / ".clawksis"
     b = a / "profiles" / "b"
     b.mkdir(parents=True)
     (a / ".env").write_text("A_MARKER=a\n", encoding="utf-8")

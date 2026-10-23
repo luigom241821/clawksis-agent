@@ -394,7 +394,7 @@ def test_binary_reference_block_maps_host_attachment_to_container_path(
     """
     from agent.context_references import preprocess_context_references
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     attachments = clawk_home / "attachments"
     attachments.mkdir(parents=True)
     payload = attachments / "archive.zip"
@@ -420,7 +420,7 @@ def test_oversized_text_reference_maps_host_attachment_to_container_path(
 ):
     from agent.context_references import preprocess_context_references
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     attachments = clawk_home / "attachments"
     attachments.mkdir(parents=True)
     payload = attachments / "large.txt"
@@ -448,7 +448,7 @@ def test_binary_reference_block_keeps_host_path_on_local_backend(
     """Local backend: no translation — the agent's tools run on the host."""
     from agent.context_references import preprocess_context_references
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     attachments = clawk_home / "attachments"
     attachments.mkdir(parents=True)
     payload = attachments / "archive.zip"
@@ -598,9 +598,9 @@ async def test_blocks_canonical_read_denylist_credential_stores(
     from agent.context_references import preprocess_context_references_async
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     (clawk_home).mkdir(parents=True)
 
     auth_json = clawk_home / "auth.json"
@@ -624,8 +624,8 @@ async def test_blocks_canonical_read_denylist_credential_stores(
     project_env.write_text("DB_PASSWORD=ENV-SECRET\n", encoding="utf-8")
 
     result = await preprocess_context_references_async(
-        "inspect @file:.clawk/auth.json and @file:.clawk/.anthropic_oauth.json "
-        "and @file:.clawk/mcp-tokens/github.json and @file:project/.env "
+        "inspect @file:.clawksis/auth.json and @file:.clawksis/.anthropic_oauth.json "
+        "and @file:.clawksis/mcp-tokens/github.json and @file:project/.env "
         "and @file:.config/gcloud/application_default_credentials.json",
         cwd=tmp_path,
         allowed_root=tmp_path,
@@ -660,9 +660,9 @@ async def test_canonical_guard_fails_closed_when_lookup_raises(
     from agent.context_references import preprocess_context_references_async
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir(parents=True)
     auth_json = clawk_home / "auth.json"
     auth_json.write_text('{"openai": "sk-AUTHJSON-SECRET"}\n', encoding="utf-8")
@@ -673,7 +673,7 @@ async def test_canonical_guard_fails_closed_when_lookup_raises(
     monkeypatch.setattr("agent.file_safety.get_read_block_error", _boom)
 
     result = await preprocess_context_references_async(
-        "inspect @file:.clawk/auth.json",
+        "inspect @file:.clawksis/auth.json",
         cwd=tmp_path,
         allowed_root=tmp_path,
         context_length=100_000,
@@ -752,7 +752,7 @@ async def test_composer_paste_outside_workspace_is_attached_but_sibling_dir_is_n
     from agent.context_references import preprocess_context_references_async
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     paste = clawk_home / "composer-pastes" / "pasted_content_1.txt"
     paste.parent.mkdir(parents=True)

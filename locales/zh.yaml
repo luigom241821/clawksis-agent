@@ -3913,7 +3913,7 @@ tips:
   t357: "clawk setup 通过一个交互式流程引导首次用户完成提供方、密钥和平台的接入。"
   t358: "clawk status --deep 对每个组件运行完整健康检查；不带参数的 clawk status 是快速概览。"
   t359: "CLAWK_AGENT_TIMEOUT=0 禁用网关对运行中代理的闲置终止——适合长时间研究任务。"
-  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 自动加载 ./.clawk/plugins/ 下的仓库本地插件——设计上有信任门控。"
+  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 自动加载 ./.clawksis/plugins/ 下的仓库本地插件——设计上有信任门控。"
   t361: "CLAWK_DISABLE_FILE_STATE_GUARD=1 关闭 patch 和 write_file 上的“文件自读取后已变更”保护。"
   t362: "CLAWK_ALLOW_PRIVATE_URLS=true 允许 Web 工具访问 localhost 和私有网络——网关模式下默认关闭。"
   t363: "CLAWK_OPTIONAL_SKILLS=name1,name2 会在每个配置档首次运行时自动安装额外的可选目录技能。"

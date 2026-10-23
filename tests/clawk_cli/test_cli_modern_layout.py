@@ -144,7 +144,7 @@ def test_layout_and_busy_default_through_the_config_loader(
         layout_from_config,
     )
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(cli, "_clawk_home", home)

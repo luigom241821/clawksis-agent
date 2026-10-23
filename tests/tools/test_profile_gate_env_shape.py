@@ -35,7 +35,7 @@ def test_routed_no_agent_script_env_keeps_operator_allowlist_and_drops_platform_
     )
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     other = launch / "profiles" / "other"
     other.mkdir(parents=True)
     (other / ".env").write_text("OTHER_MARKER=1\n", encoding="utf-8")

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli import web_server
 
     test_client = TestClient(web_server.app)

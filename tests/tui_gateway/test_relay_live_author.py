@@ -76,7 +76,7 @@ def turn_env(monkeypatch, tmp_path):
 def test_live_relay_forwards_sender_to_canonical_authority(tmp_path, monkeypatch):
     from tools import bot_live_delivery
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "profiles" / "ops").mkdir(parents=True)
     (
         home / "profiles" / "ops" / "config.yaml"

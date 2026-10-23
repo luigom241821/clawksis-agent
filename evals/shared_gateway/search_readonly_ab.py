@@ -11,7 +11,7 @@ import tempfile
 
 
 def child(repo, case, account):
-    home = account / ".clawk"
+    home = account / ".clawksis"
     home.mkdir()
     os.environ["HOME"] = str(account)
     os.environ["CLAWK_HOME"] = str(home)
@@ -90,7 +90,7 @@ def main():
                     "LANG": "C.UTF-8",
                     "TZ": "UTC",
                     "HOME": tmp,
-                    "CLAWK_HOME": str(Path(tmp) / ".clawk"),
+                    "CLAWK_HOME": str(Path(tmp) / ".clawksis"),
                     "PYTHONDONTWRITEBYTECODE": "1",
                 }
                 proc = subprocess.run(

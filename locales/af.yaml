@@ -3913,7 +3913,7 @@ tips:
   t357: "clawk setup lei eerstekeergebruikers deur verskaffer, sleutels en platformkoppeling in een interaktiewe vloei."
   t358: "clawk status --deep voer die volle gesondheidskontrole oor elke komponent uit; gewone clawk status is die vinnige oorsig."
   t359: "CLAWK_AGENT_TIMEOUT=0 skakel die gateway se onaktiwiteitsbeëindiging vir 'n lopende agent af — gebruik dit vir lang navorsingslopies."
-  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 laai bewaarplek-plaaslike plugins outomaties vanaf ./.clawk/plugins/ — met opset vertrouensbeheer."
+  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 laai bewaarplek-plaaslike plugins outomaties vanaf ./.clawksis/plugins/ — met opset vertrouensbeheer."
   t361: "CLAWK_DISABLE_FILE_STATE_GUARD=1 skakel die 'lêer het verander sedert jy dit gelees het'-wag op patch en write_file af."
   t362: "CLAWK_ALLOW_PRIVATE_URLS=true laat webgereedskap localhost en private netwerke bereik — by verstek af in gateway-modus."
   t363: "CLAWK_OPTIONAL_SKILLS=name1,name2 installeer by die eerste lopie outomaties ekstra vaardighede uit die opsionele katalogus per profiel."

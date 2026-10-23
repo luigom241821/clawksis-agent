@@ -18,7 +18,7 @@ from clawk_cli.auth_codex import _codex_refresh_failure_error
 
 @pytest.fixture
 def codex_profile_home(tmp_path, monkeypatch):
-    profile_home = tmp_path / ".clawk" / "profiles" / "codex"
+    profile_home = tmp_path / ".clawksis" / "profiles" / "codex"
     profile_home.mkdir(parents=True)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_HOME", str(profile_home))

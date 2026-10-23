@@ -98,7 +98,7 @@ class TestGmiDoctor:
     def test_run_doctor_checks_gmi_models_endpoint(self, monkeypatch, tmp_path):
         from clawk_cli import doctor as doctor_mod
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir(parents=True, exist_ok=True)
         (home / "config.yaml").write_text("memory: {}\n", encoding="utf-8")
         (home / ".env").write_text("GMI_API_KEY=***\n", encoding="utf-8")

@@ -31,7 +31,7 @@ def _make_fake_jwt(expiry_offset: int = 3600) -> str:
 @pytest.fixture()
 def clawk_auth_only_env(tmp_path, monkeypatch):
     """Tokens already in Clawksis auth store (no Codex CLI needed)."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -84,7 +84,7 @@ def claude_code_only_env(tmp_path, monkeypatch):
     """Set up an environment where Anthropic credentials only exist in
     ~/.claude/.credentials.json (Claude Code) — not in env vars or Clawksis
     auth store."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -145,7 +145,7 @@ def test_claude_code_file_detected_by_model_picker(claude_code_only_env):
 
 def test_no_codex_when_no_credentials(tmp_path, monkeypatch):
     """openai-codex should NOT appear when no credentials exist anywhere."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))

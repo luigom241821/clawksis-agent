@@ -79,7 +79,7 @@ def _make_agent(ra, session_id, tmp_path):
 def test_db_flush_drops_only_nudge_keeps_candidate(tmp_path, monkeypatch):
     """The assistant candidate is NOT flagged synthetic, so it persists.
     Only the nudge (flagged synthetic) is dropped from the DB flush."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     ra = _fresh_run_agent(tmp_path)
     agent = _make_agent(ra, "sess_db", tmp_path)
 

@@ -47,7 +47,7 @@ def test_hosted_delegation_provider_extends_schema_and_routes_from_the_host(
     from agent.delegation_registry import get_active_provider
     from tools.delegate_tool_routes import resolve_task_routes, schema_extension
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     plugin_dir = home / "plugins" / "hosted-map"
     plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.yaml").write_text(

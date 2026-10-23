@@ -51,13 +51,13 @@ scripts/run_tests.sh -v --tb=long                       # pytest flags pass thro
   ```python
   @pytest.fixture
   def profile_env(tmp_path, monkeypatch):
-      home = tmp_path / ".clawk"; home.mkdir()
+      home = tmp_path / ".clawksis"; home.mkdir()
       monkeypatch.setattr(Path, "home", lambda: tmp_path)
       monkeypatch.setenv("CLAWK_HOME", str(home))
       return home
   ```
   Tests that `patch.object(Path, "home", ...)` must ALSO set `CLAWK_HOME` — code reads the
-  env var, not `Path.home()/.clawk`.
+  env var, not `Path.home()/.clawksis`.
 
 ## Don't fake the host OS
 

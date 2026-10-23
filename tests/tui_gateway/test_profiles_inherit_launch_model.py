@@ -27,7 +27,7 @@ import tui_gateway.server as srv
 def test_inherit_launch_model_carries_a_custom_provider_gateway(
     monkeypatch, tmp_path, schema, provider
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -100,7 +100,7 @@ def test_inherit_launch_model_carries_a_custom_provider_gateway(
 def test_inherit_launch_model_pins_a_bare_custom_endpoint(
     monkeypatch, tmp_path, written
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -143,7 +143,7 @@ def test_inherit_launch_model_pins_a_bare_custom_endpoint(
 def test_inherit_launch_model_preserves_explicit_profile_selection(
     monkeypatch, tmp_path
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

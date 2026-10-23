@@ -55,8 +55,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture
 def listener(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
     _Handler.hits = []
     httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -160,4 +160,6 @@ def test_remote_fetch_sites_refuse_internal_targets_before_connect(
         monkeypatch.delenv("CLAWK_ALLOW_PRIVATE_URLS", raising=False)
         url_safety._reset_allow_private_cache()
     assert hits == ["/to-metadata" + suffix]
-    assert not list(Path(tmp_path / ".clawk").rglob("*.png")), "no body may be cached"
+    assert not list(Path(tmp_path / ".clawksis").rglob("*.png")), (
+        "no body may be cached"
+    )

@@ -3913,7 +3913,7 @@ tips:
   t357: "clawk setup は、プロバイダー、キー、プラットフォームの接続設定を 1 つの対話フローで初回ユーザーに案内します。"
   t358: "clawk status --deep はすべてのコンポーネントの完全なヘルスチェックを実行します。通常の clawk status は簡易表示です。"
   t359: "CLAWK_AGENT_TIMEOUT=0 は実行中のエージェントに対するゲートウェイの無操作による強制終了を無効にします。長時間の調査に使ってください。"
-  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 は ./.clawk/plugins/ のリポジトリ内プラグインを自動読み込みします。設計上、信頼確認を経ます。"
+  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 は ./.clawksis/plugins/ のリポジトリ内プラグインを自動読み込みします。設計上、信頼確認を経ます。"
   t361: "CLAWK_DISABLE_FILE_STATE_GUARD=1 は、patch と write_file の「読んだ後にファイルが変更された」ガードをオフにします。"
   t362: "CLAWK_ALLOW_PRIVATE_URLS=true は Web ツールから localhost やプライベートネットワークへのアクセスを許可します。ゲートウェイモードではデフォルトでオフです。"
   t363: "CLAWK_OPTIONAL_SKILLS=name1,name2 は、プロファイルごとの初回実行時にオプションカタログの追加スキルを自動インストールします。"

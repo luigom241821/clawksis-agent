@@ -102,7 +102,7 @@ def _environment(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     env = {
         **os.environ,
         "HOME": str(tmp_path / "home"),
-        "CLAWK_HOME": str(tmp_path / "home/.clawk"),
+        "CLAWK_HOME": str(tmp_path / "home/.clawksis"),
         "CLAWK_RUNTIME_DIR": str(tmp_path / "tools"),
         "UV_PYTHON_INSTALL_DIR": str(tmp_path / "managed-python"),
         "UV_CACHE_DIR": str(tmp_path / "uv-cache"),

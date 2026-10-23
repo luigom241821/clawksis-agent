@@ -26,7 +26,7 @@ SHADOWED_BUILTINS = [
 
 
 def _home(tmp_path, monkeypatch, name, builtin_env, *, entry_extra=None, pool=None):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     entry = {

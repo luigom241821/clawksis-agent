@@ -4027,7 +4027,7 @@ tips:
   t357: "clawk setup walks first-time users through provider, keys, and platform wiring in one interactive flow."
   t358: "clawk status --deep runs the full health sweep across every component; plain clawk status is the quick view."
   t359: "CLAWK_AGENT_TIMEOUT=0 disables the gateway inactivity kill for a running agent — use for long research runs."
-  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 auto-loads repo-local plugins from ./.clawk/plugins/ — trust-gated by design."
+  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 auto-loads repo-local plugins from ./.clawksis/plugins/ — trust-gated by design."
   t361: "CLAWK_DISABLE_FILE_STATE_GUARD=1 turns off the 'file changed since you read it' guard on patch and write_file."
   t362: "CLAWK_ALLOW_PRIVATE_URLS=true lets web tools hit localhost and private networks — off by default in gateway mode."
   t363: "CLAWK_OPTIONAL_SKILLS=name1,name2 auto-installs extra optional-catalog skills on first run per profile."

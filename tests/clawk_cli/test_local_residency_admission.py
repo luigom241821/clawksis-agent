@@ -80,7 +80,7 @@ NO_DEVICE = HardwareBudget(
 def test_residency_cap_is_priced_against_the_card(
     tmp_path, monkeypatch, weights, budget, configured, expected
 ):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     mdir = _staged(tmp_path, monkeypatch, weights)
     assert presets.admitted_residency_count(mdir, budget, configured) == expected
 
@@ -102,7 +102,7 @@ def test_boot_hands_the_router_the_derived_cap(
     tmp_path, monkeypatch, configured, probe, expected
 ):
     """The wiring, not just the math: what ``ensure_local_runtime`` passes as ``--models-max``."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     import clawk_cli.local_runtime.bootstrap as bs
     from clawk_cli.local_runtime import binaries, hardware, supervisor
     from clawk_cli.local_runtime import endpoint

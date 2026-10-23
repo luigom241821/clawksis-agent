@@ -217,7 +217,7 @@ def test_background_review_whitelist_includes_configured_extra_tools(
     thread-local whitelist.  This config hook lets profiles grant a narrowly
     scoped, human-gated proposal tool without enabling unrelated side effects.
     """
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
         "auxiliary:\n"

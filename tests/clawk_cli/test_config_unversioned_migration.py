@@ -25,7 +25,7 @@ WATCHED = [*USER_CHOICES, "display.personality", "plugins.enabled"]
 
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(
         Path, "home", lambda: tmp_path

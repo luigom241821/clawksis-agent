@@ -84,8 +84,8 @@ def test_batch_completion_lines_are_attributable_across_two_batches(
     monkeypatch, tmp_path
 ):
     """Two interleaved batches: every ✓ line names its own ``set N``."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
     lines = []
     parent = types.SimpleNamespace(
         session_id="root",

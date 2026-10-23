@@ -62,7 +62,7 @@ def _isolate_home(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    (tmp_path / ".clawk").mkdir(exist_ok=True)
+    (tmp_path / ".clawksis").mkdir(exist_ok=True)
 
 
 def test_save_delegation_writes_top_level_section(tmp_path, monkeypatch):

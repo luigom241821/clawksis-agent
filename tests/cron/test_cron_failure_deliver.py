@@ -24,7 +24,7 @@ from cron.scheduler import _resolve_delivery_targets
 @pytest.fixture
 def cron_env(tmp_path, monkeypatch):
     """Isolated cron environment with temp CLAWK_HOME."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "cron").mkdir()
     (clawk_home / "cron" / "output").mkdir()

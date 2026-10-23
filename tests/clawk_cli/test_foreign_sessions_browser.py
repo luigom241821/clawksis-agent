@@ -11,7 +11,7 @@ from clawk_cli.foreign_sessions_browser import list_foreign_sessions
 @pytest.mark.parametrize("operation", ["resolve", "stat"])
 def test_discovery_skips_inaccessible_log(tmp_path, monkeypatch, operation):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     folder = tmp_path / ".codex" / "sessions"
     folder.mkdir(parents=True)
     for name in ("readable", "inaccessible"):

@@ -28,7 +28,7 @@ def notepad(monkeypatch, tmp_path):
 @pytest.fixture
 def cron_env(tmp_path, monkeypatch, notepad):
     """Isolated cron environment with temp CLAWK_HOME (mirrors test_cron_context_from)."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / "cron").mkdir()
     (clawk_home / "cron" / "output").mkdir()

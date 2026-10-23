@@ -240,7 +240,9 @@ def test_pm_generation_dir_around_the_running_venv_is_the_interpreter(tmp_path, 
     ``<venv>/../clawk_cli/main.py`` (update_owning_install) and must not trip the guard."""
     from tests.home_io_guard import _pm_generation_dirs
 
-    generation = tmp_path / ".clawk" / "installs" / "0123456789abcdef" / kind / "gen-1"
+    generation = (
+        tmp_path / ".clawksis" / "installs" / "0123456789abcdef" / kind / "gen-1"
+    )
     venv = generation / "venv"
     venv.mkdir(parents=True)
     assert _pm_generation_dirs([venv]) == {generation.resolve()}

@@ -25,7 +25,7 @@ def _ok(method: str, params: dict) -> dict:
 
 
 def test_new_bot_config_keeps_launch_env_refs_not_their_values(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

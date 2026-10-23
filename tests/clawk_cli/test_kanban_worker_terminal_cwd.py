@@ -60,7 +60,7 @@ def _capture_spawn_env(kb, monkeypatch, workspace: str) -> dict:
 
 def test_terminal_cwd_pinned_to_workspace(monkeypatch, tmp_path):
     """A real, absolute workspace dir is pinned as TERMINAL_CWD."""
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles" / "w").mkdir(parents=True)
     (root / "profiles" / "w" / "config.yaml").write_text(
         "toolsets:\n  - kanban\n", encoding="utf-8"

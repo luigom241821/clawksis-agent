@@ -1447,7 +1447,7 @@ def _moa_caches_isolated():
 # ── Real-home tripwire (universal read/write guard) ──────────────────────────
 # The hermetic sandbox redirects get_clawk_home(), but TWO escape classes
 # remain: (a) code hardcoding Path.home()/".clawksis" (the exact restatement
-# class AGENTS.md bans — the Path.home()/.clawk/profiles bug the 2026-09-03
+# class AGENTS.md bans — the Path.home()/.clawksis/profiles bug the 2026-09-03
 # deployment review caught in pm/plugins_state.py), and (b) imports freezing
 # real-home paths before fixtures run. The kanban guard (#69283) covers one
 # subsystem; this covers EVERY file operation: any open()/mkdir/stat-family

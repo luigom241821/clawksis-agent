@@ -69,7 +69,7 @@ def _iteration_messages(base, iterations):
 def test_every_n_cadence_runs_references_every_nth_iteration(monkeypatch, tmp_path):
     """With every_n:3, references run on iterations 1 and 4 of a 6-iteration
     tool loop (1 on-cadence, then every 3rd), not on all 6."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     _cadence_config(home, "every_n:3")
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
@@ -96,7 +96,7 @@ def test_every_n_cadence_runs_references_every_nth_iteration(monkeypatch, tmp_pa
 def test_every_n_off_cadence_iterations_reuse_cached_guidance(monkeypatch, tmp_path):
     """Off-cadence iterations must still give the aggregator the last
     on-cadence advisor guidance (cache reuse), not run advisor-less."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     _cadence_config(home, "every_n:3")
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
@@ -133,7 +133,7 @@ def test_every_n_off_cadence_iterations_reuse_cached_guidance(monkeypatch, tmp_p
 
 def test_per_iteration_default_unchanged_by_cadence_state(monkeypatch, tmp_path):
     """Default fanout still re-runs references on every state change."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     _cadence_config(home, "per_iteration")
     monkeypatch.setenv("CLAWK_HOME", str(home))
 

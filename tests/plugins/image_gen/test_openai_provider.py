@@ -286,7 +286,7 @@ class TestEndpointConfig:
 
 class TestSourceImageLoading:
     def test_load_image_bytes_blocks_credential_store(self, tmp_path, monkeypatch):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         auth_json = clawk_home / "auth.json"
         auth_json.write_text('{"api_key":"sk-secret"}', encoding="utf-8")
@@ -298,7 +298,7 @@ class TestSourceImageLoading:
     def test_load_image_bytes_allows_legit_local_image(self, tmp_path, monkeypatch):
         """Negative control: a legitimate local image path is NOT blocked and
         loads normally — proves the guard doesn't over-fire on everything."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         img = tmp_path / "pic.png"

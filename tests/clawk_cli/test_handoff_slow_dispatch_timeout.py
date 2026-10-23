@@ -33,7 +33,7 @@ from clawk_state import SessionDB
 
 @pytest.fixture()
 def db(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     d = SessionDB(db_path=tmp_path / "state.db")
     yield d
     d.close()

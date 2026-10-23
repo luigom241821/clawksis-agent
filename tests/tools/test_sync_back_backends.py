@@ -139,7 +139,7 @@ class TestSSHBulkDownload:
         """Live sockets are excluded up front, and an rc=2 whose stderr is solely
         'socket ignored' lines (a socket not named *.sock) does not fail the transfer."""
         dest = tmp_path / "backup.tar"
-        stderr = b"tar: home/testuser/.clawk/gateway.sock: socket ignored\n"
+        stderr = b"tar: home/testuser/.clawksis/gateway.sock: socket ignored\n"
         completed = subprocess.CompletedProcess([], 2, stderr=stderr)
 
         with patch.object(subprocess, "run", return_value=completed) as mock_run:
@@ -159,14 +159,14 @@ class TestSSHBulkDownload:
             subprocess.CompletedProcess(
                 [],
                 1,
-                stderr=b"tar: home/testuser/.clawk/state.db: file changed as we read it",
+                stderr=b"tar: home/testuser/.clawksis/state.db: file changed as we read it",
             ),
             subprocess.CompletedProcess(
                 [],
                 2,
                 stderr=(
-                    b"tar: home/testuser/.clawk/gateway.sock: socket ignored\n"
-                    b"tar: home/testuser/.clawk/state.db: Cannot open: Permission denied\n"
+                    b"tar: home/testuser/.clawksis/gateway.sock: socket ignored\n"
+                    b"tar: home/testuser/.clawksis/state.db: Cannot open: Permission denied\n"
                 ),
             ),
             subprocess.CompletedProcess([], 2, stderr=b"\n"),
@@ -255,7 +255,7 @@ class TestModalBulkDownload:
         assert args[0] == "bash"
         assert args[1] == "-c"
         assert "tar cf -" in args[2]
-        assert "-C / root/.clawk" in args[2]
+        assert "-C / root/.clawksis" in args[2]
         # Live sockets cannot be archived; exclude them like the SSH backend.
         assert "--exclude='*.sock'" in args[2]
 

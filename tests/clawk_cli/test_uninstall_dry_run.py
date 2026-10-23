@@ -6,7 +6,7 @@ from clawk_cli import uninstall
 
 def test_dry_run_prints_plan_without_mutating(monkeypatch, tmp_path, capsys):
     project_root = tmp_path / "clawksis-agent"
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     project_root.mkdir()
     # A .git dir marks the tree as a removable git checkout — without it the
     # install-kind gate refuses before the dry-run plan prints.
@@ -51,7 +51,7 @@ def test_dry_run_lists_named_profiles_without_desktop_userdata(
     )
 
     uninstall._print_uninstall_dry_run(
-        project_root=tmp_path, clawk_home=tmp_path / ".clawk", full_uninstall=True
+        project_root=tmp_path, clawk_home=tmp_path / ".clawksis", full_uninstall=True
     )
 
     out = capsys.readouterr().out

@@ -21,7 +21,7 @@ from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
 @pytest.fixture
 def profile_env(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

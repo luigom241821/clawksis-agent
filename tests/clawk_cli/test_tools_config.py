@@ -839,7 +839,7 @@ def test_disabled_composite_display_matches_runtime_tool_selection():
 @_requires_recently_shipped
 def test_platforms_whose_composite_excludes_it_are_left_narrow():
     """Parity is the justification, so don't widen a deliberately small
-    composite (clawk-acp, clawksis-webhook) that never carried the toolset."""
+    composite (clawk-acp, clawk-webhook) that never carried the toolset."""
     from toolsets import TOOLSETS, resolve_toolset
 
     narrow = [

@@ -233,7 +233,7 @@ def fake_steps(monkeypatch):
 def test_double_check_under_lock(repo, tmp_path, monkeypatch, fake_steps):
     """A racer that finished between our read and our acquire wins."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     sha = _head_sha(repo)
 
     real_acquire = _RecordLock.acquire
@@ -270,7 +270,7 @@ def test_sealed_tree_bootstrap_end_to_end(tmp_path, monkeypatch):
     from clawk_cli import post_update
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     sealed = tmp_path / "payload"
     sealed.mkdir()
     (sealed / "install-stamp.json").write_text(

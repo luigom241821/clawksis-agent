@@ -20,7 +20,7 @@ def _pin_mtime(path, ns):
 
 @pytest.fixture
 def skills_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     skills = home / "skills"
     d = skills / "demo-dedup-skill"
     d.mkdir(parents=True)

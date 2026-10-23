@@ -41,4 +41,4 @@ def test_advisory_remediation_uses_active_clawk_home(monkeypatch, tmp_path):
     text = "\n".join(sa.full_remediation_text(hit))
     assert "~/.clawksis/profiles/work/.env" in text
     assert "{clawk_home}" not in text
-    assert not re.search(r"~/\.clawk/\.env", text)
+    assert not re.search(r"~/\.clawksis/\.env", text)

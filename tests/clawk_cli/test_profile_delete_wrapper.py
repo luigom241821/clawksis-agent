@@ -16,8 +16,8 @@ from clawk_cli.profiles import create_profile, create_wrapper_script, delete_pro
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    (tmp_path / ".clawk").mkdir()
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    (tmp_path / ".clawksis").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     for stub in (
         "_cleanup_gateway_service",
         "_maybe_unregister_gateway_service",

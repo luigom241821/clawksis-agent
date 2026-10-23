@@ -18,7 +18,7 @@ from clawk_cli.post_update import step_adopt_blessed_checkout
 @pytest.fixture
 def blessed_checkout(tmp_path, monkeypatch):
     """A .git checkout at the blessed $CLAWK_HOME/clawksis-agent root."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     root = home / "clawksis-agent"
     root.mkdir(parents=True)
     (root / ".git").mkdir()
@@ -59,7 +59,7 @@ def test_existing_stamp_is_never_touched(blessed_checkout):
 
 def test_non_blessed_checkout_untouched(tmp_path, monkeypatch):
     """.git anywhere else → never adopted."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     dev = tmp_path / "src" / "clawksis-agent"
     dev.mkdir(parents=True)
@@ -74,7 +74,7 @@ def test_non_blessed_checkout_untouched(tmp_path, monkeypatch):
 def test_sealed_tree_untouched(tmp_path, monkeypatch):
     """No .git → not a checkout, nothing to adopt (sealed trees always
     ship stamps anyway)."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     root = home / "clawksis-agent"
     root.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -120,7 +120,7 @@ def test_adoption_of_real_checkout_records_full_identity(tmp_path, monkeypatch):
 
     git_env = {"HOME": str(tmp_path), "PATH": os.environ["PATH"]}
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     root = home / "clawksis-agent"
     root.mkdir(parents=True)
 

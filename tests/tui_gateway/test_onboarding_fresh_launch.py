@@ -18,7 +18,7 @@ FACTS = Facts(os="macos", arch="arm64", machine_kind="Mac", plugins=())
 
 @pytest.fixture
 def root(tmp_path, monkeypatch) -> Path:
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

@@ -24,7 +24,7 @@ def _clean_headed_cache(monkeypatch, tmp_path):
     from pathlib import Path
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "tools"))
     _reset_headed_cache()
     yield

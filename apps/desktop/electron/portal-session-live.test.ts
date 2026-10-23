@@ -63,7 +63,7 @@ test.skipIf(displayPrefix === null)(
       try {
         stdout = (
           await promisify(execFile)(command, args, {
-            env: { ...env, CLAWK_HOME: join(root, '.clawk'), XDG_CONFIG_HOME: join(root, 'config') },
+            env: { ...env, CLAWK_HOME: join(root, '.clawksis'), XDG_CONFIG_HOME: join(root, 'config') },
             timeout: 45_000
           })
         ).stdout

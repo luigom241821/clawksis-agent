@@ -61,7 +61,7 @@ def test_non_retryable_reasons_stop(reason):
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    h = tmp_path / ".clawk"
+    h = tmp_path / ".clawksis"
     (h / "profiles" / "ops").mkdir(parents=True)
     (
         h / "profiles" / "ops" / "config.yaml"

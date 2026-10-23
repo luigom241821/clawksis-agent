@@ -15,7 +15,7 @@ def test_pets_cli_quoted_false_disables_and_toggle_enables(tmp_path, monkeypatch
 
     from clawk_cli.pets import _has_active_pet, toggle_pet_display
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     (home / "config.yaml").write_text(
@@ -36,7 +36,7 @@ def test_pets_cli_quoted_false_disables_and_toggle_enables(tmp_path, monkeypatch
 
 @pytest.fixture
 def empty_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home

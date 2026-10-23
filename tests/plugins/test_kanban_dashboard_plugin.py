@@ -1308,7 +1308,7 @@ def test_ws_events_for_archived_board_does_not_recreate_it(tmp_path, monkeypatch
     archived or deleted that board. The stream must close instead of handing
     the slug to connect(), which used to resurrect an empty DB-only board
     (#43243)."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

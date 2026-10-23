@@ -927,7 +927,7 @@ def test_native_dispatch_child_environment(
         assert {key: env[key] for key in compilers} == compilers
         assert Path(env["UV_CACHE_DIR"]) == cache
         assert Path(env["CLAWK_RUNTIME_DIR"]) == out / "tools"
-        assert Path(env["CLAWK_HOME"]) == homes[-1] / ".clawk"
+        assert Path(env["CLAWK_HOME"]) == homes[-1] / ".clawksis"
     assert (cache / "reused").read_text(encoding="utf-8-sig") == "xx"
     assert all(not home.exists() for home in homes)
     assert dict(os.environ) == before

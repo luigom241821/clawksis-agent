@@ -43,7 +43,7 @@ def _write_memory_config(home, **memory_section):
 
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home
 

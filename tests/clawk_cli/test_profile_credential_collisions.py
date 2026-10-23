@@ -19,7 +19,7 @@ SECRET = "123456:shared-secret-value"
 
 @pytest.fixture
 def homes(tmp_path, monkeypatch):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles" / "worker").mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(root))

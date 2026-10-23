@@ -23,7 +23,7 @@ from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 def routed_profile(tmp_path, monkeypatch):
     """A default home logging in-process plus a created profile; host services are not touched."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(profiles, "_cleanup_gateway_service", lambda *_: None)

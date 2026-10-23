@@ -39,7 +39,7 @@ def test_startup_prune_reclaims_only_provably_deleted_checkouts(tmp_path, monkey
     # A data root shared across a mount boundary records checkouts this process cannot see:
     # a host install from inside a container, a container install from the host.
     host_install = _state(
-        installs, "eeee", tmp_path / "other-host-home" / ".clawk" / "clawksis-agent"
+        installs, "eeee", tmp_path / "other-host-home" / ".clawksis" / "clawksis-agent"
     )
     container_install = _state(installs, "ffff", tmp_path / "opt-clawk")
 

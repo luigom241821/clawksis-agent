@@ -10,7 +10,7 @@ import pytest
     [
         ([], [], False),
         (["safe"], [], False),
-        (["clawksis-webhook"], [], False),
+        (["clawk-webhook"], [], False),
         (["connections"], [], True),
         (["clawk-cli"], ["connections"], False),
         (["safe"], ["connections"], False),

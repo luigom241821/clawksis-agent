@@ -11,7 +11,7 @@ import pytest
 
 
 def _make_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text("model: {}\n")
     monkeypatch.setenv("CLAWK_HOME", str(home))

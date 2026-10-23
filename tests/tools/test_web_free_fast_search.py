@@ -242,7 +242,7 @@ def test_free_fast_search_eligibility_follows_the_served_profile(
     from gateway.run import _profile_runtime_scope
     from tools import web_tools
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     profile_a, profile_b = root / "profiles" / "a", root / "profiles" / "b"
     _write_home(
         profile_a,

@@ -223,7 +223,9 @@ def test_persistence_commands_are_pinned_to_the_failing_profile(
     corrupt/fts_index causes already did this; replaced/deleted_wal/default did not."""
     from clawk_constants import profile_cli_selector
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk" / "profiles" / "research"))
+    monkeypatch.setenv(
+        "CLAWK_HOME", str(tmp_path / ".clawksis" / "profiles" / "research")
+    )
     selector = profile_cli_selector()
     assert selector.strip(), "fixture must resolve to a named profile"
     out = AIAgent._format_turn_completion_explanation(

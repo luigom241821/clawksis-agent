@@ -193,7 +193,7 @@ def test_remote_command_survives_the_ssh_remote_shell_reparse():
 
 @pytest.fixture
 def isolated_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(runtime, "state_dir", lambda: home / "bot-desktop" / "default")

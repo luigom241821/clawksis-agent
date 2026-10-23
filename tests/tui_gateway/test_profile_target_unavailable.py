@@ -9,7 +9,7 @@ def test_explicit_profile_target_never_falls_back(tmp_path, monkeypatch):
     from tui_gateway import server
     from clawk_state import SessionDB
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     worker = home / "profiles" / "worker"
     worker.mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -76,7 +76,7 @@ def test_profile_param_traversal_fails_closed(tmp_path, monkeypatch, name):
     """A traversal-shaped ``profile`` param must never resolve outside profiles/."""
     from tui_gateway import server
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     outside = tmp_path / "outside"
     outside.mkdir(parents=True)  # a real directory the traversal could land on
     home.mkdir()
@@ -99,7 +99,7 @@ def test_unavailable_profile_is_a_typed_rpc_error_not_a_dispatch_crash(
     method (#107829) — the method itself keeps raising, the dispatcher chokepoint maps it."""
     from tui_gateway import server
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text("terminal:\n  cwd: /launch\n")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

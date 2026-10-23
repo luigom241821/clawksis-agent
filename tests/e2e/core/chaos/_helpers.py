@@ -98,7 +98,7 @@ def chaos_config(
 
 
 def write_chaos_home(root: Path, base_url: str, **cfg: Any) -> tuple[Path, Path]:
-    """Create ``root/home`` (fake $HOME) and ``root/home/.clawk`` (CLAWK_HOME)."""
+    """Create ``root/home`` (fake $HOME) and ``root/home/.clawksis`` (CLAWK_HOME)."""
     home = root / "home"
     clawk_home = home / ".clawksis"
     clawk_home.mkdir(parents=True, exist_ok=True)

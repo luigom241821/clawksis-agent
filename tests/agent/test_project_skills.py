@@ -11,7 +11,7 @@ import agent.skill_utils as su
 @pytest.fixture
 def project_env(tmp_path, monkeypatch):
     """A temp CLAWK_HOME + a git-marked project with skills in both subdirs."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "skills").mkdir(parents=True)
     config = home / "config.yaml"
     config.write_text("skills:\n  external_dirs: []\n")
@@ -99,7 +99,7 @@ class TestTrustGate:
         assert su.get_untrusted_project_skills_root() is None
 
     def test_no_skills_no_notice(self, tmp_path, monkeypatch):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         (home / "skills").mkdir(parents=True)
         (home / "config.yaml").write_text("skills: {}\n")
         repo = tmp_path / "empty-proj"

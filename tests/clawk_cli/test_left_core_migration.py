@@ -168,7 +168,7 @@ def test_migration_keeps_a_toolset_off_where_core_had_it_off(tmp_path):
             "discord": ["clawk-discord"],
             "slack": ["web", "homeassistant"],
             "cli": ["clawk-cli"],
-            "webhook": ["clawksis-webhook"],
+            "webhook": ["clawk-webhook"],
             "acp": ["clawk-acp"],
         }.items()
     }
@@ -233,7 +233,7 @@ def test_a_preinstalled_plugin_gets_the_scope_conversion_once(tmp_path):
     selections = {
         "telegram": ["web"],
         "acp": ["clawk-acp"],
-        "webhook": ["clawksis-webhook"],
+        "webhook": ["clawk-webhook"],
     }
 
     def ha_on() -> dict:

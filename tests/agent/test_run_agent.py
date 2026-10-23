@@ -1753,8 +1753,8 @@ class TestExecuteToolCalls:
         assert "tool was not executed" in messages[0]["content"].lower()
 
     def test_result_truncation_over_100k(self, agent, tmp_path, monkeypatch):
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        (tmp_path / ".clawk").mkdir()
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+        (tmp_path / ".clawksis").mkdir()
         tc = _mock_tool_call(name="web_search", arguments="{}", call_id="c1")
         mock_msg = _mock_assistant_msg(content="", tool_calls=[tc])
         messages = []

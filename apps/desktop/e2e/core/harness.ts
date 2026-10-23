@@ -40,7 +40,7 @@ export interface CoreSandbox {
 
 /**
  * HOME is faked too, not just CLAWK_HOME: profile roots are anchored to
- * `Path.home()/.clawk`, so a sandbox CLAWK_HOME under the real ~/.clawksis
+ * `Path.home()/.clawksis`, so a sandbox CLAWK_HOME under the real ~/.clawksis
  * would read and write the real install's profiles/.
  */
 export function createCoreSandbox(label: string): CoreSandbox {

@@ -22,7 +22,7 @@ import pytest
 
 @pytest.fixture
 def curator_env(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "skills").mkdir()
     (home / "logs").mkdir()

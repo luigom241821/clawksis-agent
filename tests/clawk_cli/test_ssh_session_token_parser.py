@@ -44,7 +44,7 @@ def test_token_anchor_is_os_home_not_active_profile(tmp_path, monkeypatch):
     token_path = token_dir / "0123456789abcdef.token"
 
     # A sticky profile and a custom (Docker) root both point get_clawk_home()
-    # away from $HOME/.clawk; the anchor must ignore both.
+    # away from $HOME/.clawksis; the anchor must ignore both.
     for elsewhere in (
         home / ".clawksis" / "profiles" / "coder",
         tmp_path / "opt" / "data",

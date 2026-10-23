@@ -120,7 +120,7 @@ class TestGrepSearchesRootsUnderHiddenDirs:
 
     @staticmethod
     def _hidden_tree(tmp_path):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         (home / "skills").mkdir(parents=True)
         (home / "skills" / "SKILL.md").write_text(
             "visible document under a hidden home"

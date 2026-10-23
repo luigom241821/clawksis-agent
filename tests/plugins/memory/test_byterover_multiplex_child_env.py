@@ -17,7 +17,7 @@ from plugins.memory import byterover
 
 @pytest.fixture
 def two_profiles(tmp_path, monkeypatch):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     prof_b = root / "profiles" / "b"
     prof_b.mkdir(parents=True)
     (root / ".env").write_text(

@@ -388,7 +388,7 @@ def test_load_clawk_env_bomless_utf8_still_loads(tmp_path, monkeypatch):
     """BOM-less UTF-8 .env files must keep loading after the utf-8-sig switch."""
     import os
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / ".env").write_bytes(b"SEND_PLAIN_TOKEN=plain-val\n")
 
@@ -411,7 +411,7 @@ def test_load_clawk_env_latin1_fallback_still_loads(tmp_path, monkeypatch):
     first key keeps its canonical name."""
     import os
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     # BOM + valid first key + latin-1 é (0xE9, invalid UTF-8 alone) in a
     # later value — forces the UnicodeDecodeError → latin-1 stream path.
@@ -441,7 +441,7 @@ def test_load_clawk_env_latin1_fallback_overrides_shell(tmp_path, monkeypatch):
     key name: ``*_TOKEN`` values are ASCII-sanitized by the shared loader, by design.)"""
     import os
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     # 0xE9 forces the UnicodeDecodeError \u2192 latin-1 stream fallback.
     (clawk_home / ".env").write_bytes(b"SEND_OVR_LABEL=caf\xe9-file\n")
@@ -464,7 +464,7 @@ def test_load_clawk_env_fallback_read_error_is_swallowed(tmp_path, monkeypatch):
     path is best-effort by design and must never crash on a broken .env."""
     from pathlib import Path
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     # Invalid UTF-8 so the fallback (and its read_bytes call) is reached.
     (clawk_home / ".env").write_bytes(b"SEND_ERR_TOKEN=caf\xe9\n")
@@ -489,7 +489,7 @@ def test_load_clawk_env_bom_only_env_is_noop(tmp_path, monkeypatch):
     """A .env containing only a BOM must load zero vars without error."""
     import os
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     (clawk_home / ".env").write_bytes(b"\xef\xbb\xbf")
 

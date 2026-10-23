@@ -30,7 +30,7 @@ def _fresh(monkeypatch):
 def test_old_spelling_without_the_plugin_names_the_install(
     argv, tmp_path, monkeypatch, capsys
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(sys, "argv", ["clawk", *argv])
@@ -83,7 +83,7 @@ def test_a_scheduled_sync_on_a_home_nothing_migrated_installs_the_plugin_and_run
     """An upgrade that ran no `clawk update` (a Docker image swap) leaves a home with sync sources and
     no plugin; when the scheduled `clawk import-agent --sync` is its only Clawksis process, that run
     installs the plugin and parses as the plugin's own command."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text("model: test\n", encoding="utf-8")
     (home / "import-sync.json").write_text(

@@ -15,7 +15,7 @@ import clawk_yaml as yaml
 @pytest.fixture()
 def voice_home(tmp_path, monkeypatch):
     """Isolated CLAWK_HOME + reloaded config modules; yields a config writer."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     # Hermetic: no ambient provider keys may leak into resolution.

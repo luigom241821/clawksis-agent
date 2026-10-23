@@ -46,7 +46,7 @@ PY
 uv venv -q --python "${CLAWK_AB_PYTHON:-3.11}" "$ROOT/install/.venv"
 uv pip install -q --python "$ROOT/install/.venv/bin/python" -e "$ROOT/install"
 
-export HOME="$ROOT/home" CLAWK_HOME="$ROOT/home/.clawk"
+export HOME="$ROOT/home" CLAWK_HOME="$ROOT/home/.clawksis"
 mkdir -p "$CLAWK_HOME"
 export PATH="$ROOT/install/.venv/bin:/usr/bin:/bin"
 set +e

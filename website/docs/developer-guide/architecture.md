@@ -233,7 +233,7 @@ Long-running process with 25+ platform adapters (built-in + bundled plugins), un
 
 ### Plugin System
 
-Three discovery sources: `~/.clawksis/plugins/` (user), `.clawk/plugins/` (project), and pip entry points. Plugins register tools, hooks, and CLI commands through a context API. Two specialized plugin types exist: memory providers (`plugins/memory/`) and context engines (`plugins/context_engine/`). Both are single-select — only one of each can be active at a time, configured via `clawk plugins` or `config.yaml`.
+Three discovery sources: `~/.clawksis/plugins/` (user), `.clawksis/plugins/` (project), and pip entry points. Plugins register tools, hooks, and CLI commands through a context API. Two specialized plugin types exist: memory providers (`plugins/memory/`) and context engines (`plugins/context_engine/`). Both are single-select — only one of each can be active at a time, configured via `clawk plugins` or `config.yaml`.
 
 → [Plugin Guide](./plugins/index.md), [Memory Provider Plugin](./memory-provider-plugin.md)
 

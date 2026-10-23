@@ -157,7 +157,7 @@ def test_migration_is_idempotent(tmp_path, monkeypatch):
 def _default_board_db(tmp_path, monkeypatch) -> Path:
     """Point the kanban root at a temp home and return the default board's DB
     (the back-compat top-level ``<root>/kanban.db`` #83445 reports on)."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

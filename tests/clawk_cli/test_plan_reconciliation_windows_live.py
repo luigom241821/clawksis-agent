@@ -48,7 +48,7 @@ def _argv_visible(pid: int, marker: str) -> bool:
 
 
 def test_plan_reconciliation_live_windows(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
 

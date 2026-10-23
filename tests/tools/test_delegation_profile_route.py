@@ -35,7 +35,7 @@ def _write_profile(home, *, host, model, key, secret, effort, soul=None):
 
 @pytest.fixture
 def two_profiles(tmp_path, monkeypatch):
-    launch = tmp_path / "os-home" / ".clawk"
+    launch = tmp_path / "os-home" / ".clawksis"
     _write_profile(
         launch,
         host="launch.invalid",

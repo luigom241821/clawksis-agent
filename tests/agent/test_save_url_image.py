@@ -82,12 +82,12 @@ def http_server(tmp_path, monkeypatch):
     reach (the same toggle a LAN-hosted provider would set) — save_url now
     refuses private targets by default.
     """
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setenv("CLAWK_ALLOW_PRIVATE_URLS", "1")
     from tools import url_safety
 
     url_safety._reset_allow_private_cache()
-    (tmp_path / ".clawk").mkdir()
+    (tmp_path / ".clawksis").mkdir()
 
     # Force the constants/image cache helpers to re-read CLAWK_HOME.
     import sys

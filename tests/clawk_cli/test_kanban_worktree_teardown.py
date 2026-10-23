@@ -43,7 +43,7 @@ def _git(*args: str, cwd: str | None = None) -> str:
 
 @pytest.fixture
 def kanban_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

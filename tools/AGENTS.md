@@ -48,7 +48,7 @@ Rules for tool code:
   `model_tools.py` — see the `browser_navigate` / `execute_code` post-processing blocks.
 - **Paths in schema descriptions use `display_clawk_home()`** (schema is built at import; under
   multiplex it shows the launch home, which is display-only). **State files use `get_clawk_home()`**
-  at call time, never `Path.home()/.clawk` and never a module constant, so each served profile gets
+  at call time, never `Path.home()/.clawksis` and never a module constant, so each served profile gets
   its own state.
 - **No `offset`/`limit` on instructional tools** (skills, prompts, playbooks) — models read page 1
   and skip the rest (root rubric).

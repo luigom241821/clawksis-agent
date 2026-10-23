@@ -15,7 +15,7 @@ from clawk_state import SessionDB
 
 
 def test_session_search_honours_requested_profile_db(tmp_path, monkeypatch):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     profile_home = clawk_home / "profiles" / "llm-wiki"
     profile_home.mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

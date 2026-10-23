@@ -409,7 +409,7 @@ def test_failed_upstream_sync_after_origin_pull_keeps_the_tail_owed(world):
     # its next branch check once the upstream merge has failed (and been settled).
     _hostile_git(
         world,
-        'case " $* " in *" remote get-url origin "*) echo https://github.com/e2e-fork/hermes-agent.git; '
+        'case " $* " in *" remote get-url origin "*) echo https://github.com/e2e-fork/clawksis-agent.git; '
         "exit 0;; esac\n"
         # The sync fast-forwards to the upstream commit it resolved (one SHA, m2).
         f'case " $* " in *" merge --ff-only "*"{up} "*) "$REAL" "$@"; rc=$?; '

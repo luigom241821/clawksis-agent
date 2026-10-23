@@ -24,7 +24,7 @@ from cron import scheduler
 @pytest.fixture
 def tmp_clawk_home(tmp_path, monkeypatch):
     """Redirect _get_clawk_home() so the audit logger writes under tmp_path."""
-    fake_home = tmp_path / "home" / ".clawk"
+    fake_home = tmp_path / "home" / ".clawksis"
     fake_home.mkdir(parents=True)
     monkeypatch.setattr(scheduler, "_get_clawk_home", lambda: fake_home)
     return fake_home

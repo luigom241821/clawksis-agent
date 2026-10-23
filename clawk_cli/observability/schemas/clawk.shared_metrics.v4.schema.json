@@ -3647,7 +3647,7 @@
                 "clawk-slack",
                 "clawk-sms",
                 "clawk-telegram",
-                "clawksis-webhook",
+                "clawk-webhook",
                 "clawk-wecom",
                 "clawk-wecom-callback",
                 "clawk-weixin",

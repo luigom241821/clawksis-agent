@@ -44,7 +44,7 @@ def _parse_env(path: Path) -> dict[str, str]:
 
 @pytest.fixture
 def profile_env(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

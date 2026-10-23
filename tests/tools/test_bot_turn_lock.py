@@ -145,7 +145,7 @@ def test_turn_wait_seconds_reads_config(monkeypatch):
 
 def test_peer_stdin_delivery_skips_local_lock(root, tmp_path, monkeypatch):
     """Peer transports run their turn on the remote gateway — no local lock."""
-    home = root / ".clawk"
+    home = root / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     dm = tmp_path / "dm.txt"

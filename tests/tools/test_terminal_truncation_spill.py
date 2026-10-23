@@ -11,7 +11,7 @@ from tools.terminal_tool import terminal_tool
 
 @pytest.fixture
 def small_cap(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_constants import clawk_home_key
     import tools.tool_output_limits as lim
 
@@ -68,7 +68,7 @@ class TestTruncationSpill:
         assert "a1B2c3D4e5F6g7H8i9J0a1B2c3D4e5F6g7H8i9J0" not in full
 
     def test_old_spills_cleaned(self, small_cap, tmp_path):
-        spill_dir = tmp_path / ".clawk" / "cache" / "terminal-output"
+        spill_dir = tmp_path / ".clawksis" / "cache" / "terminal-output"
         spill_dir.mkdir(parents=True, exist_ok=True)
         stale = spill_dir / "out-1-2-dead.log"
         stale.write_text("old")

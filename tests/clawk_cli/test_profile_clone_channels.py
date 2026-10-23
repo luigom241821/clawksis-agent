@@ -54,7 +54,7 @@ _SOURCE_CONFIG = {
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     root.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(root))

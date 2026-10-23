@@ -18,7 +18,7 @@ from clawk_cli.setup import prompt_yes_no as real_prompt_yes_no
 
 @pytest.fixture
 def homes(tmp_path, monkeypatch):
-    user_home, clawk_home = tmp_path / "user", tmp_path / "user" / ".clawk"
+    user_home, clawk_home = tmp_path / "user", tmp_path / "user" / ".clawksis"
     clawk_home.mkdir(parents=True)
     for var in ("HOME", "USERPROFILE"):
         monkeypatch.setenv(var, str(user_home))

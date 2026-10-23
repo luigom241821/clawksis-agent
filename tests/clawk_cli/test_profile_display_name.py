@@ -29,7 +29,7 @@ from clawk_cli.profiles import (
 def profile_env(tmp_path, monkeypatch):
     """Isolated environment: Path.home() and CLAWK_HOME under tmp_path."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
     default_home.mkdir(exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(default_home))
     return default_home

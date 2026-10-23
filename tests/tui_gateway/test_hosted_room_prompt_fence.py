@@ -28,7 +28,7 @@ def _stub_session(monkeypatch, *, title, profile_home=None):
 
 
 def test_direct_prompt_to_hosted_group_session_is_rejected(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     hosted_rooms.create_room(
@@ -53,7 +53,7 @@ def test_direct_prompt_to_hosted_group_session_is_rejected(tmp_path, monkeypatch
 def test_direct_prompt_to_non_hosted_group_reaches_normal_admission(
     tmp_path, monkeypatch
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     _stub_session(monkeypatch, title="Group: local-only")
@@ -83,7 +83,7 @@ def test_direct_prompt_to_non_hosted_group_reaches_normal_admission(
 def test_direct_prompt_to_legacy_named_group_reaches_normal_admission(
     tmp_path, monkeypatch, legacy_name
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     _stub_session(monkeypatch, title=f"Group: {legacy_name}")
@@ -102,7 +102,7 @@ def test_direct_prompt_to_legacy_named_group_reaches_normal_admission(
 def test_direct_prompt_to_peer_reserved_group_is_rejected_until_revoke(
     tmp_path, monkeypatch
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     profile_home = home / "profiles" / "reviewer"
     profile_home.mkdir(parents=True)
@@ -161,7 +161,7 @@ def test_direct_prompt_to_peer_reserved_group_is_rejected_until_revoke(
 def test_direct_prompt_is_refused_when_room_authority_cannot_be_verified(
     tmp_path, monkeypatch
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     _stub_session(monkeypatch, title="Group: room-unknown")
@@ -181,7 +181,7 @@ def test_direct_prompt_is_refused_when_room_authority_cannot_be_verified(
 def test_contended_ownership_probe_fails_quickly_without_blocking_socket(
     tmp_path, monkeypatch
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     db = hosted_rooms.default_db_path()

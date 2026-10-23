@@ -228,7 +228,7 @@ def _scenario(root) -> object:
                 return
             home_env = {
                 "HOME": str(root / "a" / "home"),
-                "CLAWK_HOME": str(root / "a" / "home" / ".clawk"),
+                "CLAWK_HOME": str(root / "a" / "home" / ".clawksis"),
             }
             for how in ("resume_flag", "slash_resume"):
                 cells.phase = how

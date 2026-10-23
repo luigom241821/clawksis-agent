@@ -334,7 +334,7 @@ class TestSkillViewQualifiedName:
     def _make_memory_provider_with_skill(
         self, tmp_path, name, body="Provider skill body."
     ):
-        plugin_dir = tmp_path / ".clawk" / "plugins" / name
+        plugin_dir = tmp_path / ".clawksis" / "plugins" / name
         skill_dir = plugin_dir / "skills" / "maintenance"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
@@ -363,7 +363,7 @@ class TestSkillViewQualifiedName:
         self._make_memory_provider_with_skill(tmp_path, "memtest")
         monkeypatch.setattr(
             "plugins.memory._get_user_plugins_dir",
-            lambda: tmp_path / ".clawk" / "plugins",
+            lambda: tmp_path / ".clawksis" / "plugins",
         )
         monkeypatch.setattr(
             "plugins.memory._get_active_memory_provider",
@@ -386,7 +386,7 @@ class TestSkillViewQualifiedName:
         self._make_memory_provider_with_skill(tmp_path, "meminactive", "Inactive body.")
         monkeypatch.setattr(
             "plugins.memory._get_user_plugins_dir",
-            lambda: tmp_path / ".clawk" / "plugins",
+            lambda: tmp_path / ".clawksis" / "plugins",
         )
         monkeypatch.setattr(
             "plugins.memory._get_active_memory_provider",

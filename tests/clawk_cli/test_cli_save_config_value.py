@@ -13,7 +13,7 @@ class TestSaveConfigValueAtomic:
     @pytest.fixture
     def config_env(self, tmp_path, monkeypatch):
         """Isolated config environment with a writable config.yaml."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
         config_path.write_text(
@@ -73,7 +73,7 @@ class TestSaveConfigValueTargetsUserConfig:
 
     def test_creates_user_config_when_absent(self, tmp_path, monkeypatch):
         # Fresh CLAWK_HOME with NO config.yaml (managed/desktop first launch).
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -94,7 +94,7 @@ class TestSaveConfigValueTargetsUserConfig:
         repo_cli_config = Path(cli_module.__file__).parent / "cli-config.yaml"
         before = repo_cli_config.read_text() if repo_cli_config.exists() else None
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 

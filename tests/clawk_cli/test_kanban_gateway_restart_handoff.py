@@ -18,7 +18,7 @@ from clawk_cli import kanban_db_dispatch as kbd
 def worker_setup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, kb.Task]:
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     profile = root / "profiles" / "coder"
     profile.mkdir(parents=True)
     root.joinpath("config.yaml").write_text("{}\n", encoding="utf-8")
@@ -101,7 +101,7 @@ def test_managed_gateway_worker_is_spawned_in_restart_safe_scope(
     assert task.assignee is not None
     assert captured_env["CLAWK_PROFILE"] == task.assignee
     assert captured_env["CLAWK_HOME"] == str(
-        workspace.parent / ".clawk" / "profiles" / task.assignee
+        workspace.parent / ".clawksis" / "profiles" / task.assignee
     )
     assert captured_cwd == str(workspace)
     assert captured_env["CLAWK_KANBAN_TASK"] == task.id
@@ -320,7 +320,7 @@ def test_real_user_systemd_scope_preserves_worker_context(
         assert payload["claim"] == task.claim_lock
         assert payload["board"] == kb.get_current_board()
         assert payload["home"] == str(
-            workspace.parent / ".clawk" / "profiles" / task.assignee
+            workspace.parent / ".clawksis" / "profiles" / task.assignee
         )
         assert payload["profile"] == task.assignee
         assert payload["source"] == "kanban"

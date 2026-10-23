@@ -517,7 +517,7 @@ class TestSearchFilesFallbackHiddenPaths:
         self, tmp_path, monkeypatch
     ):
         """Fallback find should include visible files when path is inside hidden root."""
-        root = tmp_path / ".clawk" / "logs"
+        root = tmp_path / ".clawksis" / "logs"
         root.mkdir(parents=True)
         visible_file = root / "agent.log"
         hidden_dir_file = root / ".hidden" / "secret.log"

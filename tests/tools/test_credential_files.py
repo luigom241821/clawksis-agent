@@ -34,7 +34,7 @@ def _clean_state():
 
 class TestRegisterCredentialFiles:
     def test_dict_with_path_key(self, tmp_path):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "token.json").write_text("{}")
 
@@ -49,7 +49,7 @@ class TestRegisterCredentialFiles:
 
     def test_path_takes_precedence_over_name(self, tmp_path):
         """When both path and name are present, path wins."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "real.json").write_text("{}")
 
@@ -67,7 +67,7 @@ class TestRegisterCredentialFiles:
 
 class TestSkillsDirectoryMount:
     def test_returns_mount_when_skills_dir_exists(self, tmp_path):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         skills_dir = clawk_home / "skills"
         skills_dir.mkdir(parents=True)
         (skills_dir / "test-skill").mkdir()
@@ -81,7 +81,7 @@ class TestSkillsDirectoryMount:
         assert mounts[0]["container_path"] == "/root/.clawksis/skills"
 
     def test_custom_container_base(self, tmp_path):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         (clawk_home / "skills").mkdir(parents=True)
 
         with patch.dict(os.environ, {"CLAWK_HOME": str(clawk_home)}):
@@ -92,7 +92,7 @@ class TestSkillsDirectoryMount:
     @pytest.mark.require_symlinks
     def test_symlinks_are_sanitized(self, tmp_path):
         """Symlinks in skills dir should be excluded from the mount."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         skills_dir = clawk_home / "skills"
         skills_dir.mkdir(parents=True)
         (skills_dir / "legit.md").write_text("# real skill")
@@ -119,7 +119,7 @@ class TestSkillsDirectoryMount:
     def test_sanitized_copy_skips_bookkeeping_dirs(self, tmp_path):
         """The symlink-safe copy is what gets mounted, so it must apply the
         same EXCLUDED_SKILL_DIRS rule as the per-file sync path."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         skills_dir = clawk_home / "skills"
         (skills_dir / "cat" / "myskill" / "references").mkdir(parents=True)
         (skills_dir / "cat" / "myskill" / "SKILL.md").write_text("# skill")
@@ -146,7 +146,7 @@ class TestSkillsDirectoryMount:
 
     def test_no_symlinks_returns_original_dir(self, tmp_path):
         """When no symlinks exist, the original dir is returned (no copy)."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         skills_dir = clawk_home / "skills"
         skills_dir.mkdir(parents=True)
         (skills_dir / "skill.md").write_text("ok")
@@ -160,7 +160,7 @@ class TestSkillsDirectoryMount:
 class TestIterSkillsFiles:
     @pytest.mark.require_symlinks
     def test_returns_files_skipping_symlinks(self, tmp_path):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         skills_dir = clawk_home / "skills"
         (skills_dir / "cat" / "myskill").mkdir(parents=True)
         (skills_dir / "cat" / "myskill" / "SKILL.md").write_text("# skill")
@@ -190,7 +190,7 @@ class TestIterSkillsFiles:
         tree were packed up on every sync even though the sandbox never
         reads them. Sync now honours EXCLUDED_SKILL_DIRS like discovery.
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         skills_dir = clawk_home / "skills"
         (skills_dir / "cat" / "myskill").mkdir(parents=True)
         (skills_dir / "cat" / "myskill" / "SKILL.md").write_text("# skill")
@@ -223,7 +223,7 @@ class TestIterSkillsFiles:
             assert not any(excluded in path for path in paths), excluded
 
     def test_empty_when_no_skills_dir(self, tmp_path):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
 
         with patch.dict(os.environ, {"CLAWK_HOME": str(clawk_home)}):
@@ -244,8 +244,8 @@ class TestPathTraversalSecurity:
 
     def test_dotdot_traversal_rejected(self, tmp_path, monkeypatch):
         """'../sensitive' must not escape CLAWK_HOME."""
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        (tmp_path / ".clawk").mkdir()
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+        (tmp_path / ".clawksis").mkdir()
 
         # Create a sensitive file one level above clawk_home
         sensitive = tmp_path / "sensitive.json"
@@ -258,7 +258,7 @@ class TestPathTraversalSecurity:
 
     def test_deep_traversal_rejected(self, tmp_path, monkeypatch):
         """'../../etc/passwd' style traversal must be rejected."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -274,7 +274,7 @@ class TestPathTraversalSecurity:
 
     def test_absolute_path_rejected(self, tmp_path, monkeypatch):
         """Absolute paths must be rejected regardless of whether they exist."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -289,7 +289,7 @@ class TestPathTraversalSecurity:
 
     def test_nested_subdir_inside_clawk_home_allowed(self, tmp_path, monkeypatch):
         """Files in subdirectories of CLAWK_HOME must be allowed."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         subdir = clawk_home / "creds"
         subdir.mkdir()
@@ -302,7 +302,7 @@ class TestPathTraversalSecurity:
 
     def test_symlink_traversal_rejected(self, tmp_path, monkeypatch):
         """A symlink inside CLAWK_HOME pointing outside must be rejected."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -342,7 +342,7 @@ class TestConfigPathTraversal:
 
     def test_config_traversal_rejected(self, tmp_path, monkeypatch):
         """'../secret' in config.yaml must not escape CLAWK_HOME."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -357,7 +357,7 @@ class TestConfigPathTraversal:
 
     def test_config_absolute_path_rejected(self, tmp_path, monkeypatch):
         """Absolute paths in config.yaml must be rejected."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -370,7 +370,7 @@ class TestConfigPathTraversal:
 
     def test_config_legitimate_file_works(self, tmp_path, monkeypatch):
         """Normal files inside CLAWK_HOME via config must still mount."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -392,7 +392,7 @@ class TestCacheDirectoryMounts:
 
     def test_returns_existing_cache_dirs(self, tmp_path, monkeypatch):
         """Existing cache dirs are returned with correct container paths."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "cache" / "documents").mkdir(parents=True)
         (clawk_home / "cache" / "audio").mkdir(parents=True)
@@ -412,7 +412,7 @@ class TestCacheDirectoryMounts:
         ``has content`` for ``get_clawk_dir``'s populated-legacy check
         (see #27602 — empty legacy stubs are no longer honoured).
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         # Use legacy dir name with content — get_clawk_dir prefers
         # populated old over new.
@@ -439,7 +439,7 @@ class TestCacheDirectoryMounts:
         Docker snapshots the mount list at container creation; skipping
         not-yet-existing dirs meant the first attachment/clipboard file after
         container start dangled forever. All _CACHE_DIRS entries mount."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -462,7 +462,7 @@ class TestCacheDirectoryMounts:
         remote host."""
         from tools.environments.file_sync import iter_sync_files
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         paste = clawk_home / "composer-pastes" / "pasted_content_20260924_x.txt"
@@ -483,7 +483,7 @@ class TestCacheDirectoryMounts:
         This is the reverse mapping vision uses to translate a container-visible
         path back to the host mount; it must recognise the ``images/`` dir.
         """
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         (clawk_home / "images").mkdir(parents=True)
         upload = clawk_home / "images" / "upload_20260722_181019_1.png"
         upload.write_bytes(bytes.fromhex("89504e470d0a1a0a"))
@@ -499,7 +499,7 @@ class TestMapCachePathToContainer:
     """Tests for map_cache_path_to_container() — the backend-agnostic mapper."""
 
     def test_maps_path_under_cache_dir(self, tmp_path, monkeypatch):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         img_dir = clawk_home / "cache" / "images"
         img_dir.mkdir(parents=True)
         host_path = str(img_dir / "generated.png")
@@ -515,7 +515,7 @@ class TestMapCachePathToContainer:
         Docker snapshots mounts at container creation, so a dir that appears
         later would dangle for the container's whole life. The map must
         therefore succeed (and the dir exist) even before first use."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -532,7 +532,7 @@ class TestToAgentVisiblePathPerBackend:
     stays correct (local, unknown)."""
 
     def _staged(self, tmp_path, monkeypatch):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         (clawk_home / "attachments").mkdir(parents=True)
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         return str(clawk_home / "attachments" / "drop.zip")
@@ -574,7 +574,7 @@ class TestToAgentVisiblePathPerBackend:
         keep CLAWK_HOME's symlinked spelling; the resolved path must still map."""
         real_home = tmp_path / "real-clawk"
         (real_home / "attachments").mkdir(parents=True)
-        link_home = tmp_path / ".clawk"
+        link_home = tmp_path / ".clawksis"
         link_home.symlink_to(real_home, target_is_directory=True)
         monkeypatch.setenv("CLAWK_HOME", str(link_home))
         monkeypatch.setenv("TERMINAL_ENV", "docker")
@@ -600,7 +600,7 @@ class TestIterCacheFiles:
 
     def test_enumerates_files(self, tmp_path, monkeypatch):
         """Regular files in cache dirs are returned."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         doc_dir = clawk_home / "cache" / "documents"
         doc_dir.mkdir(parents=True)
         (doc_dir / "upload.zip").write_bytes(b"PK\x03\x04")
@@ -623,7 +623,7 @@ class TestIterCacheFiles:
     @pytest.mark.require_symlinks
     def test_skips_symlinks(self, tmp_path, monkeypatch):
         """Symlinks inside cache dirs are skipped."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         doc_dir = clawk_home / "cache" / "documents"
         doc_dir.mkdir(parents=True)
         real_file = doc_dir / "real.txt"
@@ -638,7 +638,7 @@ class TestIterCacheFiles:
 
     def test_empty_cache(self, tmp_path, monkeypatch):
         """No cache dirs → empty list."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -663,7 +663,7 @@ class TestMasterCredentialStoresAreNeverMountable:
 
     @staticmethod
     def _home(tmp_path):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         (home / ".env").write_text("OPENAI_API_KEY=sk-proj-REAL\n")
         (home / "auth.json").write_text('{"providers":{}}')

@@ -12,7 +12,7 @@ LEGACY = (
 def test_load_soul_md_drops_legacy_protocol_section(tmp_path, monkeypatch):
     from agent import prompt_builder
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     (home / "SOUL.md").write_text(LEGACY + "\n## Symbols\n\nuse ◆\n", encoding="utf-8")
@@ -33,7 +33,7 @@ def test_load_soul_md_drops_legacy_protocol_section(tmp_path, monkeypatch):
 def test_migration_41_strips_every_profile_soul_once(tmp_path, monkeypatch):
     from clawk_cli.config_migrations import _migrate_to_41
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "profiles" / "worker").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     (home / "SOUL.md").write_text(LEGACY, encoding="utf-8")

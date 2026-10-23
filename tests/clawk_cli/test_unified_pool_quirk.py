@@ -192,7 +192,7 @@ def test_vulkan_device_type_decides_discrete_vs_unified(
     from clawk_cli.local_runtime import devices
 
     total = 16304 << 20
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text(
         "local_runtime:\n  backend: vulkan\n", encoding="utf-8"

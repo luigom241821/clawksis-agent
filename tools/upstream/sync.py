@@ -57,6 +57,7 @@ PATH_MAP = [
     ("hermes_state", "clawk_state"),
     ("hermes_time", "clawk_time"),
     ("hermes-agent", "clawksis-agent"),
+    ("hermes-webhook", "clawk-webhook"),
     ("hermes-web", "clawksis-web"),
     ("hermes-acp", "clawk-acp"),
     ("hermes-dashboard", "clawksis-dashboard"),
@@ -78,6 +79,11 @@ CONTENT_MAP = [
     ("https://hermes-agent.nousresearch.com/install.sh", f"{_RAW}/install.sh"),
     ("https://hermes-agent.nousresearch.com/install.ps1", f"{_RAW}/install.ps1"),
     ("https://hermes-agent.nousresearch.com/install.cmd", f"{_RAW}/install.cmd"),
+    # La pagina de producto del desktop no tiene equivalente en el fork: la raiz del repo.
+    (
+        "https://hermes-agent.nousresearch.com/desktop",
+        "https://github.com/samuelgradientai-sys/clawksis-agent/",
+    ),
     ("https://hermes-agent.nousresearch.com/docs/", f"{_PAGES}/"),
     ("https://hermes-agent.nousresearch.com/docs", _PAGES),
     (
@@ -96,6 +102,10 @@ CONTENT_MAP = [
     ("hermes_state", "clawk_state"),
     ("hermes_time", "clawk_time"),
     ("hermes-agent", "clawksis-agent"),
+    # El toolset de plataforma ``hermes-webhook`` es ``clawk-webhook`` como todos los
+    # ``clawk-<plataforma>`` (el codigo los reconoce por el prefijo ``clawk-``); sin esta
+    # entrada el ``hermes-web`` historico lo dejaba en ``clawksis-webhook``.
+    ("hermes-webhook", "clawk-webhook"),
     ("hermes-web", "clawksis-web"),
     ("hermes-acp", "clawk-acp"),
     ("hermes-dashboard", "clawksis-dashboard"),
@@ -141,6 +151,9 @@ CONTENT_MAP = [
     ("☤\ufe0f", "∇"),
     ("⚕", "∇"),
     ("☤", "∇"),
+    # Esquema de Authorization ``HermesRoom`` (se compara en minusculas): la forma
+    # minuscula tiene que seguir a ``ClawksisRoom``, no quedar en ``clawkroom``.
+    ("hermesroom", "clawksisroom"),
     ("HERMES_", "CLAWK_"),
     ("HERMES", "CLAWKSIS"),
     ("Hermes", "Clawksis"),
@@ -171,47 +184,332 @@ _MODEL_ID_RE = re.compile(
 # Carpeta HOME del usuario: en el fork es ``~/.clawksis``. El blanket
 # hermes->clawk de CONTENT_MAP la convertiria en ``.clawk`` (que si es el nombre
 # correcto para la config LOCAL de un proyecto: ``<repo>/.clawk/skills``,
-# ``.clawk.md``). Estas reglas detectan los contextos inequivocos de HOME y los
-# mapean a ``.clawksis`` antes del blanket. ``{old}`` es el nombre de origen.
+# ``<repo>/.clawk/bin``, ``environment.json``, ``plans``, ``.clawk.md``). Estas reglas
+# detectan los contextos de HOME y los mapean a ``.clawksis`` antes del blanket.
+#
+# ``home_fix(text, old, new)`` es parametrico en el nombre de origen: el sync lo
+# aplica a upstream con ``old=".hermes"``, y las mismas reglas aplicadas al arbol con
+# ``old=".clawk"`` muestran donde el arbol quedo incoherente con ellas. En los patrones,
+# ``{old}`` es el nombre (regex-escapado) y ``{brand}`` la marca sin punto (``hermes``).
 _HOME_CTX = [
-    # Path.home() / ".hermes"
-    r"(Path\.home\(\)\s*/\s*)([\"']){old}\2",
-    # <algo>home<algo> / ".hermes"  (fake_home, tmp_home, home, real_home ...)
-    r"(\b\w*[Hh][Oo][Mm][Ee]\w*\)?\s*/\s*)([\"']){old}\2",
-    # Lo mismo con subruta en el literal: Path.home() / ".hermes/profiles",
-    # home / ".hermes/logs" (la comilla va en el grupo 1: no se cierra tras el nombre).
-    r"(Path\.home\(\)\s*/\s*[\"'])(){old}(?=/)",
-    r"(\b\w*[Hh][Oo][Mm][Ee]\w*\)?\s*/\s*[\"'])(){old}(?=/)",
     # Filtro de entradas del PATH: `for p in os.get_exec_path() if ".hermes" not in
     # Path(p).parts` saca el store de herramientas de PM (~/.hermes/tools/...).
     r"(\bget_exec_path\(\)[^\n]*?)([\"']){old}\2",
-    # join(homedir(), '.hermes') / join(home, ".hermes") / expanduser("~"), ".hermes"
-    r"(\b\w*(?:[Hh]ome(?:[Dd]ir)?|expanduser)\w*(?:\([^()]*\))?\s*,\s*)([\"']){old}\2",
     # process.env.HOME || '~', '.hermes'
     r"(process\.env\.HOME[^,;\n]{0,20},\s*)([\"']){old}\2",
-    # $HOME/.hermes, ${HOME}/.hermes, %USERPROFILE%\.hermes, $env:USERPROFILE '.hermes
-    r"((?:\$\{?HOME\}?|%USERPROFILE%|\$env:USERPROFILE|\$HOME)[/\\\s']+)(){old}(?=[/\\'\"\s`)]|$)",
-    # /root/.hermes, /home/<user>/.hermes, /Users/<user>/.hermes, C:\\Users\\x\\.hermes
-    r"((?:/root|/home/[\w.-]+|/Users/[\w.-]+)/)(){old}(?=[/'\"\s`)]|$)",
+    # $HOME/.hermes, ${HOME}/.hermes, ${HERMES_HOME:-$HOME/.hermes}, $HOME/.hermes${suffix},
+    # %USERPROFILE%\.hermes, ${USERPROFILE}/.hermes, $env:USERPROFILE '.hermes, y el
+    # especificador de systemd %h/.hermes (EnvironmentFile=%h/.hermes/.env).
+    r"((?:\$\{?HOME\}?|%USERPROFILE%|\$\{?USERPROFILE\}?|\$env:USERPROFILE|%h)[/\\\s']+)(){old}",
+    # Raices de HOME absolutas: /root/.hermes, /home/<user>/.hermes (tambien el placeholder
+    # /home/<user>), /Users/<user>/.hermes, el stateDir de NixOS /var/lib/hermes/.hermes, el
+    # volumen de Docker /opt/data/.hermes y /data/.hermes, y el placeholder /your/.hermes.
+    r"((?<![\w.-])(?:/root|/home/[\w.<>-]+|/Users/[\w.<>-]+|/var/lib/{brand}|/opt/data|/data|/your)/)(){old}",
+    # Lo mismo SIN barra inicial: miembros de tar (``"root/.hermes/skills/x"``,
+    # ``home/<user>/.hermes``) y rutas de sandbox (``.../<task>/home/.hermes/...``).
+    r"((?<![\w.<-])(?:root|home|home/[\w.<>-]+|Users/[\w.<>-]+)/)(){old}",
+    # Prosa con un HOME nombrado: <scratch>/.hermes, stateDir/.hermes, tmp_path/.hermes,
+    # Path.home()/.hermes, "remote .hermes/" (el HOME del sandbox remoto), y <root>/.hermes
+    # salvo <root>/.hermes/{bin,skills} (el checkout: launchers y skills del proyecto).
+    r"((?<![\w.-])(?:<(?:scratch|home)>|stateDir|tmp_path|Path\.home\(\))/)(){old}",
+    r"((?<![\w.-])<root>/)(){old}(?!/(?:bin|skills)\b)",
+    r"(\bremote\s+(?:``)?)(){old}",
+    # f-strings / templates cuyo placeholder nombra un home: f"{self._remote_home}/.hermes",
+    # `${fakeHome}/.hermes`, "${config.home.homeDirectory}/.hermes", f"{home}/.hermes".
+    r"(\{[^{}\n]*[Hh][Oo][Mm][Ee][^{}\n]*\}/)(){old}",
+    # Regex con el punto escapado: r'\$HOME/\.hermes/\.env', r'\~/\.hermes/', r'~\/\.hermes/',
+    # r'(?:\$home|\$\{home\})/\.hermes/' (approval_detection, skills_guard).
+    r"((?:~|\$\{?[Hh][Oo][Mm][Ee]\\?\}?\)?|\b[Hh][Oo][Mm][Ee]\\\}\))\\?/\\)(){old}",
+    # Un literal ``".hermes"`` en una linea que habla de perfiles: los perfiles solo viven en
+    # el HOME (``parts[-3] == ".hermes" and parts[-2] == "profiles"``).
+    r"()([\"']){old}\2(?=[^\n]*\bprofiles\b)",
+    # Prosa relativa con una subcarpeta que solo existe en el HOME: ``@file:.hermes/.env``,
+    # ``.hermes/auth.json``, ``exist in .hermes/sessions``. (``config.yaml``/``SOUL.md``/
+    # ``skills`` existen tambien en la carpeta local de un proyecto: no cuentan.)
+    r"((?<![\w./-]))(){old}(?=/(?:sessions|profiles|logs|state\.db|auth\.json"
+    r"|\.anthropic_oauth\.json|mcp-tokens|\.env)(?![\w-]))",
 ]
+
+# Fin del nombre: ``.hermes`` seguido de un separador (``/``, comilla, ``}``, ``$``, fin de
+# oracion...), nunca ``.hermes-update-in-progress``, ``.hermes_sync``, ``.hermes.md``.
+_HOME_END = r"(?![\w-])(?!\.\w)"
+
+# Componentes de la carpeta LOCAL de un proyecto (``<repo>/.clawk/bin``,
+# ``<repo>/.clawk/environment.json``, ``.clawk/plans``, adjuntos del desktop); no cuentan
+# si el operando nombra un home (``REAL_HOME / ".hermes" / "bin"``, el uv del instalador).
+_PROJECT_SUBDIRS = frozenset(
+    {"bin", "environment.json", "plans", "attachments", "desktop-attachments"}
+)
+# Los plugins de proyecto del fork viven en ``./.clawksis/plugins`` (clawk_cli/plugins.py,
+# plugins/memory/__init__.py): ``.hermes`` seguido de ``plugins`` es ``.clawksis`` tambien
+# en un proyecto. Las demas carpetas locales de un proyecto siguen siendo ``.clawk/``.
+_PLUGINS_DIR = "plugins"
+# Componentes que solo existen en el HOME: ``root / ".hermes/logs/..."`` es el HOME aunque
+# ``root`` suela nombrar un checkout.
+_HOME_SUBDIRS = frozenset(
+    {
+        "profiles",
+        "sessions",
+        "logs",
+        "state.db",
+        "auth.json",
+        "mcp-tokens",
+        ".env",
+        "cache",
+    }
+)
+# Ultimo atomo del operando izquierdo que nombra la raiz de un proyecto, checkout o
+# instalacion (``repo / ".hermes" / "skills"``, ``root / ".hermes" / "bin"``), no un HOME.
+_PROJECT_OPERAND_RE = re.compile(
+    r"(?i)^(?:repo\w*|r|work|workspace\w*|worktree\w*|proj\w*|install\w*|checkout\w*"
+    r"|core|path|cwd|root|src|source\w*|update_?root)$"
+)
+# Lo mismo para un segmento literal (``tmp_path / "proj" / ".hermes"``); ``"root"`` no
+# cuenta: ``tmp_path / "root" / ".hermes"`` imita ``/root/.hermes``.
+_PROJECT_LITERAL_RE = re.compile(
+    r"(?i)^(?:repo\w*|proj\w*|workspace\w*|worktree\w*|checkout\w*|src)$"
+)
+# ``<operando> / ".hermes"`` (Python/pathlib), tambien ``/ (".hermes" + suffix)`` y
+# ``/ ("x" if c else ".hermes")``; el literal puede traer subruta (``".hermes/logs"``).
+_JOIN_RE = re.compile(
+    r"(\s*/\s*(?:\(\s*|\([^()\n]*?\belse\s+)?)([\"']){old}(?=(?:/[^\"'\n]*)?\2)"
+)
+# join(A, ".hermes", ...) / os.path.join / path.join / Path(A, ".hermes") / X.join(".hermes")
+# / X.joinpath(".hermes") / PurePosixPath(".hermes", ...) / Path(".hermes") / "x"
+_CALL_RE = re.compile(
+    r"\b(?P<fn>[A-Za-z_][\w.]*)\(\s*"
+    r"(?P<args>(?:[^()\"'\n]|\([^()\n]*\)|\"[^\"\n]*\"|'[^'\n]*')*?)"
+    r"(?P<q>[\"']){old}(?=(?:/[^\"'\n]*)?(?P=q))"
+)
+_CALL_FNS = frozenset(
+    {"join", "joinpath", "Path", "PurePath", "PurePosixPath", "PureWindowsPath"}
+)
+_NEXT_RE = re.compile(
+    r"[\"']\s*(?:/\s*|,\s*|\)\s*/\s*|\)\s*\.join(?:path)?\(\s*)[\"']([\w.-]+)"
+)
+_CLOSERS = {")": "(", "]": "["}
+
+
+def _next_component(text: str, pos: int) -> str | None:
+    """Componente que sigue al nombre en ``pos``: ``/logs`` dentro del literal, o el
+    literal siguiente (``/ "bin"``, ``, "bin"``, ``) / "bin"``, ``).join("bin")``)."""
+    if text.startswith("/", pos):
+        m = re.match(r"/([\w.-]+)", text[pos:])
+        return m.group(1) if m else None
+    m = _NEXT_RE.match(text, pos)
+    return m.group(1) if m else None
+
+
+def _primaries_before(text: str, end: int) -> list[str]:
+    """Primarios (nombres, llamadas, subscripts, literales) encadenados con ``/`` que
+    terminan en ``end``, del mas cercano al mas lejano. Best effort, una sola linea."""
+    out: list[str] = []
+    i = end
+    while True:
+        while i > 0 and text[i - 1] in " \t":
+            i -= 1
+        start = i
+        while i > 0:
+            ch = text[i - 1]
+            if ch in _CLOSERS:
+                depth, k = 0, i - 1
+                while k >= 0 and text[k] != "\n":
+                    depth += {ch: 1, _CLOSERS[ch]: -1}.get(text[k], 0)
+                    if depth == 0:
+                        break
+                    k -= 1
+                if k < 0 or text[k] == "\n":
+                    break
+                i = k
+            elif ch in "\"'":
+                j = text.rfind(ch, 0, i - 1)
+                if j < 0 or "\n" in text[j:i]:
+                    break
+                i = j
+            elif ch.isalnum() or ch in "_.":
+                i -= 1
+            else:
+                break
+        if i == start:
+            return out
+        out.append(text[i:start])
+        k = i
+        while k > 0 and text[k - 1] in " \t":
+            k -= 1
+        # ``a / b`` sigue la cadena; ``a // b`` o ``*/`` no son uniones de rutas.
+        if k > 1 and text[k - 1] == "/" and text[k - 2] not in "/*":
+            i = k - 1
+            continue
+        return out
+
+
+def _primary_name(p: str) -> str:
+    """Nombre que identifica un primario: ``state["root"]`` -> root, ``self.install`` ->
+    install, ``Path(gateway.PROJECT_ROOT).resolve()`` -> PROJECT_ROOT, ``x.parent`` -> x."""
+    prev = None
+    while prev != p:
+        prev = p
+        p = re.sub(r"\.(?:resolve|absolute|expanduser|parent)(?:\(\))?$", "", p)
+    m = re.search(r"\[\s*[\"']([\w-]+)[\"']\s*\]$", p)
+    if m:
+        return m.group(1)
+    m = re.match(
+        r"^(?:[\w.]*\.)?(?:Path|PurePath|PurePosixPath|str|fspath)\((.*)\)$", p
+    )
+    if m:
+        return _primary_name(m.group(1).split(",")[-1].strip())
+    m = re.search(r"([A-Za-z_]\w*)(?:\([^()]*\))?$", p)
+    return m.group(1) if m else ""
+
+
+def _home_operand(
+    primaries: list[str], nxt: str | None, home_hint: bool = False
+) -> bool:
+    """¿El operando (primarios, del mas cercano al mas lejano) y la componente siguiente
+    nombran un HOME? Por defecto si; no cuando nombran un proyecto/checkout/instalacion.
+    ``home_hint``: la linea asigna ``HERMES_HOME`` (``"HERMES_HOME": str(Path(work) /
+    ".hermes")``) o una variable con ``home`` en el nombre."""
+    if nxt == _PLUGINS_DIR or nxt in _HOME_SUBDIRS:
+        return True
+    # ``REAL_HOME / ".hermes" / "bin"``: el HOME tambien tiene bin/ (uv del instalador).
+    if home_hint or any(re.search(r"[Hh][Oo][Mm][Ee]", p) for p in primaries):
+        return True
+    if nxt in _PROJECT_SUBDIRS or not primaries:
+        return nxt not in _PROJECT_SUBDIRS
+    # ``work / "demo" / ".hermes"``: un segmento literal entre la raiz y el nombre es una
+    # subcarpeta (el HOME de un usuario de prueba), salvo que nombre un proyecto
+    # (``tmp_path / "proj" / ".hermes"``).
+    lit = re.match(r"^[rbuf]*[\"'](.*)[\"']$", primaries[0])
+    if lit:
+        return not _PROJECT_LITERAL_RE.match(lit.group(1))
+    return not _PROJECT_OPERAND_RE.match(_primary_name(primaries[0]))
+
+
+def _split_args(args: str) -> list[str]:
+    """Argumentos (de nivel superior) ya escritos de una llamada, del ultimo al primero."""
+    parts, depth, cur, quote = [], 0, "", ""
+    for ch in args:
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append(cur.strip())
+            cur = ""
+            continue
+        cur += ch
+    parts.append(cur.strip())
+    return [a for a in reversed(parts) if a]
 
 
 def home_fix(text: str, old: str = ".hermes", new: str = ".clawksis") -> str:
     """Mapea la carpeta HOME ``old`` -> ``new`` solo en contextos de HOME."""
+    if old not in text:
+        return text
     esc = re.escape(old)
+    brand = old.lstrip(".")
+    fmt = {"old": esc, "brand": re.escape(brand)}
+    env_home = re.compile(rf"\b{re.escape(brand.upper())}_HOME\b")
+    project_use = "|".join(re.escape(d) for d in sorted(_PROJECT_SUBDIRS))
+
+    def _hints(pos: int) -> tuple[bool, bool]:
+        """(home_hint, project_hint) de la linea en ``pos``: ``HERMES_HOME`` en la linea o
+        ``<var con home> = ...``; o ``var = ... / ".hermes"`` con ``var / "environment.json"``
+        (u otra componente local de proyecto) mas adelante en el archivo."""
+        start = text.rfind("\n", 0, pos) + 1
+        end = text.find("\n", pos)
+        line = text[start : end if end >= 0 else len(text)]
+        m = re.match(
+            r"\s*(?:(?:const|let|var)\s+)?(\w+)\s*(?::\s*[\w.|<> ]+)?=[^=>]", line
+        )
+        var = m.group(1) if m else ""
+        if env_home.search(line) or re.search(r"[Hh][Oo][Mm][Ee]", var):
+            return True, False
+        used = var and re.search(rf"\b{var}\s*/\s*[\"'](?:{project_use})[\"']", text)
+        return False, bool(used)
+
     for pat in _HOME_CTX:
-        rx = re.compile(pat.replace("{old}", esc) + r"(?![\w.-])")
+        rx = re.compile(_fmt(pat, fmt) + _HOME_END)
         text = rx.sub(lambda m: m.group(1) + m.group(2) + new + m.group(2), text)
-    return text
+
+    def _join(m: re.Match[str]) -> str:
+        home_hint, project_hint = _hints(m.end())
+        nxt = _next_component(text, m.end())
+        if not project_hint and _home_operand(
+            _primaries_before(text, m.start()), nxt, home_hint
+        ):
+            return m.group(1) + m.group(2) + new
+        return m.group(0)
+
+    text = re.compile(_fmt(_JOIN_RE.pattern, fmt) + _HOME_END).sub(_join, text)
+
+    def _call(m: re.Match[str]) -> str:
+        fn, args = m.group("fn"), m.group("args")
+        short = fn.rsplit(".", 1)[-1]
+        if short not in _CALL_FNS:
+            return m.group(0)
+        if short in ("join", "joinpath") and "." in fn and not args.strip():
+            # X.join(".hermes") / X.joinpath(".hermes"): el operando es el receptor.
+            primaries = _primaries_before(
+                text, m.start("fn") + len(fn) - len(short) - 1
+            )
+        else:
+            primaries = _split_args(args)
+        home_hint, project_hint = _hints(m.end())
+        if not project_hint and _home_operand(
+            primaries, _next_component(text, m.end()), home_hint
+        ):
+            return m.group(0)[: m.start("q") - m.start()] + m.group("q") + new
+        return m.group(0)
+
+    text = re.compile(_fmt(_CALL_RE.pattern, fmt) + _HOME_END).sub(_call, text)
+
+    # Plugins de proyecto (prosa/docs): ./.hermes/plugins, `.hermes/plugins/<name>/`. No tras
+    # otra ruta (``/local/.hermes/plugins`` junto a ``/local/.hermes/desktop-plugins``).
+    return re.sub(rf"(?:(?<=\./)|(?<![\w/-])){esc}(?=/{_PLUGINS_DIR}\b)", new, text)
+
+
+def _fmt(pat: str, fmt: dict[str, str]) -> str:
+    for k, v in fmt.items():
+        pat = pat.replace("{" + k + "}", v)
+    return pat
 
 
 # Archivos de upstream donde ``.hermes`` es SIEMPRE la carpeta HOME del usuario
 # (nunca la config local de un proyecto), aunque no aparezca en un contexto que
-# ``home_fix`` reconozca: ``.hermes`` -> ``.clawksis`` en todo el archivo.
+# ``home_fix`` reconozca: ``.hermes`` -> ``.clawksis`` en todo el archivo (respetando el
+# fin de nombre: ``.hermes-update-in-progress`` no es la carpeta).
 HOME_DIR_FILES = {
     # HX001 (code health): detecta el HOME hardcodeado comparando la componente
     # de ruta con ``.hermes``; en el fork el HOME es ``.clawksis``.
     "scripts/code_health/py_rules.py",
+    # Helpers del HOME: ``root.name == ".hermes"``, ``user_home() / (".hermes" + suffix)``,
+    # ``os.path.basename(home) == ".hermes"``, ``".hermes" in parts[:-1]``.
+    "hermes_constants.py",
+    "hermes_state_holders.py",
+    "agent/redact.py",
+    "tests/agent/test_redact.py",
+    # Espejos del HOME dentro del sandbox (``.../<task>/home/.hermes``, ``/root/.hermes``) y
+    # credenciales del HOME del sandbox (``PurePosixPath(".hermes", ...)``).
+    "agent/file_safety.py",
+    "gateway/media_fetch.py",
+    "tools/environments/modal.py",
+    "tools/environments/ssh.py",
+    # Backups: un zip trae ``.hermes/config.yaml`` (el HOME empaquetado).
+    "hermes_cli/backup_restore.py",
+    # Modulos de Nix y su doc: ``${cfg.stateDir}/.hermes``, ``${userHome}/.hermes``.
+    "nix/nixosModules.nix",
+    "nix/homeManagerModules.nix",
+    "nix/checks.nix",
+    "website/docs/getting-started/nix-setup.md",
+    # Instalador nativo (``format!(".hermes{suffix}")``) y el HOME remoto del desktop por
+    # SSH (``/\.hermes\/desktop-ssh\//``, ``"\/home\/alice\/\.hermes"``).
+    "apps/bootstrap-installer/src-tauri/src/paths.rs",
+    "apps/desktop/electron/remote-lifecycle.test.ts",
 }
 
 # Nombres de header HTTP: el blanket rebrandea ``X-Hermes-Foo`` -> ``X-Clawksis-Foo``
@@ -231,11 +529,64 @@ _WAKE_WORD_RE = re.compile(r"(?<=@\?)hermes(?=\\[sb])")
 # repo es de su autor (``oxylabs/hermes-web-oxylabs``, ``NousResearch/hermes-official-plugins``);
 # rebrandearlo deja links e installs apuntando a repos que no existen. Solo el repo propio
 # de upstream (``NousResearch/hermes-agent``) se remapea al fork via CONTENT_MAP.
+# El repo propio se reconoce sin distinguir mayusculas (``nousresearch/hermes-agent``,
+# ``NousResearch/Hermes-Agent``: GitHub no las distingue). Los owners de ejemplo
+# (``example/``, ``you/``, ``e2e-fork/``, ``$REPO_ID/``) no son terceros: se rebrandean como
+# el resto del archivo (el fixture de ``test_release_entrypoint`` usa ``example/hermes-agent``
+# en el remote Y en las URLs esperadas). ``(?<![\w.-])`` evita que ``api.github.com/repos/..``
+# se lea como ``github.com/repos/...`` (un "tercero" llamado ``repos``).
 _THIRD_PARTY_URL_RE = re.compile(
-    r"(?:https?://)?(?:www\.)?"
+    r"(?<![\w.-])(?:https?://)?(?:www\.)?"
     r"(?:github\.com|raw\.githubusercontent\.com|codeload\.github\.com|api\.github\.com/repos)"
-    r"/(?![Nn]ous[Rr]esearch/hermes-agent(?:\.git)?(?![\w.-]))[^\s\"'`)\]>]*[Hh][Ee][Rr][Mm][Ee][Ss][^\s\"'`)\]>]*"
+    r"/(?!(?i:nousresearch/hermes-agent)(?:\.git)?(?![\w.-]))"
+    r"(?!(?:example|you|e2e-fork|\$\w+|\$\{\w+\})/)"
+    r"[^\s\"'`)\]>]*[Hh][Ee][Rr][Mm][Ee][Ss][^\s\"'`)\]>]*"
 )
+
+# Repo propio en cualquier capitalizacion -> repo del fork (CONTENT_MAP solo cubre la forma
+# exacta ``NousResearch/hermes-agent``): en URLs de GitHub (``github.com/nousresearch/
+# hermes-agent``, ``git@github.com:...``, regex ``github\.com/``) y como slug con subruta o
+# ``.git`` (``skills-sh/nousresearch/hermes-agent/<skill>``, ``nousresearch/hermes-agent/
+# skills/``, ``)nousresearch/hermes-agent(\.git)?`` en install.sh). La imagen de Docker
+# ``nousresearch/hermes-agent[:tag]`` no lleva subruta y sigue el blanket.
+_OWN_REPO_URL_RE = re.compile(
+    r"(?i)(github(?:\\)?\.com[/:])nousresearch/hermes-agent(?![\w-])"
+)
+_OWN_REPO_SLUG_RE = re.compile(
+    r"(?i)(?<![\w.-])(?<!/r/)(?<!\.io/)nousresearch/hermes-agent(?=/|\.git\b|\(\\\.git\))"
+)
+_OWN_REPO = "samuelgradientai-sys/clawksis-agent"
+
+# Variantes en Mixed_Case de una variable de entorno (``Hermes_Yolo_Mode`` para
+# ``HERMES_YOLO_MODE`` en los tests de entorno que no distinguen mayusculas): siguen al
+# nombre rebrandeado (``Clawk_Yolo_Mode``), no al blanket ``Hermes`` -> ``Clawksis``. Solo
+# si el archivo nombra la variable en mayusculas: ``Hermes_Gateway`` (la Scheduled Task de
+# Windows) no es una variable y queda ``Clawksis_Gateway``.
+_ENV_CASE_RE = re.compile(r"\bHermes_([A-Z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*)\b")
+
+# Nombre de la DISTRIBUCION (dist-info, egg-info, ``__editable__``, metadata ``Name``):
+# el fork se instala como ``clawksis-agent`` -> ``clawksis_agent``; el blanket dejaba
+# ``clawk_agent``. Los grupos de entry points (``hermes_agent.plugins``,
+# ``.memory_providers``, ``.plugin_capabilities``) son API de plugins y siguen ``clawk_agent``.
+_DIST_NAME_RE = re.compile(
+    r"(?<![A-Za-z0-9])hermes_agent(?=[-_]\d|\.(?:egg|dist)-info|[\"'])"
+)
+
+# Alternancias de nombres con prefijo (``^hermes-(serve|dashboard)...$`` en un regex):
+# si los nombres completos no comparten prefijo rebrandeado (``clawk-serve`` pero
+# ``clawksis-dashboard``) se expanden a ``(?:clawk-serve|clawksis-dashboard)``.
+_PREFIX_ALT_RE = re.compile(
+    r"\bhermes-\((?:\?:)?([a-z][a-z0-9_]*(?:\|[a-z][a-z0-9_]*)+)\)"
+)
+
+# ``x.startswith("HERMES_HOME=")`` con un corte fijo ``x[12:]`` en la misma linea o la
+# siguiente: el literal rebrandeado cambia de largo (``CLAWK_HOME=`` tiene 11), asi que el
+# corte se ajusta al largo nuevo.
+_STARTSWITH_RE = re.compile(
+    r"\.startswith\(\s*[bru]*([\"'])((?:(?!\1)[^\n])*?(?:hermes|Hermes|HERMES)(?:(?!\1)[^\n])*?)\1\s*\)"
+)
+
+_ASSETS_HOST_RE = re.compile(r"\bhermes-assets\.nousresearch\.com\b")
 
 # Datos que DEBEN quedar verbatim en un archivo puntual (el rebrand los
 # corromperia): se stashean igual que los IDs de modelo. Clave = path de upstream.
@@ -251,6 +602,12 @@ VERBATIM = {
     "tests/scripts/test_release_tags.py": re.compile(
         r"\b(?:NousResearch|fork)/hermes-agent\b"
     ),
+    # Host real del mirror de binarios de PM (``pm/artifact-mirror.json``), que ``pm.network``
+    # reconoce para diagnosticar bloqueos de Cloudflare. Los RELEASES de Hermes del mismo
+    # host (``source_releases.py``) si se rebrandean: el fork no debe descargarlos.
+    "pm/network.py": _ASSETS_HOST_RE,
+    "pm/artifact-mirror.json": _ASSETS_HOST_RE,
+    "tests/hermes_cli/test_release_channels.py": _ASSETS_HOST_RE,
 }
 
 
@@ -346,6 +703,40 @@ def map_path(p: str) -> str:
     return p
 
 
+def _map_text(text: str) -> str:
+    for old, new in CONTENT_MAP:
+        text = text.replace(old, new)
+    return text
+
+
+def _env_case(m: re.Match[str], text: str) -> str:
+    env = "HERMES_" + m.group(1).upper()
+    if re.search(rf"(?<![A-Za-z0-9_]){env}(?![A-Za-z0-9_])", text):
+        return "Clawk_" + m.group(1)
+    return m.group(0)
+
+
+def _prefix_alt(m: re.Match[str]) -> str:
+    names = [_map_text("hermes-" + alt) for alt in m.group(1).split("|")]
+    if all(n.startswith("clawk-") for n in names):
+        return m.group(0)
+    return "(?:" + "|".join(names) + ")"
+
+
+def _fix_prefix_slices(text: str) -> str:
+    if "startswith" not in text:
+        return text
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        for m in _STARTSWITH_RE.finditer(line):
+            n_old, n_new = len(m.group(2)), len(_map_text(m.group(2)))
+            if n_old == n_new:
+                continue
+            for j in (i, i + 1)[: len(lines) - i]:
+                lines[j] = re.sub(rf"\[\s*{n_old}\s*:\s*\]", f"[{n_new}:]", lines[j])
+    return "\n".join(lines)
+
+
 def rebrand(content: bytes, path: str) -> bytes:
     name = path.rsplit("/", 1)[-1]
     if path.startswith("contributors/") or not _rebrandable(name, content):
@@ -367,13 +758,18 @@ def rebrand(content: bytes, path: str) -> bytes:
         text = VERBATIM[path].sub(_stash, text)
     text = _MODEL_ID_RE.sub(_stash, text)
     text = _THIRD_PARTY_URL_RE.sub(_stash, text)
+    text = _OWN_REPO_URL_RE.sub(lambda m: m.group(1) + _OWN_REPO, text)
+    text = _OWN_REPO_SLUG_RE.sub(_OWN_REPO, text)
     text = home_fix(text)
     if path in HOME_DIR_FILES:
-        text = text.replace(".hermes", ".clawksis")
+        text = re.sub(r"\.hermes" + _HOME_END, ".clawksis", text)
     text = _HEADER_RE.sub(r"\1clawksis-", text)
     text = _WAKE_WORD_RE.sub("clawk(?:sis)?", text)
-    for old, new in CONTENT_MAP:
-        text = text.replace(old, new)
+    text = _ENV_CASE_RE.sub(lambda m: _env_case(m, text), text)
+    text = _DIST_NAME_RE.sub("clawksis_agent", text)
+    text = _PREFIX_ALT_RE.sub(_prefix_alt, text)
+    text = _fix_prefix_slices(text)
+    text = _map_text(text)
     for key, orig in stash.items():
         text = text.replace(key, orig)
     return text.encode("utf-8")

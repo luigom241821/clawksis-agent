@@ -51,7 +51,7 @@ def _panel(pick):
 
 @pytest.fixture
 def plugin_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     plugin = home / "plugins" / "pick"
     plugin.mkdir(parents=True)
     (plugin / "plugin.yaml").write_text(

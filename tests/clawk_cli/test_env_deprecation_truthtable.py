@@ -164,7 +164,7 @@ def test_deprecated_env_warning_truth_table(
     """Warning fires only for genuine .env-file entries — never for
     inherited process environment or config.yaml (#88829 #89016 #89389 #90299).
     """
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 

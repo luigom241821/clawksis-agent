@@ -19,7 +19,7 @@ def test_skill_config_helpers_share_raw_config_parse_cache(tmp_path, monkeypatch
     """Repeated skill config helpers should parse config.yaml only once."""
     from agent import skill_utils
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     external = tmp_path / "external-skills"
     external.mkdir()
@@ -247,7 +247,7 @@ class TestDisabledSkillsJsonArrayString:
     def test_get_disabled_skill_names_parses_json_array_string(
         self, tmp_path, monkeypatch
     ):
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             'skills:\n  disabled: \'["skill-a","skill-b"]\'\n',

@@ -26,7 +26,7 @@ from tools.environments.local import served_profile_child_env
 def homes(tmp_path, monkeypatch):
     """Launch home A (its .env in os.environ) plus an AMBIENT-only OPENAI key A never wrote to a file;
     served home B defines neither."""
-    a = tmp_path / ".clawk"
+    a = tmp_path / ".clawksis"
     b = a / "profiles" / "b"
     b.mkdir(parents=True)
     (a / ".env").write_text(

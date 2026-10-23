@@ -31,7 +31,7 @@ it guards. `plan → snapshot → apply → restart-per-kind → verify → repo
   trigger a tree-clobbering re-download), REFUSES a dirty working tree (`-uall` + a pre-swap TOCTOU
   re-check — but classifies a `!!` line by whether the swap would destroy it: an ignored path under a
   root entry the ZIP does not ship (`.bytecode-fingerprint`, `.clawk-bootstrap-complete`,
-  `clawk_agent.egg-info/`; tracked root entries stand in for the ZIP set before the download, the
+  `clawksis_agent.egg-info/`; tracked root entries stand in for the ZIP set before the download, the
   re-check gets the real one), a nested `__pycache__`/`node_modules`, or a `_ZIP_PRESERVED_NESTED`
   output is admitted; other ignored files under shipped dirs still block), and grafts the live nested
   build outputs (`_ZIP_PRESERVED_NESTED`: `apps/desktop/{release,dist,node_modules,build}`,

@@ -224,7 +224,7 @@ def test_update_asks_once_and_names_each_profile(tmp_path, monkeypatch):
     (#125794); every line names its profile, and a decline names the rest once with their commands."""
     from clawk_cli import plugins_cmd_install
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     homes = [root, root / "profiles" / "work-a", root / "profiles" / "work-b"]
     for profile_home in homes:
         profile_home.mkdir(parents=True, exist_ok=True)
@@ -282,7 +282,7 @@ def test_update_asks_once_and_names_each_profile(tmp_path, monkeypatch):
 
 
 def _profile_homes(tmp_path, monkeypatch, *names):
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     homes = [root, *(root / "profiles" / n for n in names)]
     for profile_home in homes:
         profile_home.mkdir(parents=True, exist_ok=True)

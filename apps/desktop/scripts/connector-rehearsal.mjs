@@ -27,7 +27,7 @@ await new Promise((resolve, reject) => {
 for (const dir of ['.clawk/shared', 'electron', 'work']) fs.mkdirSync(path.join(sandbox, dir), { recursive: true })
 const env = Object.fromEntries(['PATH', 'TMPDIR', 'LANG', 'SHELL'].filter(key => process.env[key]).map(key => [key, process.env[key]]))
 Object.assign(env, {
-  HOME: sandbox, CLAWK_HOME: path.join(sandbox, '.clawk'), CLAWK_SHARED_AUTH_DIR: path.join(sandbox, '.clawk/shared'),
+  HOME: sandbox, CLAWK_HOME: path.join(sandbox, '.clawksis'), CLAWK_SHARED_AUTH_DIR: path.join(sandbox, '.clawksis/shared'),
   CLAWK_DESKTOP_USER_DATA_DIR: path.join(sandbox, 'electron'), CLAWK_DESKTOP_CWD: path.join(sandbox, 'work'),
   CLAWK_DESKTOP_CLAWK_ROOT: root, CLAWK_DESKTOP_PYTHON: python,
   CLAWK_DESKTOP_IGNORE_EXISTING: '1', CLAWK_DESKTOP_APP_NAME: 'Clawksis Connector Rehearsal',

@@ -130,7 +130,7 @@ class Backend:
         self.clients: list[WSClient] = []
 
     def start(self, *, timeout: float = 90.0) -> Backend:
-        operator_root = (Path(_operator_home()) / ".clawk").resolve()
+        operator_root = (Path(_operator_home()) / ".clawksis").resolve()
         assert operator_root not in (
             self.clawk_home.resolve(),
             *self.clawk_home.resolve().parents,

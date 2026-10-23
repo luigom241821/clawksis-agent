@@ -319,7 +319,7 @@ def _env_write_names(node: ast.AST) -> list[str]:
 
 def _clawk_home_path(text: str, prefix: str = "") -> bool:
     """``text`` (after ``prefix``) starts with the exact ``.clawksis`` path component, so
-    ``.clawksis/x`` matches and ``.clawksis-profile-exports`` does not."""
+    ``.clawksis/x`` matches and ``.clawk-profile-exports`` does not."""
     if not text.startswith(prefix):
         return False
     return (

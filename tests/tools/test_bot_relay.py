@@ -340,7 +340,7 @@ import textwrap
 
 
 def _managed_home(tmp_path, *, legacy_soul=False):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(exist_ok=True)
     d = home / "profiles" / "researcher"
     d.mkdir(parents=True, exist_ok=True)

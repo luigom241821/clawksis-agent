@@ -14,7 +14,7 @@ def test_tools_configure_uses_live_session_profile(
     from tui_gateway import server
     from clawk_constants import get_clawk_home
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     profile = home / "profiles" / "worker"
     profile.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -67,7 +67,7 @@ def test_rebuild_preparation_failure_keeps_reachable_owner(
     from clawk_state import SessionDB
     from clawk_constants import get_clawk_home
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     profile = home / "profiles" / "worker"
     profile.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))

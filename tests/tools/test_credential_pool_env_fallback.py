@@ -37,7 +37,7 @@ def isolated_clawk_home(tmp_path, monkeypatch):
 
     Also invalidates any cached get_env_value state by patching Path.home().
     """
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

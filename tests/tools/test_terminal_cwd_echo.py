@@ -17,7 +17,7 @@ from tools.terminal_tool import terminal_tool
 
 @pytest.fixture
 def isolated_home(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     return tmp_path
 
 

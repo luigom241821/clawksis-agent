@@ -100,7 +100,7 @@ def test_oauth_rejection_chat_text_names_the_provider_slug_and_the_failing_profi
 ):
     """A revoked Codex grant must send the user to THAT profile's own sign-in (profiles are
     islands, 93889b770da) and put the provider slug in the text the goal judge reads (#114012)."""
-    profile_home = tmp_path / ".clawk" / "profiles" / "codex"
+    profile_home = tmp_path / ".clawksis" / "profiles" / "codex"
     profile_home.mkdir(parents=True)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_HOME", str(profile_home))

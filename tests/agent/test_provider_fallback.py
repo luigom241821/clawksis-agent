@@ -501,7 +501,7 @@ def _write_moa_home(tmp_path, monkeypatch):
     """Real config.yaml with a MoA preset under a temp CLAWK_HOME (genuine preset resolution)."""
     import clawk_yaml as yaml
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(exist_ok=True)
     (home / "config.yaml").write_text(
         yaml.safe_dump(

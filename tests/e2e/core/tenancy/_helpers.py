@@ -7,7 +7,7 @@ text, SOUL text, terminal cwd and a cron prompt. Each tenant also owns its own l
 WHO sent it. The invariant shared by every scenario is ``leaks(...) == []``: no tenant's canary may
 appear in another tenant's provider request, tool-subprocess env snapshot, or on-disk file.
 
-Clawksis runs for real in child processes with HOME=<tmp>/home and CLAWK_HOME=<tmp>/home/.clawk
+Clawksis runs for real in child processes with HOME=<tmp>/home and CLAWK_HOME=<tmp>/home/.clawksis
 (profiles resolve under $HOME, never the real install), every credential env var stripped.
 """
 
@@ -84,7 +84,8 @@ def hermetic_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, s
     """Child env: fake HOME (profile root anchor) + CLAWK_HOME under it, nothing credential-shaped."""
     home = home.resolve()
     assert (
-        home != real_user_home() and home / ".clawksis" != real_user_home() / ".clawk"
+        home != real_user_home()
+        and home / ".clawksis" != real_user_home() / ".clawksis"
     ), home
     env = {
         k: v
@@ -234,7 +235,7 @@ def make_tenants(
     root: Path, names: Iterable[str], launch: str = "default"
 ) -> dict[str, Tenant]:
     """Build tenant homes on disk: launch profile at HOME/.clawk, the rest under profiles/<name>."""
-    clawk_home = root / "home" / ".clawk"
+    clawk_home = root / "home" / ".clawksis"
     tenants: dict[str, Tenant] = {}
     for name in names:
         home = clawk_home if name == launch else clawk_home / "profiles" / name

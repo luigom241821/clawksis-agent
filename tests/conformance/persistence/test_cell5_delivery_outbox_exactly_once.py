@@ -24,7 +24,7 @@ effect-level invariant that follows, per obligation id, is:
 What is real
 ------------
 * The ledger module, on a real ``state.db`` under an isolated
-  ``HOME=<tmp>/home``, ``CLAWK_HOME=<tmp>/home/.clawk`` (every child).
+  ``HOME=<tmp>/home``, ``CLAWK_HOME=<tmp>/home/.clawksis`` (every child).
 * The turn-side checkpoints: ``BasePlatformAdapter._record_delivery_obligation``
   (record + mark_attempting) and ``_finalize_delivery_obligation``
   (mark_delivered) — the exact methods the adapter's final-send path calls.

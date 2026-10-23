@@ -139,7 +139,7 @@ def stage_native(args) -> int:
             **base_env,
             "HOME": work,
             "USERPROFILE": work,
-            "CLAWK_HOME": str(Path(work) / ".clawk"),
+            "CLAWK_HOME": str(Path(work) / ".clawksis"),
             "CLAWK_RUNTIME_DIR": str(out / "tools"),
             "CLAWK_PYTHON_SRC_ROOT": str(root),
             "XDG_CACHE_HOME": str(Path(work) / "cache"),

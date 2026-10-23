@@ -33,7 +33,7 @@ def _isolate_env(tmp_path, monkeypatch):
     but we want the plugin to work with a predictable subpath. We reset
     CLAWK_HOME here for clarity.
     """
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     yield clawk_home
@@ -493,12 +493,12 @@ class TestGitWorktreeFilesNeverCleaned:
 
         # CLAWK_HOME nested in an enclosing repo (a ~/.git dotfiles repo) that tracks it.
         outer = _isolate_env.parent / "outer"
-        (outer / ".clawk" / "scripts").mkdir(parents=True)
+        (outer / ".clawksis" / "scripts").mkdir(parents=True)
         subprocess.run(["git", "init", "-q", str(outer)], check=True)
-        nested = outer / ".clawk" / "scripts" / "test_x.py"
+        nested = outer / ".clawksis" / "scripts" / "test_x.py"
         nested.write_text("x")
         subprocess.run(["git", "-C", str(outer), "add", "."], check=True)
-        monkeypatch.setenv("CLAWK_HOME", str(outer / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(outer / ".clawksis"))
         assert dg.guess_category(nested) is None
 
 

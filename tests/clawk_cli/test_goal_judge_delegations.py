@@ -80,8 +80,8 @@ def test_a_delegation_wait_lifts_when_a_batch_returns_not_only_when_the_timer_ru
     from pathlib import Path
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
     goals._DB_CACHE.clear()
     mgr = goals.GoalManager(session_id="root-wait")
     mgr.set("integrate the rounds")

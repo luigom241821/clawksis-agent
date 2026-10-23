@@ -205,7 +205,7 @@ def discover_catalog() -> list[Row]:
         with tempfile.TemporaryDirectory(prefix="catalog-discover-") as d:
             env = {k: v for k, v in os.environ.items() if k in _PASSTHROUGH}
             env.update(
-                HOME=d, CLAWK_HOME=str(Path(d) / ".clawk"), PYTHONPATH=str(REPO_ROOT)
+                HOME=d, CLAWK_HOME=str(Path(d) / ".clawksis"), PYTHONPATH=str(REPO_ROOT)
             )
             proc = subprocess.run(
                 [sys.executable, "-c", _DISCOVER],

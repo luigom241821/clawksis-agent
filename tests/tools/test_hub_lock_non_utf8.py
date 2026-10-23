@@ -20,7 +20,7 @@ import pytest
 
 @pytest.fixture
 def skills_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "skills").mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

@@ -22,7 +22,7 @@ from clawk_cli.toolset_scope import (
     _TOOLSET_PLATFORM_RESTRICTIONS,
     toolset_allowed_for_platform as _toolset_allowed_for_platform,
 )
-from clawk_cli.toolset_validation import parse_platform_toolsets_value
+from clawk_cli.toolset_validation import RENAMED_TOOLSETS, parse_platform_toolsets_value
 
 # Re-exports: keep ``clawk_cli.tools_config.X`` callers and test patch targets resolving.
 from clawk_cli.tools_config_cua import (
@@ -980,7 +980,7 @@ def _enable_recently_shipped_toolsets(
         ):
             continue
         # Only enable where staying on the composite would have enabled it anyway; deliberately narrow
-        # composites (clawk-acp, clawksis-webhook) stay narrow.
+        # composites (clawk-acp, clawk-webhook) stay narrow.
         ts_tools = set(resolve_toolset(ts_key, include_registry=False))
         if composite_tools is None:
             composite_tools = set(resolve_toolset(default_ts))
@@ -1169,6 +1169,7 @@ def _get_platform_tools(
     # disappear.
     _LEGACY_TOOLSET_ALIASES: dict = {
         "clawk": ("clawk-cli", "clawk-api-server"),
+        **{old: (new,) for old, new in RENAMED_TOOLSETS.items()},
     }
     expanded: list = []
     for name in toolset_names:

@@ -148,8 +148,8 @@ class TestGoalMigratesOnRotation:
         agent = _build_agent_with_db(db, parent)
 
         # Set a persistent goal on the parent via the real persistence path.
-        with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}):
-            (tmp_path / ".clawk").mkdir(exist_ok=True)
+        with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawksis")}):
+            (tmp_path / ".clawksis").mkdir(exist_ok=True)
             from clawk_cli import goals
 
             goals._DB_CACHE.clear()

@@ -15,7 +15,7 @@ from tui_gateway import launch_profile_policy
 @pytest.fixture
 def two_profile_host(tmp_path, monkeypatch):
     """Fake HOME so ``profiles/`` never resolves to the live install (see clawksis-agent-dev)."""
-    home = tmp_path / "fakehome" / ".clawk"
+    home = tmp_path / "fakehome" / ".clawksis"
     (home / "profiles" / "b").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(tmp_path / "fakehome"))
     monkeypatch.setenv("CLAWK_HOME", str(home))

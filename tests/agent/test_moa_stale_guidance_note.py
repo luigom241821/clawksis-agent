@@ -67,7 +67,7 @@ def _after_tool_call(base):
 
 
 def _prepared(monkeypatch, tmp_path, fanout="user_turn"):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     _config(home, fanout)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     ref_runs = []

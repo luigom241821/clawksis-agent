@@ -48,7 +48,7 @@ def _seed_fetch_cache(store: Store, payload: bytes) -> None:
 def sandbox(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime"
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(runtime))
     store = Store(runtime)
     package = _FakePackage()
@@ -136,7 +136,7 @@ def test_real_node_foreign_stage_checks_bytes_without_exec(tmp_path, monkeypatch
 
     assert current_target() == "linux-x64"
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "runtime"))
     store = Store(paths.store_root())
     # Real Node package/unpacker/verifier, with a hash-verified offline archive.

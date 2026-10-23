@@ -42,7 +42,7 @@ def main():
     env = {
         "PATH": "/usr/bin:/bin",
         "HOME": str(root / "home"),
-        "CLAWK_HOME": str(root / "home/.clawk"),
+        "CLAWK_HOME": str(root / "home/.clawksis"),
         "XDG_DATA_HOME": str(root / "xdg"),
         "LANG": "C.UTF-8",
         "CLAWK_NONINTERACTIVE": "1",

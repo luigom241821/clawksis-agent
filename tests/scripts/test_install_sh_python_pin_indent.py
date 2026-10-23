@@ -69,7 +69,7 @@ def test_bootstrap_python_reads_pin_independent_of_indentation(
         f'INSTALL_DIR="{core.as_posix()}"\n'
         "bootstrap_python\n"
     )
-    env = dict(os.environ, HOME=str(tmp_path), CLAWK_HOME=str(tmp_path / ".clawk"))
+    env = dict(os.environ, HOME=str(tmp_path), CLAWK_HOME=str(tmp_path / ".clawksis"))
     result = subprocess.run(
         ["bash", "-c", script],
         env=env,

@@ -39,7 +39,7 @@ class TestResolveAutoCustomEndToEnd:
             "OPENAI_BASE_URL",
         ):
             monkeypatch.delenv(var, raising=False)
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "model:\n"
@@ -82,7 +82,7 @@ class TestResolveAutoCustomEndToEnd:
             "OPENAI_BASE_URL",
         ):
             monkeypatch.delenv(var, raising=False)
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             "model:\n"
@@ -128,7 +128,7 @@ class TestResolveAutoCustomEndToEnd:
             "OPENAI_BASE_URL",
         ):
             monkeypatch.delenv(var, raising=False)
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         proxy_base = "https://acme.palantirfoundry.com/api/v2/llm/proxy/anthropic"
         (clawk_home / "config.yaml").write_text(

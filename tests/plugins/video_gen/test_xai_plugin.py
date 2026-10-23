@@ -30,7 +30,7 @@ async def test_video_input_from_public_url_uses_url_field():
 def test_xai_video_image_input_blocks_credential_store_symlink(tmp_path, monkeypatch):
     from plugins.video_gen.xai import _image_ref_to_xai_input
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     auth_json = clawk_home / "auth.json"
     auth_json.write_text('{"api_key":"sk-secret"}', encoding="utf-8")

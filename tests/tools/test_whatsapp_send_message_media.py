@@ -172,7 +172,7 @@ def test_missing_captioned_file_falls_back_to_text():
 
 def test_standalone_send_uses_persisted_secondary_bridge_port(tmp_path, monkeypatch):
     """A secondary's automatic port must route standalone sends to its bridge."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     record = home / "platforms" / "whatsapp" / "bridge_port"
     record.parent.mkdir(parents=True)
     record.write_text("3042", encoding="utf-8")

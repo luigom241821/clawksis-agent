@@ -157,7 +157,7 @@ class TestSetupTelegramAuto:
         from clawk_cli import setup
 
         seen = {}
-        profile_home = tmp_path / ".clawk" / "profiles" / "oracle"
+        profile_home = tmp_path / ".clawksis" / "profiles" / "oracle"
         profile_home.mkdir(parents=True)
 
         monkeypatch.setattr(setup, "get_clawk_home", lambda: profile_home)

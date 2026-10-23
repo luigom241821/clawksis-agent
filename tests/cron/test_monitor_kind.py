@@ -31,7 +31,7 @@ import pytest
 @pytest.fixture
 def clawk_env(tmp_path, monkeypatch, cron_owner):
     """Isolate CLAWK_HOME for each test so jobs/scripts/snapshots don't leak."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "scripts").mkdir()
     (home / "cron").mkdir()

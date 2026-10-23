@@ -77,7 +77,7 @@ _ALPHA = (
 def two_profile_homes(tmp_path, monkeypatch):
     """Process home ``a`` (plugins side + alpha) and named profile ``b`` (plugin side only), each
     with its own ``auxiliary.compression`` model."""
-    home_a = tmp_path / ".clawk"
+    home_a = tmp_path / ".clawksis"
     home_b = home_a / "profiles" / "b"
     _write_home(home_a, {"side": _SIDE, "alpha_plugin": _ALPHA}, "vendor/model-a")
     _write_home(home_b, {"side": _SIDE}, "vendor/model-b")

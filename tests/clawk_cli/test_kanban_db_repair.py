@@ -244,7 +244,7 @@ def _run_kanban_cli(argv: list[str]) -> int:
 @pytest.fixture
 def cli_home(tmp_path, monkeypatch):
     """Isolated CLAWK_HOME so kanban_db_path() resolves inside tmp_path."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

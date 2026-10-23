@@ -22,7 +22,7 @@ HEAD = "b" * 40
 
 def _fleet_homes(monkeypatch, tmp_path, records: dict[str, dict]) -> None:
     """Default home + named profiles, each with a state file the identity resolver verifies as-is."""
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles").mkdir(parents=True)
     homes = {"default": root}
     for profile, record in records.items():

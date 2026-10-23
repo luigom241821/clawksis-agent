@@ -127,7 +127,7 @@ def test_kill9_mid_compaction_leaves_state_consistent_and_resumable(
 ):
     server, dispatch = provider
     home = tmp_path / "home"
-    sc = make_scenario("good", threshold_tokens=HIGH_THRESHOLD, name="home/.clawk")
+    sc = make_scenario("good", threshold_tokens=HIGH_THRESHOLD, name="home/.clawksis")
     specs = generate_transcript(
         41, 9, tmp_path / "work", kinds=("tools", "parallel", "chat")
     )

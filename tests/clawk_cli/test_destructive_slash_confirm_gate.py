@@ -29,7 +29,7 @@ class TestUserConfigMerge:
     def test_existing_user_config_without_key_gets_default(self, tmp_path, monkeypatch):
         import clawk_yaml as yaml
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         cfg_path = home / "config.yaml"
         legacy = {

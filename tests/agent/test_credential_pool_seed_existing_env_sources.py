@@ -50,7 +50,7 @@ def _write_home(home, provider, env_file: dict, extra_var: str):
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     for var in (

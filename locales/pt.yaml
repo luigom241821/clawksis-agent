@@ -3913,7 +3913,7 @@ tips:
   t357: "clawk setup guia usuários iniciantes pela configuração de fornecedor, chaves e plataformas em um único fluxo interativo."
   t358: "clawk status --deep executa a verificação completa de saúde em todos os componentes; clawk status simples é a visão rápida."
   t359: "CLAWK_AGENT_TIMEOUT=0 desativa o encerramento por inatividade do gateway para um agente em execução — use em pesquisas longas."
-  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 carrega automaticamente plugins locais do repositório em ./.clawk/plugins/ — protegido por confiança por design."
+  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 carrega automaticamente plugins locais do repositório em ./.clawksis/plugins/ — protegido por confiança por design."
   t361: "CLAWK_DISABLE_FILE_STATE_GUARD=1 desliga a proteção 'arquivo alterado desde a leitura' em patch e write_file."
   t362: "CLAWK_ALLOW_PRIVATE_URLS=true permite que as ferramentas web acessem localhost e redes privadas — desativado por padrão no modo gateway."
   t363: "CLAWK_OPTIONAL_SKILLS=name1,name2 instala automaticamente skills extras do catálogo opcional na primeira execução de cada perfil."

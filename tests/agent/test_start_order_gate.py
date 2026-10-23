@@ -19,8 +19,8 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _isolate_clawk(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir(exist_ok=True)
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir(exist_ok=True)
 
 
 def _make_agent(monkeypatch):

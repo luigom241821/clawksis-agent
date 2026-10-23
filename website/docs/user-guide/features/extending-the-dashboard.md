@@ -822,7 +822,7 @@ The dashboard scans three directories for `dashboard/manifest.json`:
 | 1 (wins on conflict) | `~/.clawksis/plugins/<name>/dashboard/` | `user` |
 | 2 | `<repo>/plugins/memory/<name>/dashboard/` | `bundled` |
 | 2 | `<repo>/plugins/<name>/dashboard/` | `bundled` |
-| 3 | `./.clawk/plugins/<name>/dashboard/` | `project` — only when `CLAWK_ENABLE_PROJECT_PLUGINS` is set |
+| 3 | `./.clawksis/plugins/<name>/dashboard/` | `project` — only when `CLAWK_ENABLE_PROJECT_PLUGINS` is set |
 
 On a gateway serving several profiles, a request for a profile other than the one the gateway started
 with sees that profile's own `plugins/<name>/dashboard/`, then the root `~/.clawksis/plugins/<name>/dashboard/`

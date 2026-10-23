@@ -192,7 +192,7 @@ def test_real_plugin_source_discovery_applies_dotenv(monkeypatch, tmp_path):
 
     reg._reset_registry_for_tests()
     env_loader.reset_secret_source_cache()
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     plugin_dir = home / "plugins" / "fixture-secret-source"
     plugin_dir.mkdir(parents=True)
     (home / "config.yaml").write_text(
@@ -289,8 +289,8 @@ def test_removing_the_last_plugin_source_revokes_its_process_env_value(
 
     reg._reset_registry_for_tests()
     env_loader.reset_secret_source_cache()
-    home_a = tmp_path / "a" / ".clawk"
-    home_b = tmp_path / "b" / ".clawk"
+    home_a = tmp_path / "a" / ".clawksis"
+    home_b = tmp_path / "b" / ".clawksis"
     _write_plugin_home(home_a, plugin_enabled=True)
     home_b.mkdir(parents=True)
     (home_b / ".env").write_text("SIBLING_ONLY=sibling\n", encoding="utf-8")

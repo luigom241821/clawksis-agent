@@ -3913,7 +3913,7 @@ tips:
   t357: "Treoraíonn clawk setup úsáideoirí nua trí shocrú an tsoláthraí, na n-eochracha, agus na n-ardán in aon sreabhadh idirghníomhach amháin."
   t358: "Ritheann clawk status --deep an scuabadh sláinte iomlán ar gach comhpháirt; is é clawk status lom an t-amharc gasta."
   t359: "Díchumasaíonn CLAWK_AGENT_TIMEOUT=0 marú neamhghníomhaíochta an gateway do ghníomhaire atá ag rith — úsáid é le haghaidh rití taighde fada."
-  t360: "Lódálann CLAWK_ENABLE_PROJECT_PLUGINS=1 breiseáin áitiúla an stóir ó ./.clawk/plugins/ go huathoibríoch — geataithe ar iontaoibh ó dhearadh."
+  t360: "Lódálann CLAWK_ENABLE_PROJECT_PLUGINS=1 breiseáin áitiúla an stóir ó ./.clawksis/plugins/ go huathoibríoch — geataithe ar iontaoibh ó dhearadh."
   t361: "Múchann CLAWK_DISABLE_FILE_STATE_GUARD=1 an garda 'athraíodh an comhad ó léigh tú é' ar patch agus write_file."
   t362: "Ligeann CLAWK_ALLOW_PRIVATE_URLS=true d'uirlisí gréasáin localhost agus líonraí príobháideacha a rochtain — as de réir réamhshocraithe i mód gateway."
   t363: "Suiteálann CLAWK_OPTIONAL_SKILLS=name1,name2 scileanna breise ón gcatalóg roghnach go huathoibríoch ar an gcéad rith de réir próifíle."

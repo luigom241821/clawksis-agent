@@ -13,7 +13,7 @@ MEMBERS = [{"kind": "bot", "id": "planner"}]
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    path = tmp_path / ".clawk"
+    path = tmp_path / ".clawksis"
     path.mkdir()
     (path / "profiles" / "ops").mkdir(parents=True)
     (path / "profiles" / "ops" / "config.yaml").write_text(

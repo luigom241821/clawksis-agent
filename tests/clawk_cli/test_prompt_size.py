@@ -36,7 +36,7 @@ def _seed_skill(clawk_home, name, description):
 
 @pytest.fixture
 def isolated_home(tmp_path, monkeypatch):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     monkeypatch.chdir(tmp_path)  # avoid picking up the repo's AGENTS.md

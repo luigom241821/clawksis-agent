@@ -88,7 +88,7 @@ def test_cold_worker_bootstrap_reuses_the_requests_cache(tmp_path, monkeypatch):
     cache = tmp_path / "shared-cache"
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home/.clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home/.clawksis"))
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "tools"))
     monkeypatch.setattr("pm.paths.repo_root", lambda: tmp_path / "project")
     monkeypatch.setattr("pm._uv._toolchain", lambda **kwargs: tools)

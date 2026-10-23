@@ -584,7 +584,7 @@ class TestRootLevelProviderOverride:
         """model.provider takes priority — root-level provider is only a fallback."""
         import clawk_yaml as yaml
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -614,7 +614,7 @@ class TestRootLevelProviderOverride:
         """Legacy root-level provider still populates model.provider in the CLI loader."""
         import clawk_yaml as yaml
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -644,7 +644,7 @@ class TestRootLevelProviderOverride:
         """Legacy root-level base_url still populates model.base_url in the CLI loader."""
         import clawk_yaml as yaml
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
@@ -671,7 +671,7 @@ class TestRootLevelProviderOverride:
         """Classic CLI must expose terminal.vercel_runtime to terminal_tool.py."""
         import clawk_yaml as yaml
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
         monkeypatch.delenv("TERMINAL_VERCEL_RUNTIME", raising=False)

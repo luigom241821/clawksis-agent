@@ -161,7 +161,7 @@ def test_desktop_ticker_serves_every_profile_and_yields_to_owning_gateway(
     import clawk_yaml as yaml
 
     _sp, builtin = _providers
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     for name in ("worker", "guest", "solo"):
         (root / "profiles" / name).mkdir(parents=True)
         (root / "profiles" / name / "config.yaml").write_text(

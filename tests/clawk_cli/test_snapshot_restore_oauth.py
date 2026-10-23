@@ -22,7 +22,7 @@ def test_quick_snapshot_restore_keeps_live_oauth_and_restores_static_auth(
 ):
     from clawk_cli.backup import restore_quick_snapshot
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
 

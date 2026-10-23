@@ -23,7 +23,7 @@ from tests.pm._range_server import dl_server, url as _srv_url
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli import web_server
     from clawk_cli.local_runtime import catalog
 
@@ -36,7 +36,7 @@ def client(tmp_path, monkeypatch):
 
 
 def test_local_models_routes_require_auth(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     from clawk_cli import web_server
 
     unauth = TestClient(web_server.app)

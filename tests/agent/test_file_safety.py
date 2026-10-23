@@ -74,7 +74,7 @@ class TestCacheFileReadBlocking:
 
     def test_hub_index_cache_blocked(self, tmp_path):
         """Hub index-cache reads are blocked."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         cache = clawk_home / "skills" / ".hub" / "index-cache" / "data.json"
         cache.parent.mkdir(parents=True)
         cache.write_text("{}")
@@ -86,7 +86,7 @@ class TestCacheFileReadBlocking:
 
     def test_hub_directory_blocked(self, tmp_path):
         """Hub directory reads are blocked."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         hub = clawk_home / "skills" / ".hub" / "metadata.json"
         hub.parent.mkdir(parents=True)
         hub.write_text("{}")
@@ -106,7 +106,7 @@ class TestCombinedGuards:
 
     def test_env_guard_works_regardless_of_clawk_home(self, tmp_path):
         """The env basename guard does not depend on CLAWK_HOME resolution."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
 
         with patch("agent.file_safety._clawk_home_path", return_value=clawk_home):
@@ -120,7 +120,7 @@ class TestCombinedGuards:
 
     def test_cache_guard_still_works_with_env_guard(self, tmp_path):
         """Cache file blocking still works when env guard is active."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         cache = clawk_home / "skills" / ".hub" / "index-cache" / "x"
         cache.parent.mkdir(parents=True)
         cache.write_text("")

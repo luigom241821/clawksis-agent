@@ -19,7 +19,7 @@ def test_concurrent_cron_edits_survive_recovery(tmp_path, monkeypatch):
     from clawk_cli.backup import create_quick_snapshot
     import clawk_cli.backup_cron_prompts as bcp
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     jobs_path = clawk_home / "cron" / "jobs.json"
     sched = {"kind": "interval", "minutes": 60, "display": "every 60m"}
 

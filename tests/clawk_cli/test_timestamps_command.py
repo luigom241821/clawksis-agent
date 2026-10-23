@@ -23,7 +23,7 @@ class _Stub(CLICommandsMixin):
 
 
 def _seed(tmp_path, monkeypatch, value=False):
-    hh = tmp_path / ".clawk"
+    hh = tmp_path / ".clawksis"
     hh.mkdir()
     (hh / "config.yaml").write_text(f"display:\n  timestamps: {str(value).lower()}\n")
     monkeypatch.setenv("CLAWK_HOME", str(hh))

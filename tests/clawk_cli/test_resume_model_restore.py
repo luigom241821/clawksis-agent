@@ -240,7 +240,7 @@ def test_persist_model_switch_clears_stale_route_keys(tmp_path, monkeypatch):
     api_mode (e.g. anthropic_messages) alive under the SECOND switch's
     provider, corrupting the wire protocol on TUI/desktop resume.
     """
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     db = SessionDB(db_path=tmp_path / "state.db")
     db.create_session(session_id="stale1", source="cli", model="m0")
     stub = _make_stub(_session_db=db, session_id="stale1")
@@ -445,7 +445,7 @@ def test_restore_session_model_rederives_per_model_wire_for_opencode_rows(monkey
 
 
 def test_round_trip_persist_then_restore(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     db = SessionDB(db_path=tmp_path / "state.db")
     db.create_session(session_id="rt1", source="cli", model="ambient-model")
 
@@ -465,7 +465,7 @@ def test_round_trip_persist_then_restore(tmp_path, monkeypatch):
 
 def test_update_session_model_persists_provider(tmp_path, monkeypatch):
     """update_session_model writes $.model + $.provider into model_config."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     db = SessionDB(db_path=tmp_path / "state.db")
     db.create_session(session_id="s1", source="cli", model="m0")
     db.update_session_model("s1", "claude-x", provider="custom:feather")
@@ -480,7 +480,7 @@ def test_update_session_model_without_provider_preserves_existing(
     tmp_path, monkeypatch
 ):
     """Without provider, existing $.provider is left untouched."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     db = SessionDB(db_path=tmp_path / "state.db")
     db.create_session(session_id="s2", source="cli", model="m0")
     db.update_session_model("s2", "claude-x", provider="custom:feather")
@@ -493,7 +493,7 @@ def test_update_session_model_without_provider_preserves_existing(
 
 def test_update_session_model_null_model_config_with_provider(tmp_path, monkeypatch):
     """Provider persistence works when model_config starts as NULL."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     db = SessionDB(db_path=tmp_path / "state.db")
     db.create_session(session_id="s3", source="cli", model="m0")
     # model_config is NULL at creation — update_session_model must create it

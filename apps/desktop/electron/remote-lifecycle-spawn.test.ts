@@ -86,14 +86,14 @@ async function spawnFixture(launcher: 'setsid' | 'nohup', owned: boolean): Promi
   const bin: string = path.join(root, 'bin')
   const shell: string = (await exec('command -v sh', { shell: 'sh' })).stdout.trim()
   const localPath = (remotePath: string): string => remotePath.replace(/^~/, root)
-  const env: NodeJS.ProcessEnv = { HOME: root, CLAWK_HOME: path.join(root, '.clawk'), PATH: bin, LANG: 'C.UTF-8' }
+  const env: NodeJS.ProcessEnv = { HOME: root, CLAWK_HOME: path.join(root, '.clawksis'), PATH: bin, LANG: 'C.UTF-8' }
 
   const run = async (command: string): Promise<{ stdout: string; stderr: string }> => shellExec(command, { shell, env })
 
   const ssh: Pick<SshConnection, 'exec'> = shellSshDouble({ shell, env })
 
   const clawkPath: string = path.join(root, 'fake clawk')
-  const clawkHome: string = path.join(root, '.clawk')
+  const clawkHome: string = path.join(root, '.clawksis')
   const marker: string = path.join(clawkHome, '.clawk-update-in-progress')
 
   const lock: SpawnLock = {

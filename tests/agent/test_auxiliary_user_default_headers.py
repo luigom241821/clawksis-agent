@@ -17,7 +17,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path, monkeypatch):
     """Redirect CLAWK_HOME so load_config() reads our test config.yaml."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     (clawk_home / "config.yaml").write_text("model:\n  default: test-model\n")
@@ -26,7 +26,7 @@ def _isolate(tmp_path, monkeypatch):
 def _write_config(tmp_path, config_dict):
     import clawk_yaml as yaml
 
-    (tmp_path / ".clawk" / "config.yaml").write_text(yaml.safe_dump(config_dict))
+    (tmp_path / ".clawksis" / "config.yaml").write_text(yaml.safe_dump(config_dict))
 
 
 class TestApplyUserDefaultHeadersHelper:

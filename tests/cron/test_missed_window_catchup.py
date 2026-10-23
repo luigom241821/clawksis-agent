@@ -35,7 +35,7 @@ S.tick(verbose=False, sync=True)
 
 @pytest.fixture
 def slot_env(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "cron" / "output").mkdir(parents=True)
     (home / "scripts").mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))

@@ -45,7 +45,7 @@ def register(ctx):
 
 
 def _home_with_plugins(tmp_path, monkeypatch, plugins: dict, isolation="host"):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(parents=True, exist_ok=True)
     for name, body in plugins.items():
         plugin_dir = home / "plugins" / name

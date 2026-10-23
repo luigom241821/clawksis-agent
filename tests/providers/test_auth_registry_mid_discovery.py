@@ -73,7 +73,7 @@ def _run_probe(clawk_home: Path, code: str) -> subprocess.CompletedProcess:
 
 
 def test_plugins_discovered_after_auth_import_resolve(tmp_path):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     # Sorted first: a plugin whose imports drag clawk_cli.auth in mid-discovery
     # (any plugin importing agent.credential_pool or similar does this).
     _write_plugin(

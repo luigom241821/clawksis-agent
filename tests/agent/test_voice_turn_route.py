@@ -35,7 +35,7 @@ def test_voice_turn_routes_then_restores(tmp_path, monkeypatch, voice_window_ok)
     ):
         context = "128000" if voice_window_ok else "1000"
         home = write_clawk_home(
-            tmp_path / ".clawk",
+            tmp_path / ".clawksis",
             main.base_url,
             extra_config=(
                 "auxiliary:\n  voice_chat:\n    provider: custom\n"
@@ -140,7 +140,9 @@ def test_mid_voice_turn_reports_the_sessions_own_route(
             if separate_voice_model
             else ""
         )
-        home = write_clawk_home(tmp_path / ".clawk", main.base_url, extra_config=extra)
+        home = write_clawk_home(
+            tmp_path / ".clawksis", main.base_url, extra_config=extra
+        )
         monkeypatch.setenv("CLAWK_HOME", str(home))
         agent = _agent(home, main.base_url)
         agent.reasoning_config = {"enabled": True, "effort": "low"}

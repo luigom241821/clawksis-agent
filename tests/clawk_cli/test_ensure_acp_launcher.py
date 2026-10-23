@@ -19,7 +19,7 @@ from clawk_cli.update_cmd import _ensure_acp_launcher
 @pytest.fixture
 def fake_home(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     bin_dir = tmp_path / ".local" / "bin"
     bin_dir.mkdir(parents=True)
     return bin_dir

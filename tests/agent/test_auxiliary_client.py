@@ -291,7 +291,7 @@ class TestMoaAggregatorSharedResolution:
     def _write_moa_config(tmp_path, monkeypatch, default_preset="opus-gpt"):
         import clawk_yaml as yaml
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir(exist_ok=True)
         (home / "config.yaml").write_text(
             yaml.safe_dump(
@@ -5871,7 +5871,7 @@ class TestCustomEndpointApiKeyInheritance:
 
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         (home / "config.yaml").write_text(
             yaml.safe_dump(
@@ -6018,7 +6018,7 @@ class TestNoProgressTimeoutTaskConfigGating:
         import clawk_yaml as yaml
         from agent import auxiliary_client as aux
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(home))
 
@@ -6583,7 +6583,7 @@ class TestFastModelTier:
         """
         import clawk_yaml as yaml
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
             yaml.safe_dump(

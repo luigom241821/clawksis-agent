@@ -46,7 +46,7 @@ def test_cli_starts_from_a_deleted_cwd(tmp_path):
     """A child spawned into a directory that was removed since (a cron delivery from a reaped
     kanban workspace) must still reach argv parsing: a relative ``sys.path`` entry made
     ``ensure_project_root_on_path`` die in ``realpath`` → ``getcwd`` (#102941)."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     gone = tmp_path / "scratch"
     gone.mkdir()
@@ -135,7 +135,7 @@ def _run_version(env_overrides: dict) -> subprocess.CompletedProcess:
 
 def test_fast_version_parity_on_termux(tmp_path):
     """The historical Termux path — the one eb4040242 broke."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     result = _run_version({"CLAWK_HOME": str(home), "TERMUX_VERSION": "0.118"})
     assert result.returncode == 0, result.stderr
@@ -144,7 +144,7 @@ def test_fast_version_parity_on_termux(tmp_path):
 
 
 def test_fast_version_reports_install_method_stamp(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / ".install_method").write_text("git\n", encoding="utf-8")
     result = _run_version({"CLAWK_HOME": str(home)})
@@ -239,7 +239,7 @@ def test_bootstrap_preserves_live_cwd_and_recovers_deleted_cwd(tmp_path, remove_
     )
     env = {
         **os.environ,
-        "CLAWK_HOME": str(tmp_path / ".clawk"),
+        "CLAWK_HOME": str(tmp_path / ".clawksis"),
         "PYTHONPATH": str(REPO_ROOT),
     }
     env.pop("CLAWK_DEV", None)
@@ -259,7 +259,7 @@ def test_bootstrap_preserves_live_cwd_and_recovers_deleted_cwd(tmp_path, remove_
 
 
 def test_fast_version_parity(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     result = _run_version({"CLAWK_HOME": str(home)})
     assert result.returncode == 0, result.stderr

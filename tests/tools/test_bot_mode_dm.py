@@ -28,7 +28,7 @@ def _fresh_probe_cache():
 
 
 def _managed_home(tmp_path, *, teammates=("researcher",), peers=()) -> Path:
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(exist_ok=True)
     for name in teammates:
         d = home / "profiles" / name
@@ -126,7 +126,7 @@ def test_never_injects_outside_bot_chat(tmp_path, title):
 
 def test_never_injects_on_unmanaged_install(tmp_path):
     """A 'Bot Chat'-titled session on a plain install stays tool-free."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     agent = _FakeAgent(home, title="Bot Chat")
     assert bot_mode_dm.ensure_message_agent_tool(agent) is False
@@ -166,7 +166,7 @@ def test_tool_refuses_outside_bot_chat(tmp_path):
 
 
 def test_tool_refuses_on_unmanaged_install(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     agent = _FakeAgent(home, title="Bot Chat")
     result = json.loads(
@@ -1506,7 +1506,7 @@ def test_relay_waiter_that_cannot_start_reports_queued_not_failed(
     sender resend and deliver twice)."""
     from tools import bot_relay
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles" / "default").mkdir(parents=True)
     bot_relay.write_remote_roster(
         root,

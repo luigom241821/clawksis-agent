@@ -29,7 +29,7 @@ def _write_enabled_config(home: Path):
 
 def test_malformed_config_does_not_permanently_skip(tmp_path, monkeypatch):
     """Config error on first call → fixed config on second call must apply."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text("secrets: [unclosed")  # malformed YAML
 
@@ -63,7 +63,7 @@ def test_malformed_config_does_not_permanently_skip(tmp_path, monkeypatch):
 
 
 def test_no_secrets_section_does_not_mark_applied(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text("model:\n  provider: openrouter\n")
     env_loader._apply_external_secret_sources(home)
@@ -71,7 +71,7 @@ def test_no_secrets_section_does_not_mark_applied(tmp_path):
 
 
 def test_disabled_sources_do_not_mark_applied(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text(
         "secrets:\n  bitwarden:\n    enabled: false\n    project_id: p\n"
@@ -87,7 +87,7 @@ def test_fetch_error_still_marks_applied(tmp_path, monkeypatch):
     """A real fetch attempt that FAILS still marks the home — otherwise every
     import-time load_clawk_dotenv() would re-fetch and re-print the same
     error 3-5x per startup."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     _write_enabled_config(home)
     monkeypatch.setenv("BWS_ACCESS_TOKEN", "0.dead")
@@ -114,7 +114,7 @@ def test_fetch_error_still_marks_applied(tmp_path, monkeypatch):
 
 
 def test_success_marks_applied_and_second_call_noop(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     _write_enabled_config(home)
     monkeypatch.setenv("BWS_ACCESS_TOKEN", "0.t")

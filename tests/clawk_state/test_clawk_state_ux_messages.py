@@ -22,7 +22,9 @@ def test_db_unavailable_commands_are_pinned_to_the_failing_profile(
     profile whose store failed, like the table's actions do."""
     from clawk_constants import profile_cli_selector
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk" / "profiles" / "research"))
+    monkeypatch.setenv(
+        "CLAWK_HOME", str(tmp_path / ".clawksis" / "profiles" / "research")
+    )
     selector = profile_cli_selector()
     assert selector.strip()
     clawk_state._set_last_init_error(None)

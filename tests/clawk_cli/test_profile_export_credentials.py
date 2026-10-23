@@ -229,8 +229,8 @@ class TestCredentialExclusion:
         )
 
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        (tmp_path / ".clawk").mkdir()
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        (tmp_path / ".clawksis").mkdir()
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         stores = _seed_stores(tmp_path / "v1") | {
             "auth.json.corrupt",
             ".env.bak-20260928T084018Z",

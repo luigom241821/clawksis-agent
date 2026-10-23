@@ -14,7 +14,7 @@ import pytest
 
 @pytest.fixture
 def ledger_home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "skills").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

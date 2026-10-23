@@ -462,7 +462,7 @@ class TestNamedProfileHintIntegration:
     def test_real_clawk_home_under_profiles_renders_correct_paths(
         self, tmp_path, monkeypatch
     ):
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         profile_home = root / "profiles" / "coder"
         profile_home.mkdir(parents=True)
 
@@ -492,7 +492,7 @@ class TestNamedProfileHintIntegration:
 
     def test_real_default_home_renders_default_branch(self, tmp_path, monkeypatch):
         """CLAWK_HOME at the root resolves to the default profile, unchanged."""
-        root = tmp_path / ".clawk"
+        root = tmp_path / ".clawksis"
         root.mkdir(parents=True)
 
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -517,7 +517,7 @@ def test_stable_tier_is_identical_across_homes(tmp_path, monkeypatch):
     monkeypatch.delenv("TERMINAL_CWD", raising=False)
     tiers = []
     for name in ("a", "b"):
-        root = tmp_path / name / ".clawk"
+        root = tmp_path / name / ".clawksis"
         root.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda root=root: root.parent)
         monkeypatch.setenv("CLAWK_HOME", str(root))

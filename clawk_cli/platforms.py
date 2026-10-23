@@ -59,7 +59,7 @@ PLATFORMS: OrderedDict[str, PlatformInfo] = OrderedDict(
         ("yuanbao", PlatformInfo(label="🤖 Yuanbao", default_toolset="clawk-yuanbao")),
         (
             "webhook",
-            PlatformInfo(label="🔗 Webhook", default_toolset="clawksis-webhook"),
+            PlatformInfo(label="🔗 Webhook", default_toolset="clawk-webhook"),
         ),
         (
             "api_server",

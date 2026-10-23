@@ -18,7 +18,7 @@ import pytest
 @pytest.fixture
 def clawk_home(monkeypatch):
     d = tempfile.mkdtemp(prefix="clawk_wa_test_")
-    home = os.path.join(d, ".clawk")
+    home = os.path.join(d, ".clawksis")
     os.makedirs(home)
     monkeypatch.setenv("CLAWK_HOME", home)
     yield home

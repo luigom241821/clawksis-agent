@@ -21,7 +21,7 @@ ENDPOINT = "https://api.b.ai/v1"
 def _write_keyed_provider_home(
     tmp_path, monkeypatch, *, pool_id="b-ai", extra_config=None
 ):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     config = {
@@ -141,7 +141,7 @@ def test_prune_keeps_active_legacy_pool_for_keyed_provider(tmp_path, monkeypatch
         # an unrelated stale pool that SHOULD be pruned
         "custom:old-endpoint": [_model_config_entry("mc2", "sk-stale-key")],
     }
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir(exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     (clawk_home / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
@@ -164,7 +164,9 @@ def test_prune_keeps_active_legacy_pool_for_keyed_provider(tmp_path, monkeypatch
         "https://api.b.ai/v1", provider_name="B.AI"
     )
 
-    after = json.loads((tmp_path / ".clawk" / "auth.json").read_text(encoding="utf-8"))
+    after = json.loads(
+        (tmp_path / ".clawksis" / "auth.json").read_text(encoding="utf-8")
+    )
     kept = (after.get("credential_pool") or {}).get("custom:b.ai")
     pruned = (after.get("credential_pool") or {}).get("custom:old-endpoint")
 
@@ -194,7 +196,7 @@ def test_seed_custom_pool_matches_legacy_named_pool(tmp_path, monkeypatch):
             }
         },
     }
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir(exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     (clawk_home / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")

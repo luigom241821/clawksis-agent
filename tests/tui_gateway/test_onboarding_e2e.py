@@ -30,7 +30,7 @@ FACTS = Facts(
 
 @pytest.fixture
 def chat(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(server, "_clawk_home", str(home))

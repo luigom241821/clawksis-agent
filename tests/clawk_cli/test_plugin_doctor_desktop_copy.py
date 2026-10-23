@@ -40,7 +40,7 @@ def _stale_warnings(report) -> list[str]:
 
 @pytest.fixture
 def home(tmp_path, monkeypatch) -> Path:
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home

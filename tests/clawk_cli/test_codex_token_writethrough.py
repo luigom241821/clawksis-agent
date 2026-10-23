@@ -36,7 +36,7 @@ def profile_env(tmp_path, monkeypatch):
     monkeypatch.setenv(
         "LOCALAPPDATA", str(tmp_path)
     )  # Windows resolves the native root from here
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     profile = root / "profiles" / "work"
     profile.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(profile))

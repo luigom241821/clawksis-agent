@@ -97,7 +97,7 @@ def test_full_uninstall_sweeps_macos_caches_and_dashboard_launchd(
 ):
     """The full-wipe step must reach the caches + launchd sweep, keep-data must not."""
     project_root = tmp_path / "clawksis-agent"
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     project_root.mkdir()
     # A .git dir marks the tree as a removable git checkout — without it the
     # install-kind gate refuses before the sweep runs.

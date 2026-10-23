@@ -16,7 +16,7 @@ test.skipIf(process.platform !== 'linux')(
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'update census '))
 
     const facts = {
-      clawkHome: path.join(root, 'home', '.clawk'),
+      clawkHome: path.join(root, 'home', '.clawksis'),
       checkout: path.join(root, 'checkout')
     } as InstallFacts
 

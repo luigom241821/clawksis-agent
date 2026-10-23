@@ -33,10 +33,10 @@ def test_profile_delete_from_scratch_home_leaves_the_accounts_profile_unit(
     from clawk_cli import profiles
 
     account, scratch = tmp_path / "account", tmp_path / "scratch"
-    profile_dir = scratch / ".clawk" / "profiles" / "coder"
+    profile_dir = scratch / ".clawksis" / "profiles" / "coder"
     profile_dir.mkdir(parents=True)
     real_unit = account / ".config" / "systemd" / "user" / "clawk-gateway-coder.service"
-    _unit(real_unit, account / ".clawk" / "profiles" / "coder")
+    _unit(real_unit, account / ".clawksis" / "profiles" / "coder")
     monkeypatch.delenv("CLAWK_HOME", raising=False)
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setenv("HOME", str(scratch))

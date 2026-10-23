@@ -98,7 +98,7 @@ class TestResolveAutoMainFirst:
         """
         import clawk_yaml as yaml
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         (home / "config.yaml").write_text(
             yaml.safe_dump(

@@ -31,7 +31,7 @@ MODEL_ID = "Qwen3.8-27B-UD-Q4_K_M"
 
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     return tmp_path
 
 

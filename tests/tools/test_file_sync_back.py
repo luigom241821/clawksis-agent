@@ -398,7 +398,7 @@ class TestSyncBackSizeCap:
                 "clawk_cli.config.load_config",
                 return_value={"terminal": {"sync_back_max_bytes": 1}},
             ):
-                mgr.sync_back(clawk_home=tmp_path / ".clawk")
+                mgr.sync_back(clawk_home=tmp_path / ".clawksis")
 
         # Host file should be untouched because extraction was skipped
         assert Path(skill_host).read_bytes() == b"original"
@@ -426,7 +426,7 @@ class TestSyncBackSizeCap:
             "clawk_cli.config.load_config",
             lambda: {"terminal": {"sync_back_max_bytes": 1}},
         )
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
         assert Path(host_file).read_bytes() == b"original"  # 1-byte cap: skipped
 
         monkeypatch.setattr(
@@ -434,7 +434,7 @@ class TestSyncBackSizeCap:
             lambda: {"terminal": {"sync_back_max_bytes": "lots"}},
         )
         with caplog.at_level(logging.WARNING, logger="tools.environments.file_sync"):
-            mgr.sync_back(clawk_home=tmp_path / ".clawk")
+            mgr.sync_back(clawk_home=tmp_path / ".clawksis")
         assert Path(host_file).read_bytes() == b"remote_version"  # default cap applies
         assert any("sync_back_max_bytes" in r.message for r in caplog.records)
 
@@ -469,7 +469,7 @@ class TestSyncBackWindowsHost:
             bulk_download_fn=download,
         )
         mgr._pushed_hashes["/root/.clawksis/skill.py"] = _sha256_bytes(b"v1")
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
         assert host_file.read_bytes() == b"v2"
         assert not seen["dest"].exists()  # staging tar removed after use
 
@@ -489,7 +489,7 @@ class TestSyncBackWindowsHost:
             ),
         )
         mgr._pushed_hashes["/root/.clawksis/skills/a/skill.py"] = _sha256_bytes(b"v1")
-        mgr.sync_back(clawk_home=tmp_path / ".clawk")
+        mgr.sync_back(clawk_home=tmp_path / ".clawksis")
         assert (
             host_file.read_bytes() == b"v2"
         )  # relpath key was 'root\\.clawksis\\...' → skipped

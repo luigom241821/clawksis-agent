@@ -1204,8 +1204,8 @@ class TestBackgroundOwnershipPolicyConsistency:
         self, tmp_path, monkeypatch
     ):
         """No stubbing of load_usage: telemetry side effects are live. Both attempts agree."""
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        (tmp_path / ".clawk" / "skills").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+        (tmp_path / ".clawksis" / "skills").mkdir(parents=True, exist_ok=True)
         with _skill_dir(tmp_path):
             _create_skill("flip-skill", VALID_SKILL_CONTENT)
             first = self._bg_delete("flip-skill")
@@ -1220,7 +1220,7 @@ class TestBackgroundOwnershipPolicyConsistency:
     ):
         """Fail-closed applies to AUTONOMOUS writes only. A user-directed
         foreground edit to their own skill must keep working."""
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         with _skill_dir(tmp_path):
             _create_skill("no-record", VALID_SKILL_CONTENT)
             with patch("tools.skill_usage.load_usage", return_value={}):
@@ -1236,7 +1236,7 @@ class TestBackgroundOwnershipPolicyConsistency:
 
     def test_adoption_lifts_the_autonomous_delete_refusal(self, tmp_path, monkeypatch):
         """Adoption is the documented path from refused to allowed for archival."""
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         with _skill_dir(tmp_path):
             _create_skill("adopt-me", VALID_SKILL_CONTENT)
             with patch("tools.skill_usage.load_usage", return_value={}):
@@ -1390,7 +1390,7 @@ class TestDeleteSkillRmtreeGuard:
 def _curator_pass(tmp_path, *, monkeypatch):
     """Run the body as the curator/background-review fork.
 
-    Points CLAWK_HOME at ``tmp_path/.clawk`` so skill_usage's archive path
+    Points CLAWK_HOME at ``tmp_path/.clawksis`` so skill_usage's archive path
     (``get_clawk_home()``) resolves into the same tree the skill manager
     searches, and flips ``is_background_review()`` → True so the consolidation
     guard fires.
@@ -1404,7 +1404,7 @@ def _curator_pass(tmp_path, *, monkeypatch):
     here; tests that specifically exercise the ownership guard set their own
     records instead.
     """
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     skills_root = clawk_home / "skills"
     skills_root.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -1530,7 +1530,7 @@ class TestCuratorConsolidationDeleteGuard:
         _reset_background_review_read_marks()
         with _curator_pass(tmp_path, monkeypatch=monkeypatch):
             _create_curator_skill("reviewed", _skill_content("reviewed"))
-            ref = tmp_path / ".clawk" / "skills" / "reviewed" / "references"
+            ref = tmp_path / ".clawksis" / "skills" / "reviewed" / "references"
             ref.mkdir()
             (ref / "workflow.md").write_text("old workflow\n", encoding="utf-8")
 

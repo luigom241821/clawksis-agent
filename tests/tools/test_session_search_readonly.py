@@ -14,7 +14,7 @@ def test_search_does_not_create_current_storage_for_empty_or_foreign_reads(
     from tools.registry import registry
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     token = set_clawk_home_override(home)

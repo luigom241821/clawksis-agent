@@ -21,7 +21,7 @@ from clawk_cli import profiles
 @pytest.fixture
 def two_homes(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     victim = launch / "profiles" / "victim"
     victim.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(launch))

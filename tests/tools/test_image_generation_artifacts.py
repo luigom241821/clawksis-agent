@@ -7,7 +7,7 @@ from types import SimpleNamespace
 def test_postprocess_adds_agent_visible_image_for_active_ssh_env(monkeypatch, tmp_path):
     from tools import image_generation_tool
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     image_dir = clawk_home / "cache" / "images"
     image_dir.mkdir(parents=True)
     image_path = image_dir / "xai_grok-imagine-image_test.jpg"
@@ -48,7 +48,7 @@ def test_concurrent_image_results_preserve_shared_remote_sync_state(
     from tools import image_generation_tool
     from tools.environments import file_sync
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     image_dir = clawk_home / "cache" / "images"
     image_dir.mkdir(parents=True)
     first_image = image_dir / "first.png"
@@ -122,7 +122,7 @@ def test_concurrent_image_results_preserve_shared_remote_sync_state(
 def test_handle_image_generate_postprocesses_plugin_result(monkeypatch, tmp_path):
     from tools import image_generation_tool
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     image_dir = clawk_home / "cache" / "images"
     image_dir.mkdir(parents=True)
     image_path = image_dir / "plugin.png"

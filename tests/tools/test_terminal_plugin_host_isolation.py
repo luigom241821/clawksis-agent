@@ -40,7 +40,7 @@ def register(ctx):
 
 
 def _load(tmp_path, monkeypatch, isolation):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     plugin_dir = home / "plugins" / "hostbox"
     plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.yaml").write_text(

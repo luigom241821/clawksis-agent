@@ -24,7 +24,7 @@ from agent.moa_loop import MoAChatCompletions
 
 def _enable_traces(tmp_path, monkeypatch):
     """Point CLAWK_HOME at a temp dir and turn moa.save_traces on."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 

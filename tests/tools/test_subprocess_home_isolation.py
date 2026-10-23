@@ -76,7 +76,7 @@ class TestGetSubprocessHome:
         real_home.mkdir()
         monkeypatch.delenv("HOME", raising=False)
         monkeypatch.setenv("CLAWK_REAL_HOME", str(real_home))
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         from tools.environments.local import build_subprocess_env
 
         assert build_subprocess_env()["HOME"] == str(real_home)
@@ -85,7 +85,7 @@ class TestGetSubprocessHome:
         self, tmp_path, monkeypatch
     ):
         self._container_mode(monkeypatch)
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         profile_home = clawk_home / "home"
         profile_home.mkdir(parents=True)
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -96,7 +96,7 @@ class TestGetSubprocessHome:
     def test_returns_profile_specific_path(self, tmp_path, monkeypatch):
         """Explicit profile mode keeps the old per-profile HOME behavior."""
         self._host_mode(monkeypatch)
-        profile_dir = tmp_path / ".clawk" / "profiles" / "coder"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "coder"
         profile_dir.mkdir(parents=True)
         profile_home = profile_dir / "home"
         profile_home.mkdir()
@@ -110,7 +110,7 @@ class TestGetSubprocessHome:
         self, tmp_path, monkeypatch
     ):
         self._host_mode(monkeypatch)
-        profile_dir = tmp_path / ".clawk" / "profiles" / "coder"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "coder"
         profile_home = profile_dir / "home"
         profile_home.mkdir(parents=True)
         real_home = tmp_path / "real-home"
@@ -127,7 +127,7 @@ class TestGetSubprocessHome:
 
     def test_two_profiles_get_different_homes(self, tmp_path, monkeypatch):
         self._container_mode(monkeypatch)
-        base = tmp_path / ".clawk" / "profiles"
+        base = tmp_path / ".clawksis" / "profiles"
         for name in ("alpha", "beta"):
             p = base / name
             p.mkdir(parents=True)

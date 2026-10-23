@@ -27,7 +27,7 @@ GHOST_KEY = "agent:ghost:telegram:dm:400"
 @pytest.fixture
 def homes(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     root.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(root))
     from clawk_cli.profiles import create_profile

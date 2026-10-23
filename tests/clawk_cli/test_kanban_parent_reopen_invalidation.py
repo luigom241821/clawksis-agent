@@ -173,7 +173,7 @@ def test_dashboard_and_db_paths_produce_identical_outcomes(tmp_path, monkeypatch
     import importlib.util
     import sys
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

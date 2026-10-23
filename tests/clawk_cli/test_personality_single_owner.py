@@ -124,7 +124,7 @@ def test_prompt_text_normalizes_none_str_list():
 
 
 def test_persist_personality_roundtrip(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     with patch.dict(os.environ, {"CLAWK_HOME": str(home)}):
         assert persist_personality("KAWAII ") is True
@@ -137,7 +137,7 @@ def test_persist_personality_roundtrip(tmp_path):
 
 
 def test_persist_personality_never_touches_system_prompt(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text(
         yaml.safe_dump({"agent": {"system_prompt": "manual forever"}}), encoding="utf-8"
@@ -166,7 +166,7 @@ def _run_migration(home, cfg):
 def test_migration_resets_stale_personality_name(tmp_path):
     # Shape 1: TUI/desktop wrote the name years ago; the old CLI/gateway
     # "/personality none" never cleared it. Post-#81946 it resurrected.
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     raw, results = _run_migration(
         home,
@@ -181,7 +181,7 @@ def test_migration_scrubs_personality_text_from_system_prompt(tmp_path):
     # Shape 2: old CLI/gateway wrote rendered personality TEXT into
     # agent.system_prompt. Verbatim match with a known personality render
     # proves machine-written — scrub it.
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     raw, _ = _run_migration(
         home,
@@ -194,7 +194,7 @@ def test_migration_scrubs_personality_text_from_system_prompt(tmp_path):
 def test_migration_preserves_manual_system_prompt(tmp_path):
     # Shape 3: a hand-written prompt never verbatim-matches a personality
     # render — it must survive untouched while the stale name is reset.
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     raw, _ = _run_migration(
         home,
@@ -210,7 +210,7 @@ def test_migration_preserves_manual_system_prompt(tmp_path):
 
 
 def test_migration_noop_when_nothing_stale(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     _raw, results = _run_migration(home, {"_config_version": 33})
     assert not any("personality" in item for item in results["config_added"])
@@ -219,7 +219,7 @@ def test_migration_noop_when_nothing_stale(tmp_path):
 def test_post_v34_choice_is_never_reset(tmp_path):
     # The reset fires exactly once (33→34). A personality chosen AFTER the
     # migration is the user's real selection and must survive later runs.
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     raw, _ = _run_migration(
         home,

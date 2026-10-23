@@ -23,7 +23,7 @@ PC = flow.Facts(
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "plugins").mkdir(parents=True)
     (home / "config.yaml").write_text(json.dumps({"plugins": {"enabled": ["blender"]}}))
     bundled = tmp_path / "bundled"

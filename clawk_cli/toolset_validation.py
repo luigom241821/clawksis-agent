@@ -57,6 +57,16 @@ def _platform_default_is_valid(
         return False
 
 
+# Toolsets the fork renamed. A config saved by an older Clawksis may still name the old one in
+# ``platform_toolsets``; ``tools_config._get_platform_tools`` expands it to the new name and the
+# validator accepts it, so the saved selection keeps working without a warning.
+RENAMED_TOOLSETS: dict[str, str] = {
+    # The webhook platform bundle was ``clawksis-webhook`` (a rebrand slip); every platform
+    # bundle is ``clawk-<platform>`` and the code recognizes bundles by that prefix.
+    "clawksis-webhook": "clawk-webhook",
+}
+
+
 def saved_toolset_resolver(config: dict) -> Callable[[str], bool]:
     """``is_valid_toolset`` for a saved ``platform_toolsets`` list, mirroring what
     ``tools_config._get_platform_tools`` lets through: registered toolsets, any configured MCP server by
@@ -98,6 +108,7 @@ def saved_toolset_resolver(config: dict) -> Callable[[str], bool]:
 
     return lambda name: (
         validate_toolset(name)
+        or name in RENAMED_TOOLSETS
         or name in known
         or name in platform_bundles()
         or name in plugin_names()

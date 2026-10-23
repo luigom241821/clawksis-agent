@@ -94,7 +94,7 @@ def _reap_leaked_notification_pollers():
 
 
 def test_session_slot_is_claimed_on_first_turn_not_on_create(monkeypatch, tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text("max_concurrent_sessions: 1\n", encoding="utf-8")
     token = set_clawk_home_override(home)
@@ -10473,7 +10473,7 @@ def test_setup_runtime_check_scopes_launch_profile_in_multiplex_backend(
     from agent import secret_scope
     from tui_gateway import launch_profile_policy
 
-    launch_home = tmp_path / ".clawk"
+    launch_home = tmp_path / ".clawksis"
     launch_home.mkdir()
     monkeypatch.setenv("CLAWK_CODEX_BASE_URL", "https://codex.launch.test/v1")
     monkeypatch.setattr(server, "_clawk_home", launch_home)
@@ -19194,7 +19194,7 @@ def test_verification_status_outside_workspace_is_not_applicable(monkeypatch, tm
 
     monkeypatch.setattr(coding_context, "project_facts_for", lambda _cwd=None: None)
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     token = set_clawk_home_override(home)
     try:
@@ -19673,7 +19673,7 @@ def test_session_save_writes_under_clawk_home_with_system_prompt(monkeypatch, tm
     ``os.path.abspath(...)`` (the workspace CWD) and only exported ``model``
     and ``messages``, so ``system_prompt`` was missing.
     """
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
@@ -19730,7 +19730,7 @@ def test_session_save_lands_in_the_sessions_own_profile_a_b_a(monkeypatch, tmp_p
     the RPC runs unscoped, so get_clawk_home() alone names the launch profile (#125241)."""
     from agent.secret_scope import set_multiplex_active
 
-    launch_home = tmp_path / ".clawk"
+    launch_home = tmp_path / ".clawksis"
     work_home = launch_home / "profiles" / "s6probe-work"
     work_home.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(launch_home))

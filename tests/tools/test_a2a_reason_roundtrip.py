@@ -21,7 +21,7 @@ from tools import bot_relay
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    h = tmp_path / ".clawk"
+    h = tmp_path / ".clawksis"
     h.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(h))
     return h

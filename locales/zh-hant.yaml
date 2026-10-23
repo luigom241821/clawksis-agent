@@ -3913,7 +3913,7 @@ tips:
   t357: "clawk setup 以單一互動流程引導首次使用者完成提供方、金鑰與平台的設定。"
   t358: "clawk status --deep 會對每個元件執行完整的健康檢查；單純的 clawk status 則是快速檢視。"
   t359: "CLAWK_AGENT_TIMEOUT=0 會停用閘道對執行中代理的閒置終止 — 適合長時間研究任務。"
-  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 會自動載入 ./.clawk/plugins/ 中的儲存庫本機外掛 — 設計上受信任機制把關。"
+  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1 會自動載入 ./.clawksis/plugins/ 中的儲存庫本機外掛 — 設計上受信任機制把關。"
   t361: "CLAWK_DISABLE_FILE_STATE_GUARD=1 會關閉 patch 與 write_file 的「檔案自你讀取後已變更」防護。"
   t362: "CLAWK_ALLOW_PRIVATE_URLS=true 允許網頁工具存取 localhost 與私有網路 — 閘道模式下預設關閉。"
   t363: "CLAWK_OPTIONAL_SKILLS=name1,name2 會在每個設定檔首次執行時自動安裝額外的選用目錄技能。"

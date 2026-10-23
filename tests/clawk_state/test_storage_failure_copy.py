@@ -51,7 +51,9 @@ def test_action_command_is_pinned_to_the_failing_profile(monkeypatch, tmp_path):
     whose state.db is not the process default; a bare ``clawk`` follows active_profile)."""
     from clawk_constants import profile_cli_selector
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk" / "profiles" / "research"))
+    monkeypatch.setenv(
+        "CLAWK_HOME", str(tmp_path / ".clawksis" / "profiles" / "research")
+    )
     selector = profile_cli_selector()
     assert selector.strip()
     for exc in (

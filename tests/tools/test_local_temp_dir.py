@@ -64,10 +64,10 @@ def test_default_is_clawk_cache_not_tmp(tmp_path, monkeypatch):
 
     for var in ("TERMINAL_TEMP_DIR", "TMPDIR", "TMP", "TEMP"):
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     env = _make_local_env({})
     result = env.get_temp_dir()
-    assert Path(result) == tmp_path / ".clawk" / "cache" / "terminal"
+    assert Path(result) == tmp_path / ".clawksis" / "cache" / "terminal"
     assert os.path.isdir(result)
 
 

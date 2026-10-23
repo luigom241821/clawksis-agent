@@ -259,7 +259,7 @@ def test_read_nous_provider_state_falls_back_to_global_root_for_share_auth_profi
     # A profile created with ``share_auth`` has no auth.json of its own; it signs in with the
     # root identity. The connector gate must see that identity, or manage_connections vanishes
     # from the profile's tool list while every other credential reader still works.
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     profile = root / "profiles" / "work"
     profile.mkdir(parents=True)
     # Clawksis is BYOK: a free-tier identity counts only once the profile opts in.

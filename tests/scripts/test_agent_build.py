@@ -132,7 +132,7 @@ def test_contained_cli_assembly_runs_after_move_and_preserves_prepared_state(tmp
         == "module"
     )
     assert (out / "app/clawk_cli/web_dist/index.html").is_file()
-    assert not (tmp_path / "home/.clawk").exists()
+    assert not (tmp_path / "home/.clawksis").exists()
     moved = tmp_path / "relocated payload"
     out.rename(moved)
     (tmp_path / "entry.py").write_text(

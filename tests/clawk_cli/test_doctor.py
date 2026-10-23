@@ -292,7 +292,7 @@ class TestDoctorEnvFileEncoding:
         self, monkeypatch, tmp_path
     ):
         """cp1252/latin-1 .env with ASCII provider hints must not abort doctor."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         env_path = clawk_home / ".env"
         # 0xff is invalid UTF-8; latin-1 decodes it. Keep an ASCII provider key
@@ -374,7 +374,7 @@ class TestDoctorMemoryProviderSection:
 
     def _make_clawk_home(self, tmp_path, provider="", memory_config=None):
         """Create a minimal CLAWK_HOME with config.yaml."""
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir(parents=True, exist_ok=True)
         import clawk_yaml as yaml
 
@@ -541,7 +541,7 @@ def test_run_doctor_accepts_named_provider_from_providers_section(
 def test_run_doctor_accepts_stable_key_when_provider_name_differs(
     monkeypatch, tmp_path
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(parents=True, exist_ok=True)
     (home / "config.yaml").write_text(
         "model:\n"
@@ -787,7 +787,7 @@ def test_run_doctor_vendor_slug_policy_for_openai_api_endpoint(
 ):
     """openai-api behind a custom router owns a vendor/model namespace (#69912); the real
     OpenAI endpoint keeps the warning."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(parents=True, exist_ok=True)
     (home / "config.yaml").write_text(
         "model:\n"
@@ -871,7 +871,7 @@ def test_run_doctor_accepts_kimi_coding_cn_provider(monkeypatch, tmp_path):
 def _doctor_env_for_agent_browser(monkeypatch, tmp_path):
     """Shared fixture setup for the agent-browser npx-resolution
     branch in run_doctor (clawk_cli/doctor.py ~1557-1605)."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(parents=True, exist_ok=True)
     (home / "config.yaml").write_text("memory: {}\n", encoding="utf-8")
     project = tmp_path / "project"
@@ -1825,12 +1825,12 @@ def test_profile_alias_status_follows_the_wrapper_the_profile_really_has(
     from clawk_cli import profiles
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setattr(clawk_constants, "_default_clawk_root_memo", None)
     monkeypatch.setattr(gm, "duplicate_credential_findings", list)
     for name in ("dev", "ops", "work", "old"):
-        (tmp_path / ".clawk" / "profiles" / name).mkdir(parents=True)
-        (tmp_path / ".clawk" / "profiles" / name / "config.yaml").write_text(
+        (tmp_path / ".clawksis" / "profiles" / name).mkdir(parents=True)
+        (tmp_path / ".clawksis" / "profiles" / name / "config.yaml").write_text(
             "model: m\n", encoding="utf-8"
         )
     profiles.create_wrapper_script("dev")

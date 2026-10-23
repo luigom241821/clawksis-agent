@@ -295,7 +295,7 @@ def test_dashboard_run_now_isolates_a_sibling_profile_fire_like_the_ticker(
     from clawk_cli import profiles
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     routed = launch / "profiles" / "ops"
     probe = tmp_path / "probe"
     probe.mkdir()

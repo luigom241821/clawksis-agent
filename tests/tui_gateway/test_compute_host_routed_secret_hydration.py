@@ -23,7 +23,7 @@ def test_routed_session_build_sees_the_profiles_external_secret_source(
     from agent.secret_scope import get_secret, set_multiplex_active
     from clawk_cli import env_loader
 
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     launch.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     monkeypatch.setenv("VAULT_ONLY_KEY", "from-launch-env")

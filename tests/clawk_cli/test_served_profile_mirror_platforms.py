@@ -160,7 +160,7 @@ def test_messaging_card_for_the_default_home_rekeys_by_the_profile_not_the_dirna
     from clawk_cli.web_routers import messaging
 
     root = (
-        tmp_path / ".clawk"
+        tmp_path / ".clawksis"
     )  # the shipped default root's literal name — never equal to "default"
     root.mkdir()
     (root / "config.yaml").write_text(

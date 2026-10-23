@@ -123,7 +123,7 @@ def boba_like(tmp_path, monkeypatch):
     """Install a synthetic 8-col × 9-row pet into a temp CLAWK_HOME."""
     from PIL import Image
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
 

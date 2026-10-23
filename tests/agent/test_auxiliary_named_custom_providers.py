@@ -9,7 +9,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path, monkeypatch):
     """Redirect CLAWK_HOME and clear module caches."""
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     # Write a minimal config so load_config doesn't fail
@@ -20,7 +20,7 @@ def _write_config(tmp_path, config_dict):
     """Write a config.yaml to the test CLAWK_HOME."""
     import clawk_yaml as yaml
 
-    config_path = tmp_path / ".clawk" / "config.yaml"
+    config_path = tmp_path / ".clawksis" / "config.yaml"
     config_path.write_text(yaml.safe_dump(config_dict))
 
 
@@ -152,7 +152,7 @@ class TestResolveProviderClientNamedCustom:
                 },
             },
         )
-        auth_path = tmp_path / ".clawk" / "auth.json"
+        auth_path = tmp_path / ".clawksis" / "auth.json"
         auth_path.write_text(
             json.dumps(
                 {

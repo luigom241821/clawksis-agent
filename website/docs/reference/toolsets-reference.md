@@ -118,7 +118,7 @@ Platform toolsets define the complete tool configuration for a deployment target
 | `clawk-wecom-callback` | Same as `clawk-cli`. |
 | `clawk-weixin` | Same as `clawk-cli`. |
 | `clawk-yuanbao` | Adds the five `yb_*` tools (DM/group/sticker) on top of `clawk-cli`. |
-| `clawksis-webhook` | Restricted safe subset — only `web_search`, `web_extract`, `vision_analyze`, and `clarify`. Webhook-triggered runs get no terminal, file, or browser access. |
+| `clawk-webhook` | Restricted safe subset — only `web_search`, `web_extract`, `vision_analyze`, and `clarify`. Webhook-triggered runs get no terminal, file, or browser access. |
 | `clawk-gateway` | Internal gateway orchestrator toolset — union of every `clawk-<platform>` toolset; used when the gateway needs to accept any message source. |
 
 Platforms provided by plugins get an implicit `clawk-<platform>` bundle that is not part of `clawk-gateway`. For example, `clawk-homeassistant` still resolves once the `homeassistant` catalog plugin is installed, but it is no longer a built-in toolset.

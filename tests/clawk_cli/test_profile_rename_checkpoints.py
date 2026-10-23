@@ -17,7 +17,7 @@ from tools import checkpoint_maintenance as maintenance
 def profile_env(tmp_path, monkeypatch):
     """Isolate profile paths and the process-level Clawksis root."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
     default_home.mkdir(exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(default_home))
     return default_home

@@ -40,7 +40,7 @@ def embedded_context(tmp_path, monkeypatch):
 
     monkeypatch.setattr(clawk_main, "PROJECT_ROOT", bundle)
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     checkout = home / "clawksis-agent"
     checkout.mkdir(parents=True)
     _git(checkout, "init", "-b", "main")

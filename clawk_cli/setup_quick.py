@@ -251,11 +251,10 @@ def _blank_slate_minimal_toolsets(config: dict):
         all_keys = {k for k, _, _ in CONFIGURABLE_TOOLSETS}
         all_keys.update(_get_plugin_toolset_keys())
         # Plain TOOLSETS entries catch recovered toolsets like ``kanban``. Skip "clawk-*" platform
-        # composites (the webhook one is spelled ``clawksis-webhook``), "includes" groupings, and
-        # posture toolsets (session-level picks by agent/coding_context.py — disabling them would
-        # subtract terminal/read_file).
+        # composites, "includes" groupings, and posture toolsets (session-level picks by
+        # agent/coding_context.py — disabling them would subtract terminal/read_file).
         for k, tdef in TOOLSETS.items():
-            if k.startswith(("clawk-", "clawksis-")) or (
+            if k.startswith("clawk-") or (
                 isinstance(tdef, dict) and (tdef.get("includes") or tdef.get("posture"))
             ):
                 continue

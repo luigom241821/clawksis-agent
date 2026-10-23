@@ -16,7 +16,7 @@ import clawk_cli.update_receipt as ur
 
 
 def _setup(monkeypatch, tmp_path, record: dict):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(exist_ok=True)
     monkeypatch.setattr(
         "clawk_cli.version_info.get_code_identity",

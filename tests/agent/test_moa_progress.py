@@ -33,7 +33,7 @@ def _response(content="ok"):
 
 @pytest.fixture
 def moa_config(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text(
         """

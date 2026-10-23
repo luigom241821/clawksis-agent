@@ -35,7 +35,7 @@ def _make_gui_build(clawk_home: Path) -> None:
 
 
 def test_gui_install_summary_shape(tmp_path, monkeypatch):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     _make_agent(clawk_home)
     _make_gui_build(clawk_home)
     monkeypatch.setattr(gu, "packaged_gui_app_paths", list)
@@ -72,7 +72,7 @@ def test_uninstall_removes_launcher_entry_and_refreshes_cache(tmp_path, monkeypa
         lambda d: refreshed.append(d) or ["kbuildsycoca6"],
     )
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     _make_agent(clawk_home)
     icon = lde.icon_path(clawk_home / "clawksis-agent")
     icon.parent.mkdir(parents=True, exist_ok=True)

@@ -405,7 +405,7 @@ TOOLSETS = {
         "includes": [],
     },
     "clawk-sms": _bundle("SMS bot toolset - interact with Clawksis via SMS (Twilio)"),
-    "clawksis-webhook": _ts(
+    "clawk-webhook": _ts(
         "Webhook toolset - receive and process external webhook events",
         _CLAWK_WEBHOOK_SAFE_TOOLS,
     ),
@@ -429,7 +429,7 @@ TOOLSETS = {
             "clawk-wecom-callback",
             "clawk-weixin",
             "clawk-qqbot",
-            "clawksis-webhook",
+            "clawk-webhook",
             "clawk-yuanbao",
         ],
     ),

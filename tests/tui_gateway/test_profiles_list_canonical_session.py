@@ -38,7 +38,7 @@ import tui_gateway.server as srv
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     """Temp CLAWK_HOME with the default profile plus one named profile."""
-    h = tmp_path / ".clawk"
+    h = tmp_path / ".clawksis"
     (h / "profiles" / "ops").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(h))
     return h

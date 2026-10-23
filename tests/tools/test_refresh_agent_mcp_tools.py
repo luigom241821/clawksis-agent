@@ -605,7 +605,7 @@ class _BotModeDB:
 
 @pytest.fixture
 def managed_bot_home(tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     profile = home / "profiles" / "researcher"
     profile.mkdir(parents=True)
     (profile / "profile.yaml").write_text(

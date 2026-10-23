@@ -160,7 +160,7 @@ required_environment_variables:
 
 @pytest.fixture
 def two_profiles(tmp_path, monkeypatch):
-    launch = tmp_path / ".clawk"
+    launch = tmp_path / ".clawksis"
     homes = [launch / "profiles" / name for name in ("a", "b")]
     for home in homes:
         skill_dir = home / "skills" / "demo" / "secret-skill"

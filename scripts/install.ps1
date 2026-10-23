@@ -905,7 +905,7 @@ function Get-LatestStableRelease([string]$Origin) {
     $pattern = '^v(0|[1-9]\d{0,2})\.(0|[1-9]\d*)\.(0|[1-9]\d*)$'  # update_channel.STABLE_TAG_RE
     $tag = ''
     try {
-        $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/NousResearch/hermes-agent/releases/latest' `
+        $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/samuelgradientai-sys/clawksis-agent/releases/latest' `
             -Headers @{ Accept = 'application/vnd.github+json'; 'User-Agent' = 'clawk-installer' } -TimeoutSec 20
         $tag = "$($release.tag_name)"
     } catch { }

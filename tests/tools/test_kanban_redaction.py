@@ -20,7 +20,7 @@ import pytest
 @pytest.fixture
 def worker_env(monkeypatch, tmp_path):
     """Isolated CLAWK_HOME with a running task; returns the task id."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_PROFILE", "test-worker")

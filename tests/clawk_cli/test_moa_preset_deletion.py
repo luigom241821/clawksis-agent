@@ -77,7 +77,7 @@ def _three_presets() -> dict:
 
 def test_omitted_preset_is_deleted_from_disk(tmp_path, monkeypatch):
     """The whole point: a preset the payload omits must not survive the save."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     _seed(home, monkeypatch, _three_presets())
 
@@ -192,7 +192,7 @@ def test_deletion_preserves_undeclared_moa_keys_and_other_sections(
     tmp_path, monkeypatch
 ):
     """Authoritative presets must not cost us #58819 (save_traces) or #89184 (siblings)."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     moa = _three_presets()
     moa.update(save_traces=True, trace_dir="/custom/traces")
@@ -343,7 +343,7 @@ def test_moa_save_refuses_transient_read_failure_without_losing_config(
 
 def test_adding_a_preset_still_works(tmp_path, monkeypatch):
     """Authoritative writes must not break the add/edit path."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     _seed(home, monkeypatch, _three_presets())
 
@@ -367,7 +367,7 @@ def test_adding_a_preset_still_works(tmp_path, monkeypatch):
 
 def test_named_map_does_not_receive_schema_default_on_load(tmp_path, monkeypatch):
     """An explicit named map owns its names; loader defaults must not add ``default``."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     _seed(home, monkeypatch, _three_presets())
 
@@ -381,7 +381,7 @@ def test_named_map_stays_authoritative_in_a_fresh_process_and_backup_fallback(
     tmp_path, monkeypatch
 ):
     """A restart and last-known-good fallback must not reinsert the schema ``default``."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     _seed(home, monkeypatch, _three_presets())
 
@@ -409,7 +409,7 @@ def test_named_map_stays_authoritative_in_a_fresh_process_and_backup_fallback(
 
 def test_missing_moa_map_still_receives_schema_defaults(tmp_path, monkeypatch):
     """Without a user MoA map, the built-in default remains available."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     (home / "config.yaml").write_text("model: {}\n", encoding="utf-8")
@@ -426,7 +426,7 @@ def test_deletion_preserves_privacy_filter_and_retained_preset_metadata(
     tmp_path, monkeypatch
 ):
     """A MoA edit must not reset an undeclared privacy policy or metadata."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     moa = _three_presets()
     moa.update(
@@ -463,7 +463,7 @@ def test_legacy_flat_update_preserves_named_presets_and_valid_default(
     tmp_path, monkeypatch, include_presets
 ):
     """Older flat clients preserve named presets and a valid persisted active selection."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     seeded = _three_presets()
     seeded["active_preset"] = "keep_b"
@@ -509,7 +509,7 @@ def test_legacy_flat_update_with_named_default_and_empty_map_does_not_fail(
     tmp_path, monkeypatch
 ):
     """A legacy flat payload's default_preset field cannot rename its synthesized map."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     _seed(home, monkeypatch, _three_presets())
 

@@ -34,7 +34,7 @@ _LAUNCH_VOLUMES = '["/host/secret:/data:rw"]'
 def _polluted_launch_env(monkeypatch, tmp_path):
     """Launch profile A bridged a docker backend with sensitive policy into
     the process env; every test proves a routed profile observes none of it."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setenv("TERMINAL_ENV", "docker")
     monkeypatch.setenv("TERMINAL_CWD", _LAUNCH_CWD)
     monkeypatch.setenv("TERMINAL_DOCKER_VOLUMES", _LAUNCH_VOLUMES)
@@ -292,7 +292,7 @@ def test_launch_turn_binds_terminal_scope_once_multiplexing_is_active(
         reset_terminal_scope,
     )
 
-    launch_home = tmp_path / ".clawk"
+    launch_home = tmp_path / ".clawksis"
     launch_home.mkdir()
     (launch_home / "config.yaml").write_text(
         "terminal:\n  backend: local\n", encoding="utf-8"

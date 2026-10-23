@@ -100,7 +100,7 @@ def test_env_loader_prints_remediation_hint(tmp_path, monkeypatch, capsys):
     registry._reset_registry_for_tests()
     env_loader.reset_secret_source_cache()
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text(
         "secrets:\n  bitwarden:\n    enabled: true\n    project_id: proj\n"

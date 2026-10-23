@@ -138,7 +138,7 @@ def test_cli_board_flag_trumps_worker_env_pin_end_to_end(monkeypatch, tmp_path):
 
     from clawk_cli import kanban as kc
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -263,7 +263,7 @@ def test_notifier_seam_connect_lands_on_pinned_db(monkeypatch, tmp_path):
     connect() (no board) live there."""
     from clawk_cli import kanban_db_connect as kbc
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

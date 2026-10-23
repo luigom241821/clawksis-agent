@@ -23,7 +23,7 @@ from clawk_cli import kanban_db_workspace as kbw
 @pytest.fixture
 def kanban_home(tmp_path, monkeypatch):
     """Isolated CLAWK_HOME with an empty kanban DB."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -1088,7 +1088,7 @@ class TestSharedBoardPaths:
         # worker spawned with -p <profile> previously resolved to
         # ~/.clawksis/profiles/<profile>/kanban.db. After the fix both
         # converge on ~/.clawksis/kanban.db.
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
         default_home.mkdir()
         profile_home = default_home / "profiles" / "nehemiahkanban"
         profile_home.mkdir(parents=True)
@@ -1112,7 +1112,7 @@ class TestSharedBoardPaths:
         # Belt-and-suspenders: round-trip a task across the two
         # CLAWK_HOME perspectives via a real SQLite file. Without the
         # fix the worker would open a different file and see no rows.
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
         default_home.mkdir()
         profile_home = default_home / "profiles" / "nehemiahkanban"
         profile_home.mkdir(parents=True)
@@ -1138,7 +1138,7 @@ class TestSharedBoardPaths:
         # The one exception is CLAWK_SESSION_SOURCE, which the dispatcher
         # re-sets to its own `kanban` tag AFTER the strip — a value it owns,
         # never one inherited from whatever the gateway last routed.
-        default_home = tmp_path / ".clawk"
+        default_home = tmp_path / ".clawksis"
         default_home.mkdir()
         self._set_home(monkeypatch, tmp_path, default_home)
 
@@ -1228,7 +1228,7 @@ def test_connect_falls_back_to_delete_on_locking_protocol(
     import sqlite3 as _sqlite3
     from unittest.mock import patch as _patch
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -1291,7 +1291,7 @@ def test_connect_works_when_wal_is_silently_refused(tmp_path, monkeypatch, caplo
     import sqlite3 as _sqlite3
     from unittest.mock import patch as _patch
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -1674,7 +1674,7 @@ def test_default_spawn_pins_repo_root_on_module_worker_pythonpath(
     from clawk_cli import kanban_db_dispatch as kbd
 
     root = str(Path(kbd.__file__).resolve().parents[1])
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

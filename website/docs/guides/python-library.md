@@ -262,7 +262,7 @@ async def on_message(message):
     if message.author == client.user:
         return
     if message.content.startswith("!clawk "):
-        query = message.content[8:]
+        query = message.content[7:]
         agent = AIAgent(
             model="anthropic/claude-sonnet-4",
             quiet_mode=True,

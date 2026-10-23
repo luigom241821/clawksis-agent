@@ -3913,7 +3913,7 @@ tips:
   t357: "clawk setup, ilk kez kullananları sağlayıcı, anahtarlar ve platform bağlantısı adımlarından tek bir etkileşimli akışta geçirir."
   t358: "clawk status --deep, tüm bileşenlerde eksiksiz bir sağlık taraması yapar; sade clawk status hızlı görünümdür."
   t359: "CLAWK_AGENT_TIMEOUT=0, çalışan bir ajan için gateway'in hareketsizlik nedeniyle sonlandırmasını kapatır — uzun araştırma çalıştırmalarında kullanın."
-  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1, ./.clawk/plugins/ içindeki depoya özel eklentileri otomatik yükler — tasarım gereği güven onayına bağlıdır."
+  t360: "CLAWK_ENABLE_PROJECT_PLUGINS=1, ./.clawksis/plugins/ içindeki depoya özel eklentileri otomatik yükler — tasarım gereği güven onayına bağlıdır."
   t361: "CLAWK_DISABLE_FILE_STATE_GUARD=1, patch ve write_file üzerindeki 'dosya okuduğunuzdan beri değişti' korumasını kapatır."
   t362: "CLAWK_ALLOW_PRIVATE_URLS=true, web araçlarının localhost'a ve özel ağlara erişmesine izin verir — gateway modunda varsayılan olarak kapalıdır."
   t363: "CLAWK_OPTIONAL_SKILLS=name1,name2, profil başına ilk çalıştırmada isteğe bağlı katalogdan ek skill'leri otomatik kurar."

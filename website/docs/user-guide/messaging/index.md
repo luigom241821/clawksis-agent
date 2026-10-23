@@ -748,7 +748,7 @@ Each platform has its own toolset:
 | Yuanbao | `clawk-yuanbao` | Full tools including terminal |
 | Microsoft Teams | `clawk-teams` | Full tools including terminal |
 | API Server | `clawk-api-server` | Full tools (drops `clarify`, `text_to_speech` — programmatic access doesn't have an interactive user) |
-| Webhooks | `clawksis-webhook` | Full tools including terminal |
+| Webhooks | `clawk-webhook` | Full tools including terminal |
 | Raft | `clawk-raft` | Wake-only channel; agent uses Raft CLI for message I/O |
 
 ## Operating a multi-platform gateway

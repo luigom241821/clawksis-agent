@@ -25,7 +25,7 @@ def test_auth_failure_names_the_pinned_provider_and_the_failing_profile(
     """A profile's credentials are its own (93889b770da): the notice must send the operator to
     THIS profile's sign-in for the job's pinned provider, never a bare placeholder (#114012)."""
     _no_chain(monkeypatch)
-    profile_home = tmp_path / ".clawk" / "profiles" / "ops"
+    profile_home = tmp_path / ".clawksis" / "profiles" / "ops"
     profile_home.mkdir(parents=True)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_HOME", str(profile_home))

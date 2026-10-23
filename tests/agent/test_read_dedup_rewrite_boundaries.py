@@ -27,7 +27,7 @@ FILE_KEY = ("/x/big.txt", 1, 2000)
 @pytest.fixture
 def served(tmp_path, monkeypatch):
     """One real skill served to TASK, and one file read already served in the current generation."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     skill_dir = home / "skills" / "demo-skill"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(

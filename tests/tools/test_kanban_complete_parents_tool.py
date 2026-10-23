@@ -16,7 +16,7 @@ import pytest
 @pytest.fixture
 def running_child_with_parent(monkeypatch, tmp_path):
     """A claimed (running) child whose parent is NOT done. Returns ids."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_PROFILE", "test-worker")

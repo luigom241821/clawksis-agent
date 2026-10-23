@@ -100,7 +100,7 @@ def test_moa_save_writes_only_the_moa_section(tmp_path, monkeypatch):
     import clawk_yaml as yaml
     from clawk_cli.config import get_config_path, load_config, read_raw_config
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     get_config_path().write_text(

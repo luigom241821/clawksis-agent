@@ -13,7 +13,7 @@ def test_persist_branch_copies_the_parent_system_prompt(tmp_path, monkeypatch):
     from clawk_state import SessionDB
     from tui_gateway import server
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

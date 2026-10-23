@@ -18,7 +18,7 @@ def _footer_path(text: str) -> str:
 def test_truncation_footers_render_the_sandbox_visible_cache_path(
     tmp_path, monkeypatch
 ):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("TERMINAL_ENV", "docker")
     body = "\n".join(f"row {i}" for i in range(5000))
@@ -41,7 +41,7 @@ def test_truncation_footers_render_the_sandbox_visible_cache_path(
 
 
 def test_local_backend_footer_keeps_the_host_path(tmp_path, monkeypatch):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("TERMINAL_ENV", "local")
     body = "\n".join(f"row {i}" for i in range(5000))

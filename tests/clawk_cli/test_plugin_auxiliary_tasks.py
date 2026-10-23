@@ -72,7 +72,7 @@ def test_reset_aux_to_auto_resets_plugin_tasks(tmp_path, monkeypatch, patched_ma
     from clawk_cli.config import load_config, save_config
     from clawk_cli.main_provider_setup import _reset_aux_to_auto
 
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     (tmp_path / ".clawksis").mkdir(exist_ok=True)
@@ -112,7 +112,7 @@ def aux_home(tmp_path, monkeypatch):
     """Empty CLAWK_HOME so DEFAULT_CONFIG is the only source of built-in aux values."""
     from pathlib import Path
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

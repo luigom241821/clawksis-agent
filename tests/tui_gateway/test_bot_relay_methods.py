@@ -22,7 +22,7 @@ from tools import bot_relay
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    h = tmp_path / ".clawk"
+    h = tmp_path / ".clawksis"
     (h / "profiles" / "ops").mkdir(parents=True)
     (h / "profiles" / "ops" / "config.yaml").write_text(
         "{}\n"
@@ -423,7 +423,7 @@ def test_gateway_drains_the_mailbox_the_tools_write_to(tmp_path, monkeypatch, su
     from tui_gateway import methods_bot_relay
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    home = tmp_path / ".clawk" / subdir
+    home = tmp_path / ".clawksis" / subdir
     home.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
 

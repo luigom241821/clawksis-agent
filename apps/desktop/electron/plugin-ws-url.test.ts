@@ -84,8 +84,8 @@ test('mints a native-http grant for a local gateway and null elsewhere', async (
 // The renderer cannot tell a refused upgrade from a gateway that is away. Main can name the one case it
 // knows is not transient, a grant mint refused for a permission reason, and answers it as plain data.
 test('a mint refused for a permission reason is a named reply, any other failure stays an error', async () => {
-  const unsafe = new Error('Unsafe gateway control path: \'/home/u/.clawk\' is accessible to other users (mode 755): run chmod go-rwx \'/home/u/.clawk\'')
-  const groupWritable = new Error('Profile home is writable by a group other accounts share: run chmod g-w \'/home/u/.clawk\'')
+  const unsafe = new Error('Unsafe gateway control path: \'/home/u/.clawksis\' is accessible to other users (mode 755): run chmod go-rwx \'/home/u/.clawksis\'')
+  const groupWritable = new Error('Profile home is writable by a group other accounts share: run chmod g-w \'/home/u/.clawksis\'')
   const bridged = Object.assign(new Error('Gateway ticket bootstrap failed'), { reason: 'unsafe_control_permissions' })
   const mint = vi.fn(async (): Promise<string> => { throw unsafe })
 

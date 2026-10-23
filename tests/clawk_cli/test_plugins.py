@@ -259,7 +259,7 @@ class TestPluginDiscovery:
         from clawk_cli.agent_plugins import MCP_SCHEMA_V1, PLUGIN_SCHEMA_V1
         from clawk_cli import plugins as plugins_mod
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         # Two unrelated plugins both call their server "shared": one readable name, one owner.
         for plugin_name, command in (
             ("alpha-tools", "python-a"),
@@ -2830,7 +2830,7 @@ class TestPluginContextProfileName:
 
     def test_default_profile(self, tmp_path, monkeypatch):
         """CLAWK_HOME at the root resolves to 'default'."""
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -2838,7 +2838,7 @@ class TestPluginContextProfileName:
 
     def test_named_profile(self, tmp_path, monkeypatch):
         """CLAWK_HOME under profiles/<name> resolves to that name."""
-        prof = tmp_path / ".clawk" / "profiles" / "coder"
+        prof = tmp_path / ".clawksis" / "profiles" / "coder"
         prof.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(prof))

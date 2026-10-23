@@ -23,8 +23,8 @@ GIB = 1 << 30
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
     from clawk_cli import web_server
 
     test_client = TestClient(web_server.app)

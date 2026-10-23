@@ -64,7 +64,7 @@ def fake_bw(tmp_path, monkeypatch):
     log = (
         tmp_path / "bw.log"
     )  # the backend runs bw with an allowlisted env, so the fake logs beside itself
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     unlock_mod.lock()
     yield exe, log
     unlock_mod.lock()

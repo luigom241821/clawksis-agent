@@ -28,7 +28,7 @@ def _python_with_repo_path(code: str) -> str:
 
 
 def _make_running_kanban_task(monkeypatch, tmp_path):
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     attachments_root = tmp_path / "attachments"
     workspace = tmp_path / "parent-workspace"
@@ -73,7 +73,7 @@ def test_delegated_child_context_suppresses_env_gated_kanban_tools(
     """
     monkeypatch.setenv("CLAWK_KANBAN_TASK", "t_parent")
     monkeypatch.setenv("CLAWK_KANBAN_RUN_ID", "123")
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
@@ -149,7 +149,7 @@ def test_delegate_child_execute_code_env_bridges_contextvar_and_scrubs_kanban(
     ``os.environ`` and therefore never wrote CLAWK_DELEGATED_CHILD_CONTEXT into
     the sandbox env.
     """
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_KANBAN_TASK", "t_parent")
@@ -201,7 +201,7 @@ def test_auto_heartbeat_reports_failure_without_mutating_fenced_child_board(
     try:
         task_before = kb.get_task(conn, tid)
         events_before = kb.list_events(conn, tid)
-        monkeypatch.setenv("CLAWK_DELEGATED_CHILD_CONTEXT", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_DELEGATED_CHILD_CONTEXT", str(tmp_path / ".clawksis"))
         monkeypatch.setattr(kanban_tools, "_auto_heartbeat_last_attempt", 0.0)
         # raising=False: a regression that drops the module flag must fail on the
         # symptom assertions below, not on this attribute probe.

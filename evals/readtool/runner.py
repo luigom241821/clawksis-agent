@@ -75,7 +75,7 @@ def run_task(
     task, model: str, provider: str, timeout_mult: float, toolsets: list[str]
 ) -> dict:
     ws = Path(tempfile.mkdtemp(prefix=f"readtool-{task.task_id}-"))
-    clawk_home = Path(tempfile.mkdtemp(prefix="readtool-home-")) / ".clawk"
+    clawk_home = Path(tempfile.mkdtemp(prefix="readtool-home-")) / ".clawksis"
     clawk_home.mkdir(parents=True)
     build_workspace(ws)
 

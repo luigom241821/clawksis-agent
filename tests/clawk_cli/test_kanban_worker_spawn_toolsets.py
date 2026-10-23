@@ -27,7 +27,7 @@ def _make_task(kb, *, assignee: str):
 
 def test_default_spawn_pins_assignee_profile_cli_toolsets(monkeypatch, tmp_path):
     """The transport client reaches the assigned profile with its exact run claim."""
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     profile = root / "profiles" / "elias"
     profile.mkdir(parents=True)
     profile.joinpath("config.yaml").write_text(
@@ -85,7 +85,7 @@ agent:
 
 def test_default_spawn_does_not_pass_mutable_launch_overrides(monkeypatch, tmp_path):
     """Owner policy reads overrides from the claimed card, not executable argv."""
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles" / "elias").mkdir(parents=True)
     root.joinpath("config.yaml").write_text("{}\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(root))
@@ -121,7 +121,7 @@ def test_default_spawn_resolves_env_passthrough_under_multiplex(monkeypatch, tmp
     forward the ASSIGNEE profile's own value, never crash on an unscoped read or leak the
     dispatcher's ambient os.environ (#109494).
     """
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     profile = root / "profiles" / "elias"
     profile.mkdir(parents=True)
     root.joinpath("config.yaml").write_text(

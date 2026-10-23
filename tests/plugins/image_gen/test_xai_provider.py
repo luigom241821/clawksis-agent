@@ -539,7 +539,7 @@ class TestXAIImageFieldReadGuard:
     def test_xai_image_field_blocks_credential_store(self, tmp_path, monkeypatch):
         from plugins.image_gen.xai import _xai_image_field
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         auth_json = clawk_home / "auth.json"
         auth_json.write_text('{"api_key":"sk-secret"}', encoding="utf-8")

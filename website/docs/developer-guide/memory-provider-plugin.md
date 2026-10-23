@@ -20,7 +20,7 @@ Clawksis discovers memory providers from four sources, in this precedence order:
 |---|---|---|
 | Bundled | `plugins/memory/<name>/` | Ships with Clawksis. Closed to new providers — see [CONTRIBUTING](https://github.com/samuelgradientai-sys/clawksis-agent/blob/main/CONTRIBUTING.md). |
 | User | `$CLAWK_HOME/plugins/<name>/` | Dropped in by the user, per profile. |
-| Project | `./.clawk/plugins/<name>/` | Opt-in via `CLAWK_ENABLE_PROJECT_PLUGINS=1`. |
+| Project | `./.clawksis/plugins/<name>/` | Opt-in via `CLAWK_ENABLE_PROJECT_PLUGINS=1`. |
 | Package | `clawk_agent.memory_providers` entry point | Distribution supplied by the installation owner; nothing to copy. |
 
 Earlier sources win on a name collision, so a directory dropped into a working
@@ -53,7 +53,7 @@ checks and setup commands remain separate from the Python union.
 
 A directory provider lives in `plugins/memory/<name>/` when bundled with
 Clawksis, in `$CLAWK_HOME/plugins/<name>/` when installed by a user, or in
-`./.clawk/plugins/<name>/` for a project-local one:
+`./.clawksis/plugins/<name>/` for a project-local one:
 
 ```
 plugins/memory/my-provider/

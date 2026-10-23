@@ -27,7 +27,7 @@ def owner(tmp_path, monkeypatch):
     (without running an agent turn) into the state.db the dashboard routes read."""
     from clawk_cli import profiles
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     (home / "cron").mkdir(parents=True)
     monkeypatch.setattr(profiles, "_get_default_clawk_home", lambda: home)
     monkeypatch.setattr(profiles, "_get_profiles_root", lambda: home / "profiles")

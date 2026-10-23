@@ -20,7 +20,7 @@ from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 @pytest.fixture
 def two_homes(tmp_path, monkeypatch):
     """Launch home A (CLAWK_HOME) and routed profile B, differing in every setting under test."""
-    a = tmp_path / ".clawk"
+    a = tmp_path / ".clawksis"
     b = a / "profiles" / "b"
     b.mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)

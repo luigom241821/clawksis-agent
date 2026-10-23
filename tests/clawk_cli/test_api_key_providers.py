@@ -329,7 +329,7 @@ class TestHasAnyProviderConfigured:
         """Claude Code credentials should NOT skip the wizard when Clawksis is unconfigured."""
         from clawk_cli import config as config_module
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setattr(config_module, "get_env_path", lambda: clawk_home / ".env")
         monkeypatch.setattr(config_module, "get_clawk_home", lambda: clawk_home)
@@ -369,7 +369,7 @@ class TestHasAnyProviderConfigured:
         import clawk_yaml as yaml
         from clawk_cli import config as config_module
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         config_file = clawk_home / "config.yaml"
         config_file.write_text(
@@ -417,7 +417,7 @@ class TestHasAnyProviderConfigured:
     def _setup_home(self, monkeypatch, tmp_path):
         from clawk_cli import config as config_module
 
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setattr(config_module, "get_env_path", lambda: clawk_home / ".env")
         monkeypatch.setattr(config_module, "get_clawk_home", lambda: clawk_home)

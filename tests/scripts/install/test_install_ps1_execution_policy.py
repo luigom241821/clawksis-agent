@@ -83,7 +83,7 @@ def test_installer_runs_runtime_command_from_apostrophe_account_path(tmp_path):
         install_root,
         code="print('setup-runtime-ok')",
         python=sys.executable,
-        home=install_root.parent / ".clawk",
+        home=install_root.parent / ".clawksis",
     )
     env = os.environ.copy()
     env["CLAWK_TEST_RUNTIME_COMMAND"] = json.dumps(selected)

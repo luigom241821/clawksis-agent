@@ -40,8 +40,8 @@ def test_cprint_falls_back_to_plain_print_when_prompt_toolkit_has_no_console(cap
 
 def test_empty_model_shows_no_model_configured(tmp_path, monkeypatch):
     """The banner prints before credentials resolve; with no model it says so rather than guessing."""
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    (tmp_path / ".clawk").mkdir()
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
+    (tmp_path / ".clawksis").mkdir()
     with (
         patch.object(model_tools, "check_tool_availability", return_value=([], [])),
         patch.object(banner, "get_available_skills", return_value={}),

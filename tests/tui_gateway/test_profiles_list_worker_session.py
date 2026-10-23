@@ -24,7 +24,7 @@ import tui_gateway.server as srv
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    h = tmp_path / ".clawk"
+    h = tmp_path / ".clawksis"
     h.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(h))
     return h

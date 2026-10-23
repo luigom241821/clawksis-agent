@@ -68,7 +68,7 @@ class TestFireworksDoctor:
         dropped — that heuristic is for aggregator vendor slugs only."""
         from clawk_cli import doctor as doctor_mod
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir(parents=True)
         (home / "config.yaml").write_text(
             "model:\n"

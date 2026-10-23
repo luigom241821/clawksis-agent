@@ -68,7 +68,7 @@ def pm_env(tmp_path, served, monkeypatch):
     docroot, base_url = served
     runtime = tmp_path / "runtime"
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(runtime))
     monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
     # Policy is pinned open here; the disabled-path tests pin it closed.

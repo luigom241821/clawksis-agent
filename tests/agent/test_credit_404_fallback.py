@@ -50,7 +50,7 @@ def test_billing_fallback_warning_names_failing_profile_and_remedy(tmp_path, cap
     never the launch profile; a non-billing switch stays INFO."""
     seen = {}
     for name in ("alpha", "beta"):
-        token = set_clawk_home_override(tmp_path / ".clawk" / "profiles" / name)
+        token = set_clawk_home_override(tmp_path / ".clawksis" / "profiles" / name)
         try:
             caplog.clear()
             with caplog.at_level(logging.INFO, logger="agent.chat_completion_helpers"):

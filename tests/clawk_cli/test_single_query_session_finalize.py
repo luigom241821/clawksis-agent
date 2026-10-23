@@ -73,7 +73,7 @@ def test_finalize_settles_session_before_a_successor_can_take_over(
     from clawk_cli import active_sessions
     from clawk_state import SessionDB
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     monkeypatch.setenv("CLAWK_HOME", str(home))
     db = SessionDB(db_path=tmp_path / "state.db")
     sid = "s1"

@@ -720,7 +720,7 @@ is_official_repo() {
 latest_stable_release() {
     local tag
     tag="$(curl -fsSL --connect-timeout 5 --max-time 20 -H 'Accept: application/vnd.github+json' \
-        https://api.github.com/repos/NousResearch/hermes-agent/releases/latest 2>/dev/null \
+        https://api.github.com/repos/samuelgradientai-sys/clawksis-agent/releases/latest 2>/dev/null \
         | sed -n 's/^[[:space:]]*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
     if ! valid_stable_tag "$tag"; then
         tag="$(curl -fsSI --connect-timeout 5 --max-time 20 \

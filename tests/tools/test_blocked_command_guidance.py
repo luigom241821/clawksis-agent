@@ -8,7 +8,7 @@ from tools import approval_floors
 
 class TestParserLimitRecovery:
     def test_parser_limit_block_saves_payload_and_names_it(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         cmd = "python3 -c '" + "x = 1; " * 900 + "'"
         r = _hardline_block_result(_PARSER_LIMIT_DESCRIPTION, cmd)
         assert r["approved"] is False
@@ -34,20 +34,20 @@ class TestParserLimitRecovery:
         assert "bash /path/script.sh" in r["message"]
 
     def test_real_hardline_blocks_unchanged(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         r = _hardline_block_result(
             "recursive delete of root filesystem", "rm -rf --no-preserve-root /"
         )
         assert "RECOVERY" not in r["message"]
         assert "unconditional blocklist" in r["message"]
         # And nothing was saved for a genuine hardline block.
-        assert not (tmp_path / ".clawk" / "cache" / "blocked-scripts").exists()
+        assert not (tmp_path / ".clawksis" / "cache" / "blocked-scripts").exists()
 
     def test_old_saved_payloads_cleaned(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         import os
 
-        d = tmp_path / ".clawk" / "cache" / "blocked-scripts"
+        d = tmp_path / ".clawksis" / "cache" / "blocked-scripts"
         d.mkdir(parents=True)
         stale = d / "blocked-1-dead.sh"
         stale.write_text("old")

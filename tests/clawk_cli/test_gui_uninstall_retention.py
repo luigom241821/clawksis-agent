@@ -12,7 +12,7 @@ from clawk_constants import get_clawk_home
 @pytest.fixture(params=("complete", "record_only"))
 def installation(request, tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     home = get_clawk_home()
     assert home.resolve().is_relative_to(tmp_path.resolve())
     root = home / "clawksis-agent"

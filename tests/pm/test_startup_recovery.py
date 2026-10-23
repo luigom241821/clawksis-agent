@@ -31,7 +31,7 @@ def isolated_machine_home(tmp_path, monkeypatch):
     # machine cache and platform-specific home lookup must be isolated there too.
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     monkeypatch.delenv("CLAWK_INSTALL_ROOT", raising=False)
 
 

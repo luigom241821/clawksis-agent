@@ -3930,7 +3930,7 @@ tips:
   t357: "A clawk setup egyetlen interaktív folyamatban végigvezeti az új felhasználókat a szolgáltató, a kulcsok és a platformok bekötésén."
   t358: "A clawk status --deep minden komponensen teljes állapotellenőrzést futtat; a sima clawk status a gyors áttekintés."
   t359: "A CLAWK_AGENT_TIMEOUT=0 kikapcsolja az átjáró inaktivitási leállítását a futó ügynöknél — hosszú kutatási futásokhoz."
-  t360: "A CLAWK_ENABLE_PROJECT_PLUGINS=1 automatikusan betölti a tárolóbeli pluginokat a ./.clawk/plugins/ alól — tervezetten bizalmi kapuval."
+  t360: "A CLAWK_ENABLE_PROJECT_PLUGINS=1 automatikusan betölti a tárolóbeli pluginokat a ./.clawksis/plugins/ alól — tervezetten bizalmi kapuval."
   t361: "A CLAWK_DISABLE_FILE_STATE_GUARD=1 kikapcsolja a patch és a write_file 'a fájl megváltozott az olvasás óta' védelmét."
   t362: "A CLAWK_ALLOW_PRIVATE_URLS=true engedi a webes eszközöknek a localhost és a privát hálózatok elérését — átjáró módban alapból ki van kapcsolva."
   t363: "A CLAWK_OPTIONAL_SKILLS=name1,name2 profilonként az első futáskor automatikusan telepít további opcionális katalógus-skilleket."

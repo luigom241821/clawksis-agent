@@ -27,7 +27,7 @@ def test_run_backup_prunes_older_default_named_zips_but_not_others(
     from argparse import Namespace
     from clawk_cli import backup as backup_mod
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     (home / "config.yaml").write_text("model: x\n")
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -48,7 +48,7 @@ def test_import_restores_the_session_store_with_its_message_uids(tmp_path, monke
     message ids come back with the rows."""
     from clawk_state import SessionDB
 
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     _make_clawk_tree(clawk_home)
     db = SessionDB(db_path=clawk_home / "state.db")

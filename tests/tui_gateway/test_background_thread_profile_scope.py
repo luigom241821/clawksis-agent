@@ -29,7 +29,7 @@ from clawk_constants import (
 
 @pytest.fixture
 def served_home(tmp_path, monkeypatch):
-    a = tmp_path / ".clawk"
+    a = tmp_path / ".clawksis"
     b = a / "profiles" / "b"
     b.mkdir(parents=True)
     (a / ".env").write_text("TITLE_KEY=a-key\n", encoding="utf-8")

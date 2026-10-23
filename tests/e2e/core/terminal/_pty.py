@@ -120,11 +120,11 @@ class PtyClawksis:
         cols: int,
         extra_config: str = "",
     ) -> None:
-        """``llm=None``: the caller already wrote ``root/home/.clawk`` (e.g. a native-runtime home)."""
+        """``llm=None``: the caller already wrote ``root/home/.clawksis`` (e.g. a native-runtime home)."""
         self.root = root
         self.home = root / "home"
         self.clawk_home = self.home / ".clawksis"
-        operator = (_operator_home() / ".clawk").resolve()
+        operator = (_operator_home() / ".clawksis").resolve()
         assert operator not in (
             self.clawk_home.resolve(),
             *self.clawk_home.resolve().parents,

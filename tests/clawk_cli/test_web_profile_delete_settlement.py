@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 def profile_env(tmp_path, monkeypatch):
     """Path.home() and CLAWK_HOME both point into the temp dir (profile ops are HOME-anchored)."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir(exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return tmp_path

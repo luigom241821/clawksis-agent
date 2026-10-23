@@ -25,7 +25,7 @@ import cron.jobs as J
 
 @pytest.fixture
 def cron_store(tmp_path, monkeypatch):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     (clawk_home / "cron").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     monkeypatch.setattr(J, "CLAWK_DIR", clawk_home)

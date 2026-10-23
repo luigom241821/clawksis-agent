@@ -18,7 +18,7 @@ from clawk_cli import runtime_provider
 @pytest.fixture
 def create_from_launch(tmp_path, monkeypatch):
     """Write *source* as the launch config, create a fresh profile, return its raw config."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

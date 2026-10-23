@@ -853,7 +853,7 @@ class TestProtectedInstructionFiles:
         """A repo living UNDER a .clawk dir (e.g. ~/.clawksis/clawksis-agent)
         must not have every write gated — only files directly inside a
         .clawk dir count as project config."""
-        repo = tmp_path / ".clawk" / "some-repo" / "src"
+        repo = tmp_path / ".clawksis" / "some-repo" / "src"
         repo.mkdir(parents=True)
         res = self._write(repo / "module.py", "x = 1\n")
         assert not res.get("error"), res
@@ -865,7 +865,7 @@ class TestProtectedInstructionFiles:
         """~/.clawksis itself is governed by existing guards, not this gate."""
         import tools.file_tools_write_guards as ft
 
-        fake_home = tmp_path / ".clawk"
+        fake_home = tmp_path / ".clawksis"
         (fake_home / "notes").mkdir(parents=True)
         monkeypatch.setattr(
             ft, "_get_real_clawk_home", lambda: str(fake_home.resolve())

@@ -17,7 +17,7 @@ import pytest
 
 @pytest.fixture()
 def _bridge_env(monkeypatch, tmp_path):
-    clawk_home = tmp_path / ".clawk"
+    clawk_home = tmp_path / ".clawksis"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     monkeypatch.setenv("OPENCODE_GO_BRIDGE_API_KEY", "sk-test-bridge")

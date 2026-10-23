@@ -306,7 +306,7 @@ def test_cli_ledger_path_defaults_under_clawk_home(
     sources_mod, tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.delenv("CLAWK_CITATION_LEDGER", raising=False)
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
     path = sources_mod.resolve_ledger_path(None)
     assert path.parts[-3:] == ("cache", "citations", "ledger.json")
     assert str(tmp_path) in str(path)

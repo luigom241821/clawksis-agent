@@ -42,6 +42,7 @@ from clawk_cli.memory_provider_migration import (
     _note_failure,
     _unattended_consent,
 )
+from clawk_cli.toolset_validation import RENAMED_TOOLSETS
 
 logger = logging.getLogger(__name__)
 
@@ -459,6 +460,7 @@ def _core_carried(feature: LeftCoreFeature, selection: list) -> bool:
     directly, or through a ``clawk`` / ``clawk-<platform>`` composite that included them."""
 
     def carries(name: str) -> bool:
+        name = RENAMED_TOOLSETS.get(name, name)  # a pre-rename saved bundle name
         if name in feature.toolsets or name == "clawk":
             return True
         return (

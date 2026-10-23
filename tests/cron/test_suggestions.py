@@ -14,7 +14,7 @@ import pytest
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     """A cron.suggestions module bound to an isolated CLAWK_HOME."""
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     import clawk_constants
