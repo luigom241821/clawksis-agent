@@ -16,7 +16,7 @@ Storage layout (single shared store, git objects deduplicated across projects)
     ~/.clawksis/checkpoints/
         store/                          — single bare-ish git repo
             HEAD, config, objects/      — standard git internals (shared)
-            refs/clawksis/<hash16>        — per-project branch tip
+            refs/clawk/<hash16>         — per-project branch tip
             indexes/<hash16>            — per-project git index
             projects/<hash16>.json      — {workdir, created_at, last_touch}
             info/exclude                — default excludes (shared)
