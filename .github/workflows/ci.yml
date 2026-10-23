@@ -70,6 +70,10 @@ jobs:
           py="$("$boot" -c "import sys; sys.path.insert(0, '.'); from pathlib import Path; from pm.testenv import testenv_python; print(testenv_python(Path('.').resolve()) or '')")"
           test -x "$py"
           "$py" -c "import pytest, anthropic, mistralai" && echo "CLAWK_PYTHON=$py" >> "$GITHUB_ENV"
+          # Los tests de pm/ y de empaquetado usan el uv real del lock (como el setup-pm de upstream).
+          uvdir="$(ls -d "$HOME"/.clawksis/tools/uv-*/ | head -n1)"
+          test -x "${uvdir}uv"
+          echo "${uvdir%/}" >> "$GITHUB_PATH"
       # scripts/run_tests.sh corre cada archivo en su propio subproceso de pytest con un
       # entorno limpio (env -i: sin credenciales, TZ=UTC, sin INVOCATION_ID del runner).
       - name: Run tests

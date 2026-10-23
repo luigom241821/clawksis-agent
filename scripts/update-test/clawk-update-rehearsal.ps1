@@ -53,7 +53,7 @@ param(
   [ValidateSet('pre', 'post', 'status', 'help')]
   [string]$Command = 'help',
 
-  [string]$Source = 'https://github.com/ethernet8023/hermes-agent.git',
+  [string]$Source = 'https://github.com/samuelgradientai-sys/clawksis-agent.git',  # Clawksis: rehearse against the fork itself
   [string]$BackupRoot,
   [switch]$Yes
 )
