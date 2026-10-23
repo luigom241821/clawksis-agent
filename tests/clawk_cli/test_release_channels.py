@@ -212,13 +212,14 @@ def test_passive_reads_and_missing_objects_make_one_attempt(monkeypatch):
 @pytest.mark.parametrize(
     ("base", "headers", "blocked"),
     [
+        # pm.network._R2_HOSTS keeps the real R2 mirror host (pm/artifact-mirror.json).
         (
-            "https://clawk-assets.nousresearch.com",
+            "https://hermes-assets.nousresearch.com",
             {"Server": "cloudflare", "Content-Type": "text/html"},
             True,
         ),
         (
-            "https://clawk-assets.nousresearch.com",
+            "https://hermes-assets.nousresearch.com",
             {"Server": "cloudflare", "cf-cache-status": "DYNAMIC"},
             False,
         ),

@@ -98,6 +98,11 @@ _ALLOWED: dict[tuple[str, str], str] = {
         "Plugin workspace installs resolve npm inside the PM runner env that "
         "pm.ensure('npm') just composed."
     ),
+    ("clawk_cli/tools_config.py", "npm"): (
+        "Clawksis setup hook: `npm install -g` of a user-facing CLI (Claude Code, Codex) "
+        "must use the user's own npm so the CLI lands on their PATH; PM's sealed Node "
+        "store must not receive global installs."
+    ),
     ("tools/mcp_tool_config.py", "node"): (
         "Looks up node only inside the sealed payload's own node dirs (an explicit "
         "`path=`, never the ambient PATH), to run a package bin on the packaged node."

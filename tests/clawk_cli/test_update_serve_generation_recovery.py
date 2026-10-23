@@ -498,8 +498,9 @@ def test_dashboard_unit_is_restarted_and_verified_by_the_serve_pass(linux_system
     )
     out = recovery.restart_serve_units(run=fake, sleep=lambda _: None)
     assert fake.restarted == ["clawk-serve.service", "clawksis-dashboard-work.service"]
+    # Reported sorted: the rebranded names order serve before dashboard.
     assert out == {
-        "verified": ["user/clawksis-dashboard-work", "user/clawk-serve"],
+        "verified": ["user/clawk-serve", "user/clawksis-dashboard-work"],
         "failed": [],
     }
 

@@ -106,7 +106,8 @@ class TestClassifyFetchFailure:
             fetch(damaged, "origin"), git_cmd=["git"], root=damaged
         )
         out = capsys.readouterr().out
-        assert "damaged" in out and "clawksis-agent.nousresearch.com/install." in out
+        # Clawksis's installer is served from its GitHub repo, not a Nous-hosted domain.
+        assert "damaged" in out and "clawksis-agent/main/scripts/install." in out
         assert (
             str(damaged) in out
         )  # the repair targets THIS checkout, not the default directory

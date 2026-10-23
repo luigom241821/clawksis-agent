@@ -113,7 +113,7 @@ def test_consumption_checkpoints_debt_before_unlink_and_producer_death(
         token = r.record_pause({"resume_needed": True, "profiles": {"default": pid},
                                "identities": {str(pid): r.identity(pid)["ct"]}}, None, [])
         # Discovery and the gateway can spell the same profile path differently.
-        r.mark_stop_requested(token, [pid], {pid: home / ".." / ".clawk" / ".gateway-planned-stop.json"})
+        r.mark_stop_requested(token, [pid], {pid: home / ".." / ".clawksis" / ".gateway-planned-stop.json"})
         # The real callback is the first operation after marker publication. Hold it
         # before its checkpoint while another interpreter runs the actual consumer.
         def on_request(pid):

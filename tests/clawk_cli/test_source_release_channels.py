@@ -373,11 +373,14 @@ def test_stable_is_the_latest_published_github_release_without_r2(releases):
 def test_default_stable_only_moves_forward_until_the_channel_is_chosen(
     releases, monkeypatch, capsys, start, expected
 ):
-    from clawk_cli.update_channel import default_channel
+    from clawk_cli import update_channel
 
     _track_official_origin(releases)
     git(releases.root, "checkout", "--detach", releases.commits[start])
-    assert default_channel(releases.root) == "stable"
+    # Clawksis publishes no stable source releases, so unconfigured checkouts default
+    # to main; emulate a stable default to exercise the forward-only machinery.
+    assert update_channel.default_channel(releases.root) == "main"
+    monkeypatch.setattr(update_channel, "default_channel", lambda *_a, **_k: "stable")
     opts = update_cmd._UpdateOptions(
         pre_update_version=None,
         gw_input_fn=None,

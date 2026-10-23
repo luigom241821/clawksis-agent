@@ -140,8 +140,8 @@ def _package_channel(stamp: dict) -> bool:
 def default_channel(project_root: Optional[Path] = None) -> str:
     """The channel an unconfigured install tracks.
 
-    A source checkout of the official repository follows the latest published
-    stable release. Forks, mirrors and checkout-less trees keep following main.
+    Every source checkout (the official repository included) and checkout-less
+    tree follows main: Clawksis publishes no stable source releases.
     ``electron-updater`` and ``app-installer`` bundles report their artifact
     channel: a canary artifact tracks canary, every other bundle
     tracks stable. The stamp's ``tag`` is the authority, the same fact

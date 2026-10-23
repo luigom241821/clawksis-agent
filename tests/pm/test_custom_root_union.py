@@ -37,7 +37,7 @@ def test_home_layout_joins_sibling_union(tmp_path, monkeypatch, layout):
     import clawk_constants
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    root = tmp_path / (".clawk" if layout == "default" else "data-root")
+    root = tmp_path / (".clawksis" if layout == "default" else "data-root")
     active = root / "profiles/active" if layout == "profile" else root
     if layout == "default":
         monkeypatch.delenv("CLAWK_HOME", raising=False)

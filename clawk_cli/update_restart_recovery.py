@@ -63,7 +63,9 @@ _VERIFY_TIMEOUT = 15
 from clawk_constants import PROFILE_ID_RE as _PROFILE_ID_RE
 
 _SUPERVISOR_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
-_UNIT_RE = re.compile(r"^clawk-(serve|dashboard)(-[a-z0-9][a-z0-9_-]{0,63})?\.service$")
+_UNIT_RE = re.compile(
+    r"^(?:clawk-serve|clawksis-dashboard)(-[a-z0-9][a-z0-9_-]{0,63})?\.service$"
+)
 _SERVE_UNIT_PATTERNS = ("clawk-serve*", "clawksis-dashboard*")
 _SCOPE_LABELS = ("user", "system")
 _UNIT_RESTART_TIMEOUT = 60

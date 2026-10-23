@@ -56,7 +56,7 @@ def fixture_tree(tmp_path, monkeypatch):
     # Windows resolves its default under LOCALAPPDATA, not HOME.
     if os.name == "nt":
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    home = tmp_path / ("clawk" if os.name == "nt" else ".clawk")
+    home = tmp_path / ("clawk" if os.name == "nt" else ".clawksis")
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.delenv("CLAWK_RUNTIME_DIR", raising=False)

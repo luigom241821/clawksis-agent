@@ -144,7 +144,8 @@ class TestUpdateAdmission:
         refusal = evaluate_update_admission(root)
         assert refusal is not None
         assert refusal.code == "docker"
-        assert "docker pull" in refusal.update_command
+        # Clawksis publishes no image: the container is rebuilt from the host checkout.
+        assert "docker compose build" in refusal.update_command
 
     def test_git_checkout_is_admitted(self, tmp_path, monkeypatch):
         from clawk_cli.update_contract import evaluate_update_admission

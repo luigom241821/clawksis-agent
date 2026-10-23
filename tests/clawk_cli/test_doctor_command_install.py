@@ -201,7 +201,8 @@ def test_doctor_reports_selected_import_tree_not_interpreter_prefix(
     [
         ("git", "clawk pm repair"),
         ("nix", "Nix"),
-        ("docker", "docker pull"),
+        # Clawksis publishes no image: the container is rebuilt from the host checkout.
+        ("docker", "docker compose build"),
         ("apt", "pkg upgrade"),
     ],
 )

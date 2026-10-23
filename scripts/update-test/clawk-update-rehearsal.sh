@@ -31,7 +31,7 @@ set -euo pipefail
 
 OFFICIAL_HTTPS="https://github.com/samuelgradientai-sys/clawksis-agent.git"
 OFFICIAL_SSH="git@github.com:samuelgradientai-sys/clawksis-agent.git"
-DEFAULT_SOURCE="https://github.com/ethernet8023/clawksis-agent.git"
+DEFAULT_SOURCE="$OFFICIAL_HTTPS"  # Clawksis: ensayar contra el propio fork
 
 SUBCMD=""
 BACKUP_ROOT="${HOME}/clawk-update-rehearsal"
@@ -107,7 +107,7 @@ resolve_paths() {
   if [ -n "${CLAWK_HOME:-}" ]; then
     CLAWK_HOME="$(cd "$CLAWK_HOME" 2>/dev/null && pwd || printf '%s' "$CLAWK_HOME")"
   else
-    CLAWK_HOME="$HOME/.clawk${suffix}"
+    CLAWK_HOME="$HOME/.clawksis${suffix}"
   fi
   INSTALL_DIR="$CLAWK_HOME/clawksis-agent"
   if [ -n "${CLAWK_DESKTOP_USER_DATA_DIR:-}" ]; then
