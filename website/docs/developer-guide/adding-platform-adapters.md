@@ -34,13 +34,11 @@ The plugin system lets you add a platform adapter without modifying any core Cla
 
 ```
 ~/.clawksis/plugins/my-platform/
-
-  PLUGIN.yaml      # Plugin metadata
+  plugin.yaml      # Plugin metadata
   adapter.py       # Adapter class + register() entry point
 ```
 
-
-### PLUGIN.yaml
+### plugin.yaml
 
 Plugin metadata. The `requires_env` and `optional_env` blocks auto-populate `clawk config` UI entries (see [Surfacing Env Vars](#surfacing-env-vars-in-clawk-config) below).
 
@@ -218,8 +216,7 @@ When you call `ctx.register_platform()`, the following integration points are ha
 | YAML config bridge | `apply_yaml_config_fn` translates `config.yaml` keys into env vars / extras |
 | Cron delivery | `cron_deliver_env_var` makes `deliver=<name>` work |
 | `clawk config` UI entries | `requires_env` / `optional_env` in `plugin.yaml` auto-populate |
-
-| send_message tool | Routes through live gateway adapter |
+| send engine (`tools/send_message_tool.py`) | Routes through live gateway adapter |
 | Webhook cross-platform delivery | Registry checked for known platforms |
 | `/update` command access | `allow_update_command` flag |
 | Channel directory | Plugin platforms included in enumeration |
@@ -664,8 +661,7 @@ class Platform(Enum):
 
 ### 2. Adapter File
 
-
-Create `gateway/platforms/newplat.py`:
+Create `plugins/platforms/newplat/adapter.py`:
 
 ```python
 from gateway.config import Platform, PlatformConfig

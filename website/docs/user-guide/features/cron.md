@@ -210,50 +210,6 @@ When `workdir` is set:
 Each agent run binds its `workdir` to that run's unique task identity. Workdir jobs therefore use the normal parallel pool without mutating process-global terminal state or leaking paths between concurrent runs. Set `cron.max_parallel_jobs` if you want to limit total cron concurrency.
 :::
 
-
-## Running cron jobs in a specific profile
-
-
-By default a cron job inherits whichever Clawksis profile owned the gateway / CLI that created it. Pass `--profile <name>` (CLI) or `profile=` (cronjob tool) to re-target the job at a different profile — the scheduler resolves that profile's `CLAWK_HOME`, temporarily switches into it for the duration of the run, loads its `.env` + `config.yaml`, and executes the job there:
-
-
-```bash
-
-# Pin a job to the `night-ops` profile regardless of where it was scheduled
-
-clawk cron create "every 1d at 03:00" \
-
-  "Tail the security log and flag anomalies" \
-
-  --profile night-ops
-
-```
-
-
-```python
-# From a chat, via the cronjob tool
-
-cronjob(
-    action="create",
-    schedule="every 1d at 03:00",
-    prompt="Tail the security log and flag anomalies",
-    profile="night-ops",
-)
-```
-
-
-Use `--profile default` to explicitly pin to the root Clawksis profile. The named profile must already exist; the scheduler refuses to create profiles on the fly. To clear a profile pin during `cron edit`, pass an empty string (`--profile ""` or `profile=""`) — the job reverts to running in whatever profile the scheduler itself is in.
-
-
-If the pinned profile is later deleted, the scheduler logs a warning and falls back to running the job in its current profile rather than crashing — so a stale `profile` reference never wedges a job.
-
-
-:::note Serialization
-
-Jobs with a `profile` set also run sequentially, for the same reason as `workdir`-pinned jobs: switching `CLAWK_HOME` is a process-global mutation, so two profile-pinned jobs running in parallel would race each other. Unpinned jobs still run in the normal parallel pool.
-
-:::
-
 ## Editing jobs
 
 You do not need to delete and recreate jobs just to change them.
@@ -437,6 +393,188 @@ On each tick Clawksis:
 
 A file lock at `~/.clawksis/cron/.tick.lock` prevents overlapping scheduler ticks from double-running the same job batch.
 
+### Restart-safe workers under systemd
+
+When the gateway runs as a systemd service, each due job is handed to an external worker process launched in a transient user scope (`systemd-run --user --scope`), so restarting the gateway mid-job does not kill the job. Creating that scope needs a user systemd session; hosts without one (containers, minimal LXCs, a service user without linger) cannot provide it.
+
+By default cron then **degrades**: the job still runs as a separate external process with the same execution handoff, but without cgroup isolation, so a gateway restart during the job kills it (the execution ledger records that). One warning is logged per gateway process. To fail closed instead — skip the job and record the error on the job row — set:
+
+```yaml
+cron:
+  require_restart_safe_scope: true
+```
+
+The lasting fix is a user session for the gateway user: `sudo loginctl enable-linger <gateway-user>` (and `XDG_RUNTIME_DIR` / `DBUS_SESSION_BUS_ADDRESS` in the unit for system-level installs), then restart the gateway. Kanban workers always require a scope under the managed gateway regardless of this key: a spawn the host cannot scope is recorded on the card as an infrastructure failure and retried later, never charged to the card (see the [Kanban docs](kanban.md#workers-and-systemd-cgroups)).
+
+The worker is the gateway's own interpreter running `python -m cron.scheduler`, with the gateway's checkout pinned on its `PYTHONPATH` (plus any entries the gateway itself was started with), so it imports the same Clawksis tree the gateway runs — regardless of the venv's editable-install mapping, the unit's `WorkingDirectory`, or `PYTHONSAFEPATH` on the host. A worker that dies before acknowledging the handoff records its own stderr tail in the job's last error and in the execution ledger, so the failing import (or whatever killed it) is named instead of a bare exit code.
+
+### Execution history
+
+Clawksis records each claimed cron attempt in the profile-local
+`~/.clawksis/cron/executions.db` before executor or provider dispatch. Attempts
+move through `claimed`, `running`, and one immutable terminal state:
+`completed`, `failed`, or `unknown`. After restart — and before every manual
+`clawk cron run` / `/cron run`, so a one-shot invocation with no scheduler
+running heals the ledger too — Clawksis marks an abandoned attempt `unknown` only
+when the original PID and process-start fingerprint prove that its owner is
+gone, or when a live owner has been **silent** for longer than the derived
+stale bound (`max(3 × CLAWK_CRON_TIMEOUT, script timeout, 2 h)`): the run
+monitor stamps `progress_at` on the attempt while the agent is still calling
+tools or streaming, so a healthy multi-hour job is never reclaimed mid-run, while
+a worker deadlocked on a lock stops stamping and is released once the bound
+passes. Unknown attempts are audit records and are never automatically rerun.
+
+Inspect recent attempts with `clawk cron runs [job-id] --limit 20` (alias:
+`history`). Terminal history is bounded; active attempts are never pruned. The
+ledger is included in quick backups.
+
+Scheduled attempts also record their exact scheduled instant, separately from
+the time they were claimed. If an old `jobs.json` snapshot re-arms an occurrence
+that the retained ledger records as completed, Clawksis skips that replay and
+re-anchors recurring jobs. This works even when the snapshot predates the
+dispatch stamp or the original run started late. Explicit manual runs do not
+consume a scheduled occurrence's identity.
+
+This is not an exactly-once side-effect guarantee: legacy rows without an
+identity, pruned history, unavailable ledgers, and interrupted attempts cannot
+prove completion. Restoring the ledger itself to an older backup also removes
+that evidence. External fire callbacks identify the currently accepted store
+claim, not an upstream scheduled slot absent from the callback.
+
+### Repeated-failure review nudge
+
+Each job tracks a `failure_streak` — consecutive failed runs (delivery
+failures don't count). A run that fails before the agent is reached at all —
+a bad import after a half-applied update, a provider client that cannot be
+constructed — counts and alerts the same as one the agent itself failed. When
+a *recurring* job's streak reaches the threshold, the failure message
+delivered to chat gains a review nudge telling you the job has failed N runs
+in a row and suggesting you fix, pause (`clawk cron pause <job>`), or remove
+it. Any successful run resets the streak, and `clawk cron list` shows the
+streak alongside a failing job's last run. One-shot jobs never nudge.
+
+```yaml
+cron:
+  failure_nudge_threshold: 3   # default; 0 disables the nudge
+```
+
+### Automatic re-runs when the model was unreachable
+
+A recurring job whose run fails with a transient network or DNS error before
+a single model call was made — the classic case is a fire right after the
+computer wakes, while the VPN or Wi-Fi is still reconnecting — does not sit
+out a whole period. The scheduler re-runs it automatically after **5, 15, and
+30 minutes** (inspired by Claude Cowork's scheduled-task re-runs), then falls
+back to the normal schedule. Because zero API calls were made, the re-run is
+spend-neutral and cannot duplicate any side effect. Re-runs also do not count
+toward a job's `repeat` limit: the occurrence they repeat already counted once.
+
+While a re-run is pending, the interim failure notice is suppressed — you get
+the real result when a re-run succeeds, or a normal failure alert once the
+ladder is exhausted. Any run that reaches the model (success or failure)
+resets the ladder. One-shot jobs are excluded: their dispatch accounting is
+at-most-times and a consumed dispatch is never resurrected. Retries never
+fire past the schedule's own next occurrence when that comes sooner.
+
+```yaml
+cron:
+  retry_unreachable: false   # default true; disables the automatic re-runs
+```
+
+### Holding a job through a closed provider usage window
+
+The mirror case: the provider says exactly how long it will stay closed. When
+the scheduler resolves a subscription provider (currently the OpenAI Codex
+usage probe) and the provider reports its usage limit exhausted with a
+`retry after <N>s` hint (often many hours), and the whole fallback chain is
+unavailable, re-firing a sub-hourly job into that window is guaranteed to fail
+identically on every tick — and to alert every time. A 429 the model API
+returns mid-run is not held this way; it is retried on the normal cadence.
+
+Instead, the scheduler **parks the job**: the one failure alert says the
+window is closed and that the job is held. If the provider reopens well before
+a **sparse** cron job's next natural occurrence (at least half a schedule
+period early), a blocked scheduled occurrence retries once at that recovery
+boundary; a second quota failure waits for the natural schedule. Dense
+schedules, manual runs and interval jobs retain their natural next run.
+Otherwise, missed occurrences are coalesced and
+`next_run_at` moves to the first scheduled occurrence after the window. The
+parked instant is stored as `quota_hold_until`; nothing fires or alerts before
+it. Any run that reaches the model clears the hold. One-shot jobs are not held.
+
+### Failure incidents: alert once, remind on a cooldown, acknowledge
+
+A recurring job that keeps failing with the *same* error alerts you **once**,
+not on every run. Each failure is recorded as a durable **incident**, keyed by
+the job plus a normalized signature of the error text (case, whitespace and
+measured durations such as `idle for 603s` are ignored), in the same per-profile
+ledger database as the execution history; the first failure of a signature is
+always delivered, and repeats are then withheld while the incident is `alerted`
+(the run is still recorded — `clawk cron runs` and the failure streak see it,
+only the ping is held back).
+
+```yaml
+cron:
+  failure_repeat_alert_hours: 6   # still broken after this long → one reminder ping,
+                                  # then silent again; 0 = alert on every failing run
+```
+
+Anything that changes the picture alerts immediately: a *different* error mints
+its own incident and pings at once, and a successful run re-arms the signature
+so the same error after a green run alerts again. If the incident ledger cannot
+be read, the ping is delivered rather than swallowed.
+
+```bash
+clawk cron incidents                 # list incidents (newest activity first)
+clawk cron incidents --state alerted # filter: detected | alerted | resolved | closed
+clawk cron incidents ack <id>        # acknowledge — silence this signature for good
+```
+
+Acknowledging an incident silences the failure ping for that exact signature
+only, reminders included. Nothing else changes: the run history still records
+every failure, the failure streak keeps counting, and the moment the job starts
+failing with a *different* error a new incident is minted and alerts fire
+again.
+
+A successful run marks every open incident for that job `resolved`, so the
+list reflects current health rather than every failure the job ever had. If
+the job later fails with the *same* error, the resolved incident re-opens as
+`detected` and you are alerted again. Acknowledged (`closed`) incidents are
+the exception: a success leaves them alone, and a repeat stays silent.
+
+Incident lifecycle: `detected` (failure recorded) → `alerted` (at least one
+failure ping reached delivery; `alerted_at` is the latest one and starts the
+reminder cooldown) → `resolved` (the job ran OK afterwards; re-opens on a
+repeat) or `closed` (acknowledged; terminal for that signature). Stored error
+text is secret-redacted and truncated before it is written.
+
+### Fleet health check: `clawk cron doctor`
+
+`clawk cron doctor` is a read-only health check over every active job. It prints grouped, per-job issues and exits `1` while any finding stands, including historical late or catch-up dispatches (`0` when no findings remain).
+
+A successful catch-up does not clear the lateness warning; the next on-time dispatch does. A watchdog such as `clawk cron doctor || alert` can therefore keep alerting for a full schedule interval after the host wakes, even if the catch-up succeeds.
+
+```bash
+clawk cron doctor
+```
+
+Checks per active job:
+
+- last run failed (`last_status` not ok, with the recorded error),
+- last delivery failed (the output was produced but never reached you),
+- last dispatch was late or caught up after a missed schedule (`last_dispatch`); this warning clears at the next on-time fire,
+- a scheduled fire could not reach the runner (`last_fire_error`), with the recorded timestamp and a shortened reason; this warning clears after a successful run,
+- `next_run_at` missing, or parked in the past beyond a 15-minute ticker
+  grace window — the "job is silently not firing" signal (scheduler dead,
+  gateway down, or a wedged fire-claim),
+- script missing, not a file, or resolving outside `CLAWK_HOME/scripts`,
+- `no_agent` job with no script,
+- configured `workdir` that no longer exists.
+
+Doctor never mutates jobs or state — it only reports. Pair it with
+`clawk cron incidents` (durable failure records) and `clawk cron runs`
+(attempt ledger) when digging into a flagged job.
+
 ## Delivery options
 
 When scheduling jobs, you specify where the output goes:
@@ -547,10 +685,153 @@ cron:
   wrap_response: false
 ```
 
+### Push notifications (`cron.delivery.notify`)
+
+Cron output is a *final* delivery, not a progress message, so by default it is
+sent with the platform's notification flag set — on Telegram this means the
+brief triggers a push even when the adapter's notification mode is `important`
+(which otherwise sends with `disable_notification=true`, and users report the
+silent brief as "never delivered"). To restore silent deliveries:
+
+```yaml
+# ~/.clawksis/config.yaml
+cron:
+  delivery:
+    notify: false   # default: true
+```
+
+The flag rides both the text send and any media attachments, so a run never
+pushes for one and stays silent for the other.
+
+### Delivery confirmation and the `UNVERIFIED` state
+
+A live-adapter delivery is logged as delivered only on positive evidence from
+the adapter: an explicit `success` that is not a filtered drop
+(`delivered: false`), plus a `message_id` or `raw_response`. A result carrying
+`success` but neither piece of evidence — the shape Slack, Matrix and
+Mattermost adapters return — is still accepted (it is not proof of failure),
+but the run is recorded on the job as `last_delivery_unverified` and surfaces
+in `clawk cron list`:
+
+```
+⚠ Delivery UNVERIFIED: adapter acked slack:C0123456 without message_id/raw_response
+```
+
+and in `clawk cron doctor` as `last delivery unverified (...)`. The marker is
+cleared by the next run that delivers with evidence. An empty payload (no text
+and no media) is never handed to an adapter; it fails closed and is reported in
+`last_delivery_error` instead of being logged as delivered.
+
+### Continuable jobs (reply to a cron delivery)
+
+By default a cron delivery is fire-and-forget: the message is sent, but it does
+not live in the chat's conversation history, so if you reply to it the agent
+has no record of what it said. Set a job **continuable** and the delivered brief
+becomes a conversation you can reply into — the agent has the brief in context
+instead of asking "what is Task #2?".
+
+Opt-in, **default off**. Enable globally in config, or per-job via the `cronjob`
+tool's `attach_to_session` (which overrides the global setting for that one job):
+
+```yaml
+# ~/.clawksis/config.yaml
+cron:
+  mirror_delivery: false   # set true to make cron deliveries continuable
+```
+
+Behaviour is **thread-preferred**, scoped to the job's own conversation:
+
+- **Thread-capable platforms** (Telegram topics, Discord/Slack/Matrix threads): each
+  delivery opens its own dedicated thread and the brief is seeded into that
+  thread's session, so a reply in-thread continues with full context. A
+  recurring job (e.g. a daily brief) opens a fresh thread per run, keeping each
+  delivery's follow-up discussion isolated.
+- **DM-only platforms** (WhatsApp, Signal, SMS): no threads exist, so the brief
+  is mirrored into the target DM session instead (the origin DM, or the home DM
+  for fallback and bare-platform jobs) — the DM itself is the continuation surface.
+
+Only the job's **own conversation** is ever touched:
+
+- the **origin chat** the job was created in;
+- the **home-channel fallback** when `deliver: origin` captured no origin (jobs
+  created by scripts, or from a session on the request/response `api_server`
+  platform, which cannot receive a delivery) — the
+  user's primary conversation standing in for the origin;
+- a job's **single explicit `platform:chat` target**, but only when the job
+  itself opts in with `attach_to_session: true` — the job author declares that
+  target a conversation. The global `mirror_delivery` flag alone never makes an
+  explicitly-addressed chat continuable.
+
+Broadcast expansions (`all`) are never made continuable. A user-written bare
+platform name (`deliver: slack`) addresses that platform's home channel
+deliberately and follows the same rules as the home-channel fallback above.
+After upgrading, existing `deliver: <platform>` jobs with `cron.mirror_delivery: true`
+can open a new thread per run on thread-capable platforms. Set `attach_to_session: false`
+on a job to opt out of this thread-per-run behaviour.
+
+The mirror is written as a labelled user turn (`[Cron delivery: <task name>]`), which keeps
+the conversation history alternation-safe across all model providers.
+
+#### Flat, in-channel continuation (Slack)
+
+The thread-preferred behaviour above mints a dedicated thread on every
+delivery. If you'd rather have a continuable job land **flat in the channel
+timeline** — no thread — set the Slack **continuable surface** to `in_channel`:
+
+```yaml
+# ~/.clawksis/config.yaml
+slack:
+  cron_continuable_surface: in_channel   # default: thread
+  reply_in_thread: false                 # required pairing (see below)
+  require_mention: false                 # so a plain reply continues the job
+```
+
+In `in_channel` mode the brief is delivered as an ordinary top-level channel
+message (no thread is opened), and your reply continues the job via the
+channel's shared session. Three settings work together:
+
+- **`cron_continuable_surface: in_channel`** — skips thread creation on delivery.
+- **`reply_in_thread: false`** (required) — makes the bot answer your reply
+  *flat* in the channel and key it to the same whole-channel session the brief
+  was seeded into. Without it the continuation still works but arrives in a
+  thread (it falls back safely to thread-style continuation, never a dropped
+  reply — the gateway logs a warning at startup so you can spot the mismatch).
+- **`require_mention: false`** (or add the channel to `free_response_channels`)
+  — so you can reply with a plain message; otherwise the bot only wakes when you
+  `@`-mention it on each reply.
+
+Because the continuation is the **whole-channel** session, it is shared: other
+chatter in the channel — and a second continuable in-channel job — join the same
+rolling conversation. That is inherent to "flat in a channel" and is the same
+tradeoff `reply_in_thread: false` users already accept; use the default
+`thread` surface when you want each delivery's follow-up isolated.
+
+This is a Slack capability today. Other platforms accept the key but fall back
+to the `thread` surface (their continuation primitives differ); the choice is
+per-platform, set under each platform's config. It's a gateway-side config flag
+— a `/restart` picks it up; no Slack app reinstall is needed.
+
+:::note 1:1 DMs
+`cron_continuable_surface` is a **channel** setting — a 1:1 DM has no
+thread-vs-timeline split to choose between (the DM is already flat), so the key
+has no effect there. What governs whether a DM cron delivery is continuable is
+the separate, pre-existing knob **`slack.dm_top_level_threads_as_sessions`**:
+
+- **`false`** — all top-level DMs share one rolling DM session, so a continuable
+  cron brief and your reply land in the **same** session and the job continues in
+  context. This is what you want for continuable cron in a DM.
+- **`true`** (default) — each top-level DM message is its own session, so a reply
+  to a delivered brief starts a *fresh* session that has no record of the brief.
+  Continuation does not work in this mode (for cron or any other flat delivery).
+
+So for a continuable cron job delivered to a 1:1 DM, set
+`slack.dm_top_level_threads_as_sessions: false`. `cron_continuable_surface` is
+not required (and is ignored) for DMs.
+:::
+
 ### Silent suppression
 
-
-If the agent's final response starts with `[SILENT]`, delivery is suppressed entirely. The output is still saved locally for audit (in `~/.clawksis/cron/output/`), but no message is sent to the delivery target.
+If the agent's final response contains `[SILENT]`, delivery is suppressed entirely. The output is still saved locally for audit (in `~/.clawksis/cron/output/`), but no message is sent to the delivery target.
 
 This is useful for monitoring jobs that should only report when something is wrong:
 
@@ -581,14 +862,12 @@ with a non-zero exit code.
 
 ## Script timeout
 
-
-Pre-run scripts (attached via the `script` parameter) have a default timeout of 120 seconds. If your scripts need longer — for example, to include randomized delays that avoid bot-like timing patterns — you can increase this:
+Pre-run scripts (attached via the `script` parameter) have a default timeout of 3600 seconds (1 hour). This bounds the **script only** — skill-based / LLM-driven jobs run on a separate inactivity budget and are not capped by this value. If your scripts need a different limit, you can change it:
 
 ```yaml
 # ~/.clawksis/config.yaml
 cron:
-
-  script_timeout_seconds: 300   # 5 minutes
+  script_timeout_seconds: 1800   # 30 minutes
 ```
 
 Or set the `CLAWK_CRON_SCRIPT_TIMEOUT` environment variable. The resolution order is: env var → config.yaml → 3600s default.
@@ -842,8 +1121,7 @@ Local (built-in ticker) deployments don't need this — the ticker already picks
 
 ## Schedule formats
 
-
-The agent's final response is automatically delivered — you do **not** need to include `send_message` in the cron prompt for that same destination. If a cron run calls `send_message` to the exact target the scheduler will already deliver to, Clawksis skips that duplicate send and tells the model to put the user-facing content in the final response instead. Use `send_message` only for additional or different targets.
+The agent's final response is automatically delivered to the job's `deliver:` target — the agent no longer fires messages itself, so the user-facing content simply goes in the final response. To deliver to **additional or different** targets, list multiple `deliver:` targets on the cron job (comma-separated, e.g. `deliver: "telegram,discord"`) rather than having the agent send them.
 
 ### Relative delays (one-shot)
 
@@ -1009,7 +1287,6 @@ The `wakeAgent` gate gives you a $0 way to decide whether a scheduled job should
 #!/usr/bin/env bash
 # ~/.clawksis/scripts/feed-changed.sh
 FEED="$HOME/data/feed.json"
-
 STATE="$HOME/.clawksis/scripts/.feed-changed.last"
 test -f "$FEED" || { echo '{"wakeAgent": false}'; exit 0; }
 mtime=$(stat -c %Y "$FEED")
@@ -1096,6 +1373,14 @@ The referenced jobs' most recent completed outputs are injected above the prompt
 ## Job storage
 
 Jobs are stored in `~/.clawksis/cron/jobs.json`. Output from job runs is saved to `~/.clawksis/cron/output/{job_id}/{timestamp}.md`.
+
+Job definitions are plain JSON on disk: they survive `clawk update`, gateway restarts, and machine reboots. A job that was mid-run during a restart is marked `unknown` in the execution ledger — it is not automatically retried, but the job's next scheduled tick fires normally. See [Execution history](#execution-history) for details.
+
+:::tip
+Ask the agent to manage jobs through the `cronjob_manage` tool, `clawk cron edit`, or `/cron` — not by patching `jobs.json` directly. Direct edits can fail silently when [file write safety](../security.md#file-write-safety) blocks the path (for example when `CLAWK_WRITE_SAFE_ROOT` is set), and the [file-mutation verifier](../configuration.md#file-mutation-verifier) footer is the authoritative signal that nothing was saved.
+:::
+
+If a hand edit leaves `jobs.json` malformed, the scheduler repairs it on the next load instead of stopping: entries in the `jobs` list that are not JSON objects are dropped, and a `repeat.completed` that is not a non-negative integer is reset to a valid count (0 when it can't be read). Each repair is logged as a warning (value types only, never contents).
 
 Jobs may store `model` and `provider` as `null`. When those fields are omitted, Clawksis resolves them at execution time from the global configuration. They only appear in the job record when a per-job override is set.
 

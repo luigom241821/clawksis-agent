@@ -109,8 +109,13 @@ Anthropic (Claude Pro/Max), OpenAI Codex, and xAI OAuth logins use **single-use 
 ### Clone from a specific profile
 
 ```bash
+clawk profile create work --clone-from coder
+```
 
-clawk profile create work --clone --clone-from coder
+`--clone-from <source>` selects the source profile directly and implies a config/skills/SOUL clone. Combine it with `--clone-all` when you want a full copy of that source profile:
+
+```bash
+clawk profile create work-backup --clone-from coder --clone-all
 ```
 
 ### Messaging channels are never cloned (`--clone-channels` to opt in)
@@ -166,8 +171,7 @@ never start adapters on a half-copied tree. A symlinked source `.env`/`config.ya
 materialized as a private copy first — the clone never writes through to the source.
 
 :::tip Honcho memory + profiles
-
-When Honcho is enabled, `--clone` automatically creates a dedicated AI peer for the new profile while sharing the same user workspace. Each profile builds its own observations and identity. See [Honcho -- Multi-agent / Profiles](./features/memory-providers.md#honcho) for details.
+When Honcho is enabled, clone operations automatically create a dedicated AI peer for the new profile while sharing the same user workspace. Each profile builds its own observations and identity. See [Honcho -- Multi-agent / Profiles](./features/memory-providers.md#honcho) for details.
 :::
 
 ## Using profiles
@@ -305,6 +309,20 @@ If you want this profile to work in a specific project by default, also set its 
 coder config set terminal.cwd /absolute/path/to/project
 ```
 
+### From the dashboard
+
+The [web dashboard](features/web-dashboard.md#managing-multiple-profiles)
+is a machine-level surface that can manage **any** profile's config, API
+keys, skills, MCPs, and model via the profile switcher in its sidebar — no
+per-profile dashboard needed. `coder dashboard` routes to the machine
+dashboard with the `coder` profile preselected. The dashboard's Chat tab
+also follows the switcher, spawning a conversation under the selected
+profile's home.
+
+Note: "Set as active" on the dashboard's Profiles page is the sticky
+default for **future CLI/gateway runs** (same as `clawk profile use`) —
+to edit a profile from the dashboard, use the switcher instead.
+
 ## Updating
 
 `clawk update` pulls code once (shared) and syncs new bundled skills to **all** profiles automatically:
@@ -386,6 +404,32 @@ Add the line to your `~/.bashrc` or `~/.zshrc` for persistent completion. Comple
 Profiles use the `CLAWK_HOME` environment variable. When you run `coder chat`, the wrapper script sets `CLAWK_HOME=~/.clawksis/profiles/coder` before launching clawk. Since 119+ files in the codebase resolve paths via `get_clawk_home()`, Clawksis state automatically scopes to the profile's directory — config, sessions, memory, skills, state database, gateway PID, logs, and cron jobs.
 
 This is separate from terminal working directory. Tool execution starts from `terminal.cwd` (or the launch directory when `cwd: "."` on the local backend), not automatically from `CLAWK_HOME`.
+
+On host installs, tool subprocesses keep your real OS-user `HOME` by default so
+existing CLI credentials under `~` keep working across profiles. Profile data is
+isolated by `CLAWK_HOME`, not by changing `HOME`. Container backends still use
+`{CLAWK_HOME}/home` for persistent tool state, and host users who need strict
+per-profile tool config can opt in with `terminal.home_mode: profile`.
+
+This means two things that are easy to mix up:
+
+- `CLAWK_HOME` is the profile boundary. It controls Clawksis config, `.env`,
+  memory, sessions, skills, logs, cron jobs, gateway state, and other Clawksis
+  data.
+- `HOME` is the operating-system/user home that external CLIs expect. On host
+  installs, Clawksis keeps it as the real user home by default so tools like
+  `git`, `ssh`, `gh`, `az`, `npm`, Claude Code, and Codex find the same
+  credentials they use in your normal shell.
+
+The tradeoff is that host profiles share normal user-level CLI state by default.
+If you need separate CLI identities per profile, set `terminal.home_mode:
+profile` in that profile's `config.yaml`. In that mode Clawksis launches tool
+subprocesses with `HOME={CLAWK_HOME}/home`; you then need to initialize or link
+the profile-specific `~/.ssh`, `~/.gitconfig`, `~/.config/gh`, cloud CLI auth,
+Claude/Codex auth, npm state, and similar files inside that profile home.
+
+Clawksis also exposes `CLAWK_REAL_HOME` to subprocesses so scripts can still find
+the actual account home when `home_mode: profile` is active.
 
 The default profile is simply `~/.clawksis` itself. No migration needed — existing installs work identically.
 

@@ -64,8 +64,72 @@ The center of the app. You get:
 - **Unsent drafts survive a lost session** — a draft you typed into a chat whose session no longer exists (deleted elsewhere, or a stale tab after a profile rename or wiped backend) is carried into the fresh chat the app falls back to, with an inline **Restored your unsent message** strip above the input. **Undo** puts the text back where it was; nothing is sent, navigated, or focused on your behalf, and the strip appears once per lost draft.
 - **Directive chip actions** — hover an actionable reference (such as a URL) to reveal its action pill. A short grace period lets you move from the chip to the pill before it dismisses. The pill stays available while you move within it; after leaving, unrelated pointer movement does not delay dismissal. Clicking its action preserves the draft selection.
 - **A right-hand preview rail** — render web pages, files, and tool outputs side by side while you keep chatting.
+- **Hide vs. Close for stateful panes** — a zone holding a Browser (or HTML preview) or the Terminal pane offers **Hide** instead of Minimize. Hiding collapses the zone to its restore rail but keeps the pane's body mounted: a live page keeps its unsaved form input, timers, scroll position, and the agent's `drive_preview` automation target; a terminal keeps its running shell and scrollback; and **Restore** shows the same content without a reload. The hidden body is inert — it never takes keyboard shortcuts or steals composer focus. **Close** (the tab's ×) is what actually releases the page or shell.
+- **Comment mode in the in-app browser** — click **Annotate** in the preview browser bar, then click any element (or drag a box) on the live page and type a note; each saved comment stays as a numbered pin on the page. Saving a pin never sends a turn — when you're done, **Add N comments** attaches a cropped screenshot per pin and a short prompt naming each comment to the composer, and you still hit send yourself. Each element comment carries its CSS selector, its markup, and the computed styles that matter for layout, so the agent can find the element in your source instead of guessing from the picture. Password and hidden field values, and any attribute that looks like a key or token, are redacted on the page before the markup leaves it. Larger batches arrive grouped by which part of the page each comment sits in, so twenty-odd comments become a handful of pieces of work rather than one task each — and because the groups are separate DOM subtrees they usually touch separate files, which is what makes handing them to parallel workers safe. Pin numbers hold steady if you delete one, and switching chats clears the stack.
+- **Composer history and queue editing** — press the up/down arrow keys in an empty composer to recall and reuse previous prompts, and edit messages you've queued up before they're sent. Pressing Stop (or Esc) while turns are queued pauses the queue and expands it above the composer; resume it from there, or send, edit, and delete individual entries. The queue itself lives on the gateway, so it survives an app or gateway restart and every window attached to the same chat sees the same list. If the gateway restarts while a turn is mid-flight, that turn cannot be finished or safely repeated: the queue shows it as **Turn lost during restart** with a single **Discard** button, and the turns queued behind it wait until you discard it. Your text stays in the transcript to resend. (The gateway CLI has the same control as `/discard <admission_id>`.)
+- **Task progress above the composer** — expand the Tasks header to inspect each phase. Long lists stay bounded above the input; scroll inside the expanded list to reach the final tasks without moving the conversation.
+- **A conversation timeline rail** — long chats get a slim rail of markers along the edge of the transcript, one per prompt. Hover it to pop open the list of prompts, click one to jump straight to that point in the conversation. After a jump, **Show earlier** at the top of the transcript keeps paging backwards from that prompt all the way to the start of the session. (It appears once the chat has a handful of turns.)
+- **Reading-position memory** — returning to a session restores its saved distance from the bottom instead of always jumping to the latest message. Sessions left at the bottom continue following new output. Use **Scroll to bottom** to return to the live edge. Positions are kept in this Desktop installation's local storage; they are not synchronized through the backend.
+- **Find in page** — press **Cmd/Ctrl+F** to open a find bar that searches the rendered chat transcript. Enter / Shift+Enter (or Cmd/Ctrl+G / Cmd/Ctrl+Shift+G while the bar is open) step through matches; Esc closes it.
+
+Async cron and delegation completions appear as collapsed timeline disclosures. Open the completion label to read the result body (including job output) as Markdown; long reports scroll within the disclosure. Task instructions and delivery envelopes are not shown as report content.
+
+#### Status bar
+
+The bar along the bottom of the chat shows live session state and exposes quick controls without opening Settings:
+
+- **Per-session YOLO toggle** — flip YOLO on or off for just this session (matching the TUI). YOLO bypasses the dangerous-command approval prompts, so know what you're turning off — see [Security → YOLO Mode](./security.md#yolo-mode).
+- **Context-usage meter** — a live "% full" meter of the session's context window. Click it to open the **Context Usage** popover with a token breakdown by category (system prompt, tool definitions, skills, memory, rules, MCP, subagent definitions, and the conversation itself) so you can see exactly what's eating the window before compression kicks in.
+- **Cache hit rate and tokens per second** — off by default; turn them on from the right-click menu. Cache hit rate is the share of this session's prompt tokens served from the provider's prompt cache (cached tokens cost less, so higher is cheaper — you can watch a session get cheaper as it warms up). Tokens per second is output throughput averaged over the last 10 model calls. Both update live during a turn.
+- **Customizable items** — right-click the status bar (**Show in status bar**) to choose what appears: the context meter, cache hit rate, tokens per second, workspace, model, approvals, turn/session timers, terminal, Command Center, backend version, and more — or hide the bar entirely (**Cmd/Ctrl+Shift+S** toggles it). The workspace item's menu offers **Open containing folder** only when the focused session runs on this computer; a session on a remote gateway keeps its folder on that machine, so use **Reveal in filetree** instead. When the OS file manager cannot find a path, the app says so instead of doing nothing.
 
 Chatting against a Clawksis instance on another machine instead of the bundled local backend? See [Connecting to a remote backend](#connecting-to-a-remote-backend) below — and for the full picture of how the remote-hosted dashboard connection works (the auth gate, the `/api/ws` chat socket, and WebSocket close-code triage), see [Web Dashboard → Connecting Clawksis Desktop to a remote backend](./features/web-dashboard.md#connecting-clawk-desktop-to-a-remote-backend).
+
+#### Fonts
+
+Two independent font settings live in **Settings → Appearance**, both stored per profile in `config.yaml`:
+
+- **Chat Font** (`desktop.font_family`) — chat and the rest of the app's UI. Readability faces such as OpenDyslexic or Atkinson Hyperlegible work as soon as they are installed on the system; the active theme's stack stays behind your pick so missing glyphs still render. Blank means the theme's font.
+- **Terminal Font** (`terminal.font_family`) — the embedded terminal pane; Nerd Fonts render shell icons here. Blank means the bundled JetBrains Mono.
+
+#### Repository discovery
+
+Clawksis Desktop discovers local Git repositories for the Projects sidebar by scanning your home directory to a bounded depth. You can change this per profile in **Settings → Workspace**, or in `config.yaml`:
+
+```yaml
+desktop:
+  repo_scan_enabled: true
+  repo_scan_roots: []
+  repo_scan_exclude_paths: []
+```
+
+- Set `repo_scan_enabled: false` to stop the filesystem scan completely. Existing disk-discovery cache rows for that profile are cleared; explicit projects and repositories inferred from intentional Clawksis sessions remain available.
+- Set `repo_scan_roots` to a list of folders to restrict scanning. An empty list preserves the default home-directory scan.
+- Set `repo_scan_exclude_paths` to folders whose complete subtrees should be skipped.
+
+Changing any of these values invalidates only that profile's disk-discovery cache and starts a policy-compliant refresh. **Hide from sidebar** remains a separate per-item curation action.
+
+With **Group by → Projects**, each project row previews its three most recent sessions. A project with more ends in a **Show all N sessions** row that expands the rest in place; the sidebar menu's **Show all sessions** toggle removes the preview cap for every project at once.
+
+#### Choosing a model
+
+The model picker lives in the **composer**, just left of the microphone. Click it to switch the model; hover a model row for its options (thinking, effort, fast). Next to it, a **reasoning pill** shows the active model's effort level (`Med`, `High`, …) and opens the same options directly, so you can change effort without finding the model's row. The pill is hidden for models whose catalog reports no reasoning control. When the route clamps a Clawksis-internal step (`ultra` is sent as the route's strongest level, e.g. `max`), the pill shows both ends (`Ultra→Max`) and its tooltip spells out the same wording as the CLI, `Ultra (sends Max on this route)`, so the level you see is the level that is sent. When the gateway flags a switch as risky (a large cached context, an expensive model, a data-training tier), the app asks first in a dialog: **Switch anyway** applies it, **Keep current model** (or Esc) leaves everything as it was.
+
+The **microphone** is dictation; hover it and the other voice toggles fan out above it — **Read replies aloud** and the **wake word** ear. A toggle that is on shows as a solid disc. Starting a full voice conversation stays on the primary button to the right. In the HUD and in narrow tiles the same controls fold into one menu behind the mic instead. When dictation talks to the speech-to-text provider directly (client-direct voice), the request honours the same `stt.openai.timeout` budget (default 60 s) as the gateway's own transcription client, so a slow endpoint fails with "Transcription timed out" instead of leaving the mic stuck on transcribing.
+
+- **The composer picker is sticky UI state and never touches your default.** It's remembered locally (per device) and **follows** across new chats and restarts instead of snapping back to the default — pick a model once and the next `Cmd/Ctrl+N` opens on it. With a live chat, switching models scopes the change to that **current chat**; either way the selection rides along when the session is created/switched and is **never** written to the profile default — with one exception: on a fresh profile that has no `model.default`/`model.provider` configured yet, the first pick is persisted so the app has a real default instead of falling through to a stray API-key env var on restart. Persistence follows the same rule as `/model` (`model.persist_switch_by_default`); use **Settings → Model** to change the default deliberately. (Switching [profiles](#sessions--profiles) reseeds to that profile's own default.)
+- **Set the default in Settings → Model → Main model.** Choose a provider and model in their labeled rows, then click **Apply** below the model selector. Controls align to the right on wide windows and stack below their labels on narrow windows. The **Defaults** section has separate reasoning and speed controls where the model supports them. That "main" model is your **per-profile global default**, which new chats, crons, subagents, and auxiliary tasks start from. Each [profile](#sessions--profiles) keeps its own default.
+- **Per-model effort/fast presets.** Each model remembers its own reasoning effort and fast-mode choice in the desktop app, re-applied to the session whenever you pick that model. These presets are a desktop convenience and don't change crons or subagents.
+- **Favorite models.** Click the star on the left of a model row (or shift-click the row, the same gesture that pins a chat in the sidebar; Shift+Enter from the search box) to lift it into a **Favorites** section at the top of the picker. Starring never selects the model or closes the menu, so the same gesture undoes it. The section only appears once something is starred. Favorites show in the composer, in session tiles, and anywhere else a model is picked, because they are one stored preference. They persist per device, keep the order you starred them, and ignore the **Edit models** shortlist (a star IS an explicit "always show me this one"); a favorite for a provider that is not connected is kept and reappears when it reconnects. Searching is unaffected — a query lists every match in its provider's place.
+- **Mid-chat switches reset the prompt cache.** Switching the model inside a live chat means the next message re-reads the whole conversation at full input price (provider prompt caches are keyed to the model). Fine occasionally; on a long chat, a fresh chat on the new model is often cheaper than bouncing back and forth.
+
+#### Subagent models and limits
+
+Open **Settings → Model → Subagents** to choose a delegated agent's provider and model and adjust its turn limit, concurrency, timeout, and reasoning effort. Provider and model dropdowns have separate labeled rows, with controls aligned to the right on wide windows and stacked below their labels on narrow windows. The catalog and saved changes belong to the profile selected under **Applies to**.
+
+Provider and model changes remain a local draft until you click **Apply**. **Cancel**, leaving the page, or changing the settings profile discards an unapplied route. A provider switch requires a model; select **Use parent model** explicitly for a provider-only override, and make sure that provider supports the parent's model.
+
+**Inherit from main agent** uses the parent's model and credentials. **Custom model (use parent credentials)** overrides only the model. Existing direct endpoints are shown as **Direct endpoint override**. Applying a different route clears the superseded delegation endpoint, its stored key and its wire protocol together, without removing other request settings. If the catalog is unavailable, use **Custom provider...** and **Custom model…** to enter a route manually, or click **Retry** without losing your draft.
 
 ### File browser
 
@@ -202,6 +266,32 @@ The pre-window reader is a small YAML subset, not the full parser the rest of Cl
 
 Manage providers, models, tools, and credentials from a real UI instead of editing YAML. First-run onboarding gets you to your first message in seconds. The settings panes cover providers/keys, model selection, toolset configuration, MCP servers, the gateway, and session management.
 
+- **Providers settings pane** — a dedicated place to manage inference providers, with an Accounts / API-keys UX for signing in and storing credentials per provider. Accounts, API keys, and Custom Endpoints share the Settings **Applies to** selection: credential reads and edits, OAuth account removal, custom-endpoint save/test, and sign-in launched here target the selected profile, not the active chat profile. The sign-in flow keeps that target through credential saving and model selection. Changing **Applies to** discards unsaved credential drafts. Closing sign-in cancels polling and ignores late results; a credential write already sent may still finish in its original profile. Externally managed CLI credentials use their own CLI and are not covered by this profile selector. Its **Local Models** view installs and manages an on-device llama.cpp runtime — see [Local Models](./local-models.md).
+- **Every provider and model in the menus** — the GUI surfaces the full provider list and every model that `clawk model` knows about, so you pick from the same catalog the CLI sees rather than a curated subset.
+- **Custom endpoints with an API mode** — **Settings → Providers → Custom Endpoints** has an **API Mode** selector (**Auto-detect**, **Chat Completions**, **Responses API**, **Anthropic Messages**) — the same choice `clawk model` offers for a custom provider. It is saved as `providers.<id>.api_mode` in `config.yaml`, so a Responses-only or Anthropic-compatible host is no longer called on `/chat/completions`. **Test** checks the transport you will actually use, not just `/v1/models`: it sends a one-token request to the pinned mode's route (or to the mode Auto-detect resolves to) and fails with the transport named when the host does not serve it. **Test** also keeps the alias metadata a gateway advertises in `/v1/models` (`canonical_model`, `reasoning_effort`): picking an alias such as `gpt-5.6-sol-high` saves the canonical model and pins its effort under `agent.reasoning_overrides`.
+- **xAI Grok OAuth** — Grok is a first-class OAuth provider in the launcher; sign in through the browser flow like the other OAuth providers.
+- **Tool-backend installs from the GUI** — run a tool backend's post-setup install steps directly from the app instead of dropping to a terminal. In the terminal backend picker, selecting a backend marked **Needs setup** asks for confirmation first; declining leaves the current backend selected.
+- **Terminal font picker** — choose an installed font in **Settings → Appearance**. Nerd Fonts such as `MesloLGS NF` render Powerlevel10k separators and icons in both interactive and agent terminals; the setting is saved per profile.
+- **Reasoning Blocks** — **Settings → Chat → Reasoning Blocks** (`display.show_reasoning` in `config.yaml`) shows or hides the model's thinking in the transcript (off shows answers only). Open chats update as soon as the setting saves. Typing `/reasoning hide` or `/reasoning show` in the composer flips the same setting and the open transcript follows immediately.
+- **Reopen Last Chat on Launch** — by default the app picks up where you left off on cold start. Turn it off in **Settings → Appearance** (or set `display.resume_last_session: false` in `config.yaml`) to always begin with a fresh chat. Deep links and explicit destinations are never overridden either way.
+- **Auxiliary-model warning** — if you switch the main model to a new provider while auxiliary tasks (titling, summarization, and similar helpers) are still pinned to another provider, the app warns you so you don't unknowingly split work across two providers.
+- **Per-task reasoning effort** — each row under **Settings → Model → Auxiliary models** has a reasoning selector next to its provider/model pick: a level, **Off**, or **inherit · main model effort** (the default, which removes the task's override). It is saved as `auxiliary.<task>.reasoning_effort` in `config.yaml`, the same key `clawk model` writes, and shows in the row's summary when set. Use it to run frequent helpers such as compression or titling at low or no reasoning while the main agent stays at high.
+- **VS Code Marketplace themes** — beyond the built-in theme presets, the appearance settings include a live VS Code Marketplace search: pick any color theme and the app downloads, converts, and installs it as a desktop theme. The same importer is available from the command palette (*Install theme*), and imported themes can be removed again from the appearance settings.
+- **Keep computer awake** — **Settings → Advanced → Keep computer awake** stops the machine from sleeping so long or overnight agent runs keep going (the display can still dim). **While working** holds the machine awake only while a turn is in flight and lets it sleep normally once the run finishes or fails; **Always** holds it whenever Clawksis is open. **While working** is the default on a computer where nobody has picked a mode. If you turned it **Off** and a timed sleep interrupts a turn, Clawksis offers **Keep awake while working** once on wake. Closing the lid or choosing Sleep still sleeps the machine, and on battery Windows may still sleep after its own timeout. This is a per-computer setting.
+
+First-run onboarding has been redesigned on a unified overlay design system, and you can pick **Choose provider later** to skip provider setup and get into the app first.
+
+#### Per-profile settings: the "Applies to" scope
+
+When you have two or more [profiles](./profiles.md), the config-backed settings pages — **Model, Workspace, Safety, Memory & Context, Voice, Chat, Advanced, and Tools & Keys** — plus **Providers → Custom Endpoints** and the **Messaging** overlay show a shared **Applies to** chip row at the top. It selects which profile your edits target:
+
+- The default selection **follows the active profile**, which behaves exactly as before — edit the profile you're using.
+- Pick another profile to view and edit *its* settings without switching the whole app; the selection persists as you move between settings pages.
+- Switching the app's active profile resets the selector, so edits can't silently keep landing on a previously selected profile.
+- With fewer than two profiles the chip row is hidden entirely.
+
+(The Gateways page handles profiles differently — via its **Per-profile overrides** subsection — and the Capabilities and Scheduled Jobs views have their own scope selectors.)
+
 ### Management panes
 
 The app also surfaces the broader Clawksis management surface so you don't have to drop to a terminal:
@@ -212,6 +302,76 @@ The app also surfaces the broader Clawksis management surface so you don't have 
 - **Profiles** — switch between [Clawksis profiles](./profiles.md) (isolated config/skills/sessions).
 - **Messaging** — set up gateway channels. Telegram has a **Quick setup** card: click **Create with QR**, scan the code (or open the link) in Telegram, and Clawksis creates the bot, detects your user ID for the allowlist, saves the credentials, and restarts the gateway for you. Any credential save, clear, or enable toggle keeps a **Restart now** banner on the page until the gateway has actually restarted; if a restart fails, the banner stays so you can retry or restart manually.
 - **Agents** and **Command Center** — orchestration surfaces for multi-agent work.
+
+### Bot Mode (built in)
+
+**Bot Mode** ships with the app and is on by default: a "one chat per agent"
+roster where every [Clawksis profile](./profiles.md) appears as a bot with its
+own avatar (geometric face, uploaded image, AI-generated portrait, or a pixel
+pet), its own canonical **Bot Chat** conversation, and its own **Routines**
+(recurring tasks backed by Clawksis cron). The roster lives in the left
+sidebar as a tab next to your conversations — a **Sessions | Bots** tab
+strip — rather than a second pane stacked below the session list. Installs
+that picked up the older stacked layout are re-homed into the tab strip
+automatically, once; if you've hand-placed panes yourself, your layout is
+left alone. The **Cronjobs** (Routines) pane docks beside the chat only
+while the Bots tab is active and disappears when you switch back to
+Sessions (older desktop builds keep it always visible).
+
+Create new agents from the roster —
+Name / Title / Description plus an Advanced disclosure with the full
+capabilities surface (model, SOUL, skills, toolsets, MCP servers) — group
+them into sections, and open group chats where several bots deliberate.
+Group chats appear as standalone Discord-style rows in the roster — stacked
+member avatars, member count, a preview of the latest room line, and the
+"needs you" badge — interleaved with the bot rows in the same pin+recency
+ordering. Clicking a group row opens the room as a tab that takes over the
+**main chat window** (older desktop builds fall back to opening it inside the
+bots side panel).
+
+Bots message each other: type `@researcher have a look at this` in any chat
+and the active bot hands the message off and reports back, and bots reach
+each other's Bot Chats directly (`clawk -p <bot> chat`). The backend teaches
+each bot's canonical **Bot Chat** session the messaging protocol
+automatically (config `agent.bot_mode_protocol`, default on) — including
+when a teammate bot opens it headlessly from the CLI — so bot-to-bot
+replies and handoffs work without touching your SOUL.md, and your regular
+sessions stay untouched.
+
+Bot Mode's sessions — each bot's canonical Bot Chat and every group-chat
+member session — are always hidden from the global Sessions sidebar. They
+live in the Bots pane (roster rows, room views, and each bot's session
+browser) instead of interleaving with your own conversations.
+
+Bots you don't use can be tucked away: right-click a bot row → **Hide
+Bot**. Hidden bots leave the roster but keep working — @mentions still
+resolve and group-chat membership is untouched. An eye toggle appears in
+the Bots header whenever at least one bot is hidden; click it to reveal
+hidden bots dimmed in place (right-click → **Unhide Bot** brings one back),
+and the eye shows a dot when a hidden bot has unread activity. Hidden
+state is stored in the bot's profile, so it follows the bot across
+machines.
+
+Don't want it? Flip its **Desktop** switch off in **Capabilities → Plugins → Bots** — the roster,
+routines pane, and composer middleware unregister live, no restart needed.
+
+Full guide — creating agents (including the multi-machine **Create on**
+picker), the roster across connections, bot-to-bot mentions, and how group
+chats decide who replies: [Bot Mode: A Roster of Agents](./bot-mode.md).
+
+### Keyboard & navigation
+
+- **Command palette** — press **Cmd+K** or **Cmd+P** (Ctrl+K / Ctrl+P on Windows/Linux) to jump to actions and navigate the app from the keyboard: open any page or settings section, jump to a session by title or id, switch model/theme/color mode, spawn a terminal, restart the gateway, update Clawksis, and more.
+- **Rebindable shortcuts** — **Settings → Keyboard Shortcuts** (or **Cmd/Ctrl+/**) opens the shortcuts panel where you can remap almost every binding — profile switching, session navigation, view toggles, and any shortcuts contributed by desktop plugins. Duplicate assignments are flagged as conflicts. A few defaults worth knowing: **Cmd/Ctrl+N** new session, **Cmd/Ctrl+.** Command Center, **Cmd/Ctrl+,** Settings, **Cmd/Ctrl+Shift+F** search sessions, **Cmd/Ctrl+1–9** switch to the Nth tab of the pane under the pointer (or the focused pane) and switch profiles when no pane has a tab strip, **Shift+X** toggle light/dark.
+- **Custom zoom shortcuts** — zoom the interface in half-step increments for finer control over text size.
+- **UI language switcher** — change the app's interface language in-app: English, Simplified Chinese (zh-Hans), Traditional Chinese (zh-Hant), Japanese, Arabic (RTL), and Russian.
+
+### Sessions & profiles
+
+- **Session-list overhaul** — a reworked session list with archiving and general session hygiene to keep the list manageable as it grows.
+- **Search sessions by id** — find a specific session directly by its id.
+- **Concurrent multi-profile sessions** — run sessions across multiple [profiles](./profiles.md) at the same time, and reference a session in another profile with cross-profile `@session` links.
+- **Export / import a profile** — share a whole setup as a single file. **⌘K → Export profile…** (or right-click a profile square in the rail) writes a `.tar.gz` with skills, memory, persona, crons, plugins, and settings; API keys are stripped. Exporting from the desktop also bundles your appearance and interface — skin, light/dark mode, custom themes, the profile's rail color, and your window layout — so an imported profile arrives looking the way the sender had it. Import via **⌘K → Import profile…** or the button beside the rail's **+**; it applies the overlay and drops you into the new profile. The same archive works with `/export` / `/import` in chat and `clawk profile export` / `import` from a shell. See [Export and import a profile file](./profile-distributions.md#export-and-import-a-profile-file).
 
 ## Updating
 
@@ -252,12 +412,48 @@ The packaged app ships the Electron shell and a native React chat surface. On fi
 
 By default the app starts and manages its own **local** backend. You can instead point it at a Clawksis backend running on another machine — a VPS, a home server, or a Mini behind Tailscale.
 
-The connection has two halves: on the backend you protect the dashboard with a **username and password**, and in the app you enter the backend's URL and sign in with those credentials. Binding the dashboard to a non-loopback address automatically engages its auth gate, so the username/password provider is what lets the desktop app through.
+Everything connection-related lives on one settings page: **Settings → Gateways**. (Older builds split this across separate **Gateway** and **Connections** pages — those are now unified, and old `?tab=connections` deep links redirect to the unified page.)
+
+**Settings → Gateways → Connection mode** offers the alternatives to the local gateway:
+
+- **Remote gateway** — enter the URL of a `clawk serve` backend you run yourself and sign in. This is the mode the rest of this section walks through.
+- **Clawksis Cloud** — sign in once to Clawksis Cloud and pick from the agents on your account; no URL to paste. The app discovers your agents (with an organization picker if your account spans several orgs), and connecting to one switches the session over automatically. The status bar shows the cloud connection while it's active.
+
+Gateway connections are **machine-level**: the Gateways page manages which gateway backends this desktop can connect to, and profiles are discovered *from* the gateways you connect. Sessions select one gateway at a time, while the adjacent profile rail selects a profile discovered on that gateway.
+
+### The multi-connection registry
+
+Further down the same **Settings → Gateways** page, **Registered gateways** manages a named list of every Clawksis gateway the app knows about — the local runtime, any number of remote gateways (LAN, Tailscale, internet), Clawksis Cloud instances, and SSH hosts — all persisted together in one place. You can jump there from the plug button at the right end of the sidebar profile rail (**Connect another Clawksis gateway…**) or via **⌘K → Gateways**. The full guide, including the union agent roster, `@name-device` handles, fleet-wide updates, and the plugin SDK surface, is at [Connecting Desktop to Many Clawksis Instances](./multi-connection-desktop.md).
+
+- **Every connection needs a unique name** (a device name such as "Homelab" or "Work laptop"). When the same profile name exists on several registered gateways, surfaces disambiguate it as `@profile-device` (e.g. `@research-homelab`).
+- **Switch gateways from the Sessions sidebar.** A named gateway selector appears when more than one gateway is registered and handles any registry size without making gateways look like profiles. The adjacent profile rail then shows only that gateway's agents and remembers the last profile used there; large profile sets condense independently.
+- **Hide the profile rail.** If your profiles are bots rather than workspaces, the colored strip of profile squares at the foot of the sidebar duplicates the sessions list. Turn it off from the Sessions view menu (**Profile rail**), the shell's right-click menu, or **⌘K → Toggle profile rail**. While it is hidden, a **Profiles** dropdown appears in the status bar next to the gateway selector with the same choices — this gateway's profiles, other gateways' agents, **New profile**, **Import profile…**, **Manage profiles…** — so switching profiles always has a door.
+- **Choose what opens after a restart.** **Open on launch** keeps the backward-compatible **Primary gateway** default, or can resume the **Last used** gateway after it connects successfully. This preference is stored outside the application bundle and survives Desktop updates.
+- **Add / edit / remove / test** connections from the panel. The **Add** flow offers all four kinds — **Local**, **Clawksis Cloud**, **Remote gateway**, and **SSH** (the Local button is disabled while the app-managed local entry exists, and a hint points cloud adds at the sign-in/discovery flow above). The local entry is managed by the app and cannot be removed. **Test** probes the connection's own HTTP and WebSocket legs directly.
+- **Duplicates are rejected at save time**: only one **local** entry ever; remote and cloud entries are deduplicated on the normalized URL (trimmed, trailing slashes stripped, lowercased — across both kinds); SSH entries on the normalized `user@host:port` plus remote profile.
+- Existing settings are **imported automatically** the first time you run a build with the registry: your current global connection and any legacy per-profile overrides become named entries. The legacy settings file is left untouched, so older builds keep working.
+- Cloud entries come from the Clawksis Cloud sign-in/discovery flow above, not from a hand-typed URL.
+- Tokens are stored encrypted with the OS keyring (with an explicit plain-text opt-in on keyring-less Linux).
+
+Side-by-side routing is live: each registered gateway dials its own backends and sockets on demand (keyed per connection + profile), the plugin SDK exposes the union agent roster (`host.agents()` / `host.ensureAgent()`), and **Update all instances** on the Gateways page dispatches `clawk update` to every eligible gateway at once — Clawksis Cloud entries are skipped (the platform updates them), and each instance reports its own result.
+
+
+:::info The remote backend is a running `clawk serve` process
+"Remote backend" means a **`clawk serve`** server running on the remote machine — that is the process the desktop app connects to. Nothing in this section works unless that backend is actually up and reachable. The desktop app does not start it for you; you (or a `systemd` service) keep `clawk serve` running on the remote host, and the app attaches to it. If you also use messaging channels (Telegram, Discord, etc.), the **gateway** is a *separate* long-running process you start independently — see the note after the setup steps.
+:::
+
+The connection has two halves: on the backend you protect it with an **auth provider**, and in the app you enter the backend's URL and sign in. Binding the backend to a non-loopback address automatically engages its auth gate, and the provider you configure is what lets the desktop app through.
+
+**Pick a provider based on where the backend lives:**
+
+- **OAuth (Nous Portal) — preferred for anything reachable beyond your own machine.** Logins are verified against your Nous account, so this is the option suitable for a VPS, a public host, or any remote backend. Register the dashboard with `clawk dashboard register` (or the Portal [`/local-dashboards`](https://portal.nousresearch.com/local-dashboards) page) to provision its OAuth client, then sign in from the app with **Sign in with Nous Research**. A self-hosted OIDC provider works the same way if you run your own identity provider.
+- **Username/password — local / trusted-network use only.** The simplest option when the backend is on the same trusted LAN or reachable only over a VPN (e.g. Tailscale). It protects a single shared credential with no external identity provider, so **do not use it for a dashboard exposed to the public internet** — reach for OAuth there instead.
+
+The rest of this section shows the username/password path because it's the quickest to stand up on a trusted network; for the OAuth path see [Web Dashboard → Default provider: Nous Research](./features/web-dashboard.md#default-provider-nous-research).
 
 ### On the backend (the remote machine)
 
-
-Set a username and password, then start the dashboard bound to a reachable address. The credentials live in `~/.clawksis/.env` (the secrets file, mode 0600):
+Set a username and password, then start the backend bound to a reachable address. The credentials live in `~/.clawksis/.env` (the secrets file, mode 0600):
 
 ```bash
 # 1. Set the dashboard login credentials.
@@ -271,24 +467,21 @@ CLAWK_DASHBOARD_BASIC_AUTH_SECRET=$(openssl rand -base64 32)
 EOF
 chmod 600 ~/.clawksis/.env
 
-
-# 2. Run the dashboard bound to a reachable address. The non-loopback bind
+# 2. Run the backend bound to a reachable address. The non-loopback bind
 #    engages the auth gate; the username/password provider handles login.
-
-clawk dashboard --no-open --host 0.0.0.0 --port 9119
+clawk serve --host 0.0.0.0 --port 9119
 ```
 
+Keep that `clawk serve` process running for as long as you want the desktop app to be able to connect — if it stops, the app can no longer reach the backend. Run it under `systemd`, `tmux`, or your process manager of choice so it survives logout and reboots.
 
-Make sure the **gateway is running** on the remote host as well if you rely on messaging channels — the desktop app drives the agent, but your gateway sessions are managed separately. See [Messaging](./messaging/index.md) for gateway setup.
+Separately, make sure the **gateway is running** on the remote host if you rely on messaging channels — the `clawk serve` backend is what the desktop app talks to, but your Telegram/Discord/Slack gateway sessions are a different process that you start and keep running on their own. See [Messaging](./messaging/index.md) for gateway setup.
 
 Prefer not to keep a plaintext password at rest? Set `CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD_HASH` to a scrypt hash instead — compute it with `python -c "from plugins.dashboard_auth.basic import hash_password; print(hash_password('PW'))"`. Full configuration surface (config.yaml keys, every env var, the rate limiter): [Web Dashboard → Username/password provider](./features/web-dashboard.md#usernamepassword-provider-no-oauth-idp).
 
-
-Running the dashboard as a systemd service? Give the unit `EnvironmentFile=%h/.clawksis/.env` so the credentials are in the environment at boot.
+Running the backend as a systemd service? Give the unit `EnvironmentFile=%h/.clawk/.env` so the credentials are in the environment at boot.
 
 :::warning
-
-The dashboard reads and writes your `.env` (API keys, secrets) and can run agent commands. Even behind a username and password, never expose it directly to the open internet — put it behind a VPN. [Tailscale](https://tailscale.com/) is the clean option: bind to the machine's tailscale IP (`--host <tailscale-ip>`) and use `http://<tailscale-ip>:9119` as the Remote URL so only your tailnet can reach it.
+The backend reads and writes your `.env` (API keys, secrets) and can run agent commands. The **username/password** setup shown above is for a trusted network — never expose a password-protected backend directly to the open internet; put it behind a VPN. [Tailscale](https://tailscale.com/) is the clean option: bind to the machine's tailscale IP (`--host <tailscale-ip>`) and use `http://<tailscale-ip>:9119` as the Remote URL so only your tailnet can reach it. To reach a backend over the public internet, use the **OAuth (Nous Portal)** provider instead.
 :::
 
 ### In the app
@@ -296,8 +489,7 @@ The dashboard reads and writes your `.env` (API keys, secrets) and can run agent
 **Settings → Gateways → Remote gateway:**
 
 1. **Remote URL** — `http://<backend-host>:9119` (path prefixes like `/clawk` work if you front it with a reverse proxy)
-
-2. **Sign in** — the app detects that the backend requires a username and password and shows a **Sign in** button. Click it, enter the credentials from step 1, and the app authenticates against the backend's login page.
+2. **Sign in** — the app detects which provider the backend advertises and adapts the button. For a username/password backend it shows a **Sign in** button that opens a credential form (enter the credentials from step 1). For an OAuth backend it shows **Sign in with `<provider>`** (e.g. *Sign in with Nous Research*), which runs the provider's browser sign-in. Either way the app ends up with an authenticated session against the backend.
 3. **Save and reconnect** — switches the desktop shell onto the remote backend. The session refreshes automatically; you stay signed in across restarts when `CLAWK_DASHBOARD_BASIC_AUTH_SECRET` is set.
 
 You can also set the backend URL without the UI via the `CLAWK_DESKTOP_REMOTE_URL` environment variable before launching the app (it overrides the in-app setting); you still sign in from the Gateways settings panel.
@@ -327,6 +519,77 @@ diagnostic does not add native ARM64 window enumeration support.
 - **Connection refused / times out** — the backend bound to `127.0.0.1` (the default) or a firewall/VPN is blocking the port. Bind to `0.0.0.0` or the tailscale IP and open the port to your trusted network.
 
 For the same setup from the web-dashboard angle, see [Web Dashboard → Connecting Clawksis Desktop to a remote backend](./features/web-dashboard.md#connecting-clawk-desktop-to-a-remote-backend); the env vars are catalogued under [Environment Variables → Web Dashboard & Clawksis Desktop](../reference/environment-variables.md#web-dashboard--clawk-desktop).
+
+## Extending the desktop app
+
+The desktop app is contribution-driven — panes, pages, sidebar nav, status-bar
+items, palette commands, keybinds, and themes all register through one SDK, and
+you can add your own. A plugin is a single ESM file dropped in
+`$CLAWK_HOME/desktop-plugins/<id>/plugin.js`; the app loads it within seconds and
+hot-reloads every save. Manage installed plugins live in **Capabilities → Plugins**.
+
+See [Desktop Plugin SDK](../developer-guide/desktop-plugin-sdk.md) for the full
+reference. (This is separate from the [web dashboard plugin system](./features/extending-the-dashboard.md).)
+
+A desktop plugin is **not sandboxed**: it runs inside the app with the app's own
+authority (gateway RPC, the native bridge, other plugins' storage). Only load
+files you wrote or reviewed; for catalog installs the protection is the
+[catalog trust model](./features/plugin-catalog.md#trust-model) (human-reviewed,
+SHA-pinned) plus an import allowlist — not isolation. A plugin whose
+`register()` throws is rolled back and shown as **Failed** with the error on its
+row; **⌘K → Reload desktop plugins** re-reads every installed `plugin.js`,
+including one an installer replaced in place.
+
+**Capabilities → Plugins** is the one place for everything that extends
+Clawksis: **one row per plugin**, with two switch columns.
+
+- A plugin can extend **this app**, **the agent**, or **both** — the badge on
+  each row says which, inferred from what the package contains (`plugin.yaml`
+  → agent half, `plugin.js` → desktop half). A plugin with both halves is one
+  row, never two.
+- **Desktop column** — the half loaded into this app. It is app-level: the
+  same switch, the same value, whichever profile, gateway, or remote machine
+  the window is looking at. Desktop code loads from exactly one place,
+  `~/.clawksis/desktop-plugins/`; the desktop half of a unified agent+desktop
+  package is copied there by the app when the package is installed (and
+  follows its updates and uninstall), so switching profiles never loads,
+  unloads, or re-scopes a pane. Toggles apply live.
+- **Agent column** — the half installed in the selected profile's backend
+  ([agent plugins](./features/plugins.md): user, git, project, pip and
+  portable installs), with an **Update** chip when a catalog pin moved. The
+  profile selector lives in this column's header because it governs only
+  this column; with a single profile there is no selector at all.
+  Repo-bundled built-ins (platform adapters, provider plugins) are not
+  listed: they ship enabled and are configured from their own surfaces. The
+  exceptions are the bundled lifecycle plugins with no surface of their own
+  (`disk-cleanup`, `security-guidance`), which appear here so they can be
+  toggled like any other agent plugin.
+- A half the plugin does not ship shows a dash. A desktop half whose agent
+  half is **not** installed in the selected profile shows **Install here**,
+  which pre-fills the install dialog from the package's origin (catalog entry
+  or git remote) for that profile only. Optional extras such as the
+  [Accent Picker](https://github.com/NousResearch/clawk-official-plugins/tree/main/accent-picker)
+  install from the plugin catalog.
+- **Uninstall** — every plugin installed under the selected profile's
+  `plugins/` folder (user or git install) has a trash button beside its name.
+  It asks for confirmation, then deletes the plugin's files and install
+  metadata from that profile — the same operation as
+  `clawk plugins remove <name>` — and prunes the app-level copy of a unified
+  package's desktop half. Restart the gateway to unload the plugin's code.
+  Repo-bundled and pip-installed (entrypoint) plugins have no trash button:
+  the first cannot be removed, the second goes with its Python package.
+  A standalone desktop plugin (a folder you dropped into
+  `~/.clawksis/desktop-plugins/` with no agent package) gets the same trash
+  button; confirming deletes that folder on this computer and unloads the
+  plugin immediately, no gateway involved.
+
+Discovery sits underneath: the live [Plugin Catalog](./features/plugin-catalog.md)
+picker installs reviewed entries at their pinned commit into the selected
+profile, and **Install from Git** takes any other repository through the same
+review-then-install dialog; its optional **Pin to commit** field installs one
+exact 40-character commit SHA (private repos included), and pinned plugins
+carry a `pinned @ <sha8>` badge in the list. Old `Settings → Plugins` links
+redirect here.
 
 ## Troubleshooting
 
@@ -404,6 +667,55 @@ damaged application files, repair through the
 ```bash
 # Reset a stuck macOS microphone prompt
 tccutil reset Microphone com.nousresearch.clawk
+```
+
+### Windows: the SSH client is missing or broken
+
+On Windows the app runs SSH through the built-in OpenSSH client (`%SystemRoot%\System32\OpenSSH\ssh.exe`). If that client is not installed, it falls back to Git for Windows' bundled `usr\bin\ssh.exe` and then to whatever `ssh` is on `PATH`. If the built-in client is installed but broken (for example, every `ssh.exe` exits with code 255 after a Windows update), boot stops on an error naming the client instead of retrying. To use a different client, set it in `config.yaml` and restart the app:
+
+```yaml
+desktop:
+  ssh_path: 'C:\Program Files\Git\usr\bin\ssh.exe'
+```
+
+Use single quotes or no quotes so the backslashes stay literal. The key goes two spaces under `desktop:`, like the launch keys above. It has no effect on macOS or Linux.
+
+### "The host key has CHANGED since you last connected" (SSH remote)
+
+If your SSH remote was reinstalled or its host key rotated, SSH fails closed
+and Desktop latches an error overlay instead of retrying (retrying can never
+succeed until the stale key is cleared). Verify the change is expected, then
+remove the old entry and retry from the overlay:
+
+```bash
+ssh-keygen -R <host>
+```
+
+Click **Retry** (or re-apply the connection in Settings → Gateway) after
+clearing the entry — the latch resets and the next boot dials fresh.
+
+### "Build desktop app" stuck on Electron download
+
+The build downloads the Electron runtime (~114&nbsp;MB) from `github.com/electron/electron/releases`. If the installer hangs on the **Build desktop app** step with the live output repeating `retrying attempt=…`, GitHub is being blocked or throttled on your network (firewall, proxy, or region).
+
+The build does not fall back to a mirror on its own and does not retry a failed download: a build that fails for any reason leaves the previous app untouched (stage-and-swap, see [Updating](../getting-started/updating.md#what-happens-during-an-update)), the update itself fails, and `clawk desktop --build-only --force-build` (or the next `clawk update`) runs the build again. If the failure was a corrupt cached Electron zip, delete it from `@electron/get`'s cache (`~/.cache/electron/` on Linux, `~/Library/Caches/electron/` on macOS, `%LOCALAPPDATA%\electron\Cache` on Windows) before rebuilding. `@electron/get` SHASUM-checks every download, but the checksums come from the same host, so a mirror you point it at is trusted for both.
+
+To **use a mirror** (e.g. a corporate one, or `npmmirror.com`, the de-facto Electron community mirror), set `ELECTRON_MIRROR` before installing or rebuild manually — the build honors it and never overrides one you've set:
+
+```bash
+ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
+  bash -c 'cd "$HOME/.clawksis/clawksis-agent/apps/desktop" && CSC_IDENTITY_AUTO_DISCOVERY=false npm run pack'
+```
+
+**Other native downloads (e.g. the `get-windows` prebuilt on Windows) that need a mirror:** put the npm keys in `$CLAWK_HOME/npmrc` (`%LOCALAPPDATA%\clawk\npmrc` on Windows, `~/.clawksis/npmrc` elsewhere) — for example `node_get_windows_binary_host_mirror=https://<mirror>/sindresorhus/get-windows/releases/download/`. Every `npm ci`/`npm run` the updater spawns (desktop, web and TUI builds) points `NPM_CONFIG_USERCONFIG` at that file when it exists, so the config survives `clawk update`; the repo-root `.npmrc` is git-tracked and gets autostashed on every update, and `~/.npmrc` may be missed because the desktop hand-off inherits the GUI's environment. An `NPM_CONFIG_USERCONFIG` you set yourself is never overridden.
+
+**If `get-windows` is missing or half-installed:** the build no longer fails — it prints `[stage-native-deps] get-windows not installed ... read_window_below will be unavailable in this build` and ships without the `read_window_below` tool. When the package directory exists but is not loadable (a Windows in-place update interrupted by a running Clawksis window, `TAR_ENTRY_ERROR` in the install log), the same warning names the directory, and the next `clawk desktop --force-build` or update removes it before its npm install so the package is re-extracted — close every Clawksis window and gateway first so the extract is not interrupted again. A package whose native binding or macOS helper is missing is likewise shipped without window enumeration rather than failing the build.
+
+To clear a corrupt cached zip by hand:
+
+```bash
+rm -f "$HOME/Library/Caches/electron"/electron-*.zip   # macOS
+rm -f "$HOME/.cache/electron"/electron-*.zip            # Linux
 ```
 
 ## Building from source
@@ -508,8 +820,7 @@ time. Grants are stable from then on. If a permission gets stuck, reset it with
 ## See also
 
 - [CLI Guide](./cli.md) — the terminal interface
-
-- [TUI](./tui.md) — the modern terminal UI the desktop backend reuses
+- [TUI](./tui.md) — the modern terminal UI used by `clawk --tui` and the dashboard chat tab
 - [Web Dashboard](./features/web-dashboard.md) — browser admin panel with an embedded chat tab
 - [Configuration](./configuration.md) — config that the desktop app reads and writes
 - [Windows (Native)](./windows-native.md) — native Windows install path

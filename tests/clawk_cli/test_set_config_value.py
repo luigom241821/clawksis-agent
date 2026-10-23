@@ -395,9 +395,8 @@ class TestListNavigation:
         self._write_config(
             _isolated_clawk_home,
             (
-                "platforms:\n"
-                "  telegram:\n"
-                "    allowlist:\n"
+                "telegram:\n"
+                "  allowlist:\n"
                 "    - name: alice\n"
                 "      role: admin\n"
                 "    - name: bob\n"
@@ -414,8 +413,7 @@ class TestListNavigation:
         import clawk_yaml as yaml
 
         reloaded = yaml.safe_load(_read_config(_isolated_clawk_home))
-
-        allowlist = reloaded["platforms"]["telegram"]["allowlist"]
+        allowlist = reloaded["telegram"]["allowlist"]
         assert isinstance(allowlist, list)
         assert allowlist[0] == {"name": "alice", "role": "admin"}
         assert allowlist[1] == {"name": "bob", "role": "admin"}

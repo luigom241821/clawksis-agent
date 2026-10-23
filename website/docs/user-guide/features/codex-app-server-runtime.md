@@ -321,12 +321,10 @@ auxiliary:
   title_generation:
     provider: openrouter
     model: google/gemini-3-flash-preview
-
-  context_compression:
+  compression:
     provider: openrouter
     model: google/gemini-3-flash-preview
-
-  vision_detect:
+  vision:
     provider: openrouter
     model: google/gemini-3-flash-preview
   goal_judge:
@@ -470,8 +468,7 @@ This runtime is **opt-in beta**. Working as of Clawksis 2026.5 + Codex CLI 0.130
 
 Known limitations:
 
-
-- **Clawksis auth and codex auth are separate sessions.** You need both `codex login` AND `clawk auth login codex` for the cleanest UX (the runtime uses codex's session for the LLM call). This is a deliberate design choice in Clawksis' `_import_codex_cli_tokens` — Clawksis won't share OAuth state with codex CLI to avoid clobbering each other on token refresh.
+- **Clawksis auth and codex auth are separate sessions.** You need both `codex login` AND `clawk auth add openai-codex` for the cleanest UX (the runtime uses codex's session for the LLM call). This is a deliberate design choice in Clawksis' `_import_codex_cli_tokens` — Clawksis won't share OAuth state with codex CLI to avoid clobbering each other on token refresh.
 - **`delegate_task`, `memory`, `session_search`, `todo` are unavailable on this runtime.** They need the running AIAgent context which a stateless MCP callback can't provide. Use `/codex-runtime auto` when you need these.
 - **No inline patch preview in approval prompts when codex doesn't track the changeset.** Codex's `fileChange` approval params don't always carry the changeset. Clawksis caches the data from the corresponding `item/started` notification when possible, but if approval arrives before the item has streamed, the prompt falls back to whatever `reason` codex provides.
 - **`fallback_providers` fail over only on quota and rate-limit failures.** When a codex app-server turn fails with a billing / usage-limit / rate-limit error, Clawksis switches to the configured [fallback provider](./fallback-providers.md) and retries the same turn on it; auth failures (`codex login` expired), turn timeouts and unknown-model errors do not fail over on this runtime and surface as the turn's error instead.

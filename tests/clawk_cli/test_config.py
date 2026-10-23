@@ -21,6 +21,7 @@ from clawk_cli.config import (
     load_config,
     load_env,
     migrate_config,
+    read_raw_config,
     remove_env_value,
     save_config,
     save_env_value,
@@ -242,6 +243,16 @@ class TestEmptyConfigSections:
 
 
 class TestSaveAndLoadRoundtrip:
+    @staticmethod
+    def _deny_config_reads(config_path):
+        real_open = open
+
+        def fake_open(file, mode="r", *args, **kwargs):
+            if Path(file) == config_path and "r" in mode:
+                raise PermissionError("denied")
+            return real_open(file, mode, *args, **kwargs)
+
+        return fake_open
 
     def test_roundtrip(self, tmp_path):
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
@@ -624,8 +635,7 @@ class TestSaveConfigAtomicity:
 
             # Read raw YAML to verify it's valid and correct
             config_path = tmp_path / "config.yaml"
-
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 raw = yaml.safe_load(f)
             assert raw["model"] == "test/atomic-model"
             assert raw["agent"]["max_turns"] == 77
@@ -1187,11 +1197,12 @@ class TestInterimAssistantMessageConfig:
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
             results = migrate_config(interactive=False, quiet=False)
             raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            loaded = load_config()
 
         from clawk_cli.config import DEFAULT_CONFIG
 
         assert raw["_config_version"] == DEFAULT_CONFIG["_config_version"]
-
+        # The user's explicit non-default value is preserved on disk.
         assert raw["display"]["tool_progress"] == "off"
         # interim_assistant_messages defaults to True and merges in transparently
         # at read time, so the migration must NOT materialise it to disk (that
@@ -1282,7 +1293,6 @@ class TestEnvWriteDenylist:
     @pytest.mark.parametrize(
         "allowed_key",
         [
-            "CLAWK_GEMINI_CLIENT_ID",
             "CLAWK_LANGFUSE_PUBLIC_KEY",
             "CLAWK_SPOTIFY_CLIENT_ID",
             "CLAWK_QWEN_BASE_URL",

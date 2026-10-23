@@ -12,10 +12,13 @@ from clawk_platform.host import runtime as host_runtime
 from clawk_constants import (
     agent_browser_runnable,
     get_default_clawk_root,
+    get_clawk_dir,
     get_clawk_home,
     get_process_clawk_home,
     is_container,
+    node_tool_runnable,
     parse_reasoning_effort,
+    reset_clawk_home_override,
     secure_parent_dir,
     set_clawk_home_override,
 )

@@ -1102,10 +1102,7 @@ def _patch_specifier_response(monkeypatch, *, content, model="test-model"):
     resp = MagicMock()
     resp.choices = [MagicMock()]
     resp.choices[0].message.content = content
-
-    # specify_task routes through call_llm now (#35566) — mock it directly
-    # instead of get_text_auxiliary_client, which it no longer calls.
-
+    # specify_task routes through call_llm now (#35566) — mock it directly.
     fake_call = MagicMock(return_value=resp)
     monkeypatch.setattr("agent.auxiliary_client.call_llm", fake_call)
     return fake_call

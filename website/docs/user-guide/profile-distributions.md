@@ -231,12 +231,10 @@ git push -u origin main --tags
 The repo is now a distribution. Anyone with access can install it.
 
 :::note
-
-The git repo contains **everything in the profile directory except things already excluded from distributions**: `auth.json`, `.env`, `memories/`, `sessions/`, `state.db*`, `logs/`, `workspace/`, `*_cache/`, `local/`. Those stay on your machine. You can also add a `.gitignore` if you want to exclude additional paths.
+The installer will additionally strip the [hard-excluded paths](#whats-not-in-a-distribution-ever) even if an author somehow ships them — but that only protects installers, not the author.
 :::
 
-
-### Step 4 — Tag versioned releases
+### Step 5 — Tag versioned releases
 
 Every time the agent reaches a stable point, bump the version and tag:
 
@@ -256,6 +254,7 @@ A complete authored distribution:
 
 ```
 research-bot/
+├── .gitignore                   # excludes secrets & user data (see Step 3)
 ├── distribution.yaml            # required
 ├── SOUL.md                      # strongly recommended
 ├── config.yaml                  # model, provider, tool defaults
@@ -306,8 +305,7 @@ What happens:
 2. Reads `distribution.yaml`, shows you the manifest (name, version, description, author, required env vars).
 3. Checks each required env var against your shell environment and the target profile's existing `.env`. Marks each as `✓ set` or `needs setting` so you know exactly what to configure.
 4. Asks for confirmation. Pass `-y` / `--yes` to skip.
-
-5. Copies distribution-owned files into `~/.clawksis/profiles/research-bot/` (or wherever the manifest's `name` resolves).
+5. Copies distribution-owned files into `~/.clawksis/profiles/research-bot/` (or wherever the manifest's `name` resolves). The [hard-excluded paths](#whats-not-in-a-distribution-ever) are stripped during this copy, even if the author accidentally left them in the repo.
 6. Writes `.env.EXAMPLE` with the required keys commented out — copy to `.env` and fill in.
 7. With `--alias`, creates a wrapper so you can run `research-bot chat` directly.
 
@@ -454,11 +452,10 @@ So you never accidentally delete an agent without knowing where it came from or 
 You built a research assistant on your laptop. You want the same agent on your workstation.
 
 ```bash
-
-# Laptop
+# Laptop — create .gitignore first (see "For authors" Step 3), then:
 cd ~/.clawksis/profiles/research-bot
-
-git init && git add . && git commit -m "initial"
+git init && git add . && git status   # confirm no secrets staged
+git commit -m "initial"
 git remote add origin git@github.com:you/research-bot.git
 git push -u origin main
 
@@ -474,12 +471,11 @@ Any iteration on the laptop (`git commit && push`) pulls onto the workstation wi
 Your engineering team wants a shared PR-review bot with a specific SOUL, specific skills, and a cron that runs every PR through it.
 
 ```bash
-
-# Engineering lead
+# Engineering lead — create .gitignore first (see "For authors" Step 3), then:
 cd ~/.clawksis/profiles/pr-reviewer
 # ... build and tune ...
-
-git init && git add . && git commit -m "v1.0 PR reviewer"
+git init && git add . && git status   # confirm no secrets staged
+git commit -m "v1.0 PR reviewer"
 git tag v1.0.0
 git push -u origin main --tags    # push to your company's internal Git host
 
@@ -496,12 +492,11 @@ When the lead ships v1.1 (better SOUL, new skill), engineers run `clawk profile 
 You built something novel — maybe a "Polymarket trader" or an "academic paper summarizer" or a "Minecraft server ops assistant." You want to share it.
 
 ```bash
-
-# You
+# You — create .gitignore first (see "For authors" Step 3), then:
 cd ~/.clawksis/profiles/polymarket-trader
 # Write a solid README.md at the repo root — GitHub shows it on the repo page
-
-git init && git add . && git commit -m "v1.0"
+git init && git add . && git status   # confirm no secrets staged
+git commit -m "v1.0"
 git tag v1.0.0
 # Publish to a public GitHub repo
 git remote add origin https://github.com/you/clawk-polymarket-trader.git
@@ -546,8 +541,7 @@ Your customers install via a single command; the install preview tells them exac
 You're the ops lead. You want a temporary agent that diagnoses a production incident — a canned SOUL with the right tools and MCP connections — and runs on three on-call engineers' laptops for the next week.
 
 ```bash
-
-# You
+# You — create .gitignore first (see "For authors" Step 3), then:
 # Build the profile, commit, push a private repo
 git push -u origin main
 
@@ -730,8 +724,11 @@ The installer hard-excludes these paths even if an author accidentally ships the
 - `*_cache/` — image / audio / document caches
 - `local/` — user-reserved customization namespace
 
+When you clone a distribution as an installer, these simply aren't copied into your profile directory. When you update, your copies stay put. If you installed the same distribution on five machines, you have five isolated sets of this data — one per machine.
 
-When you clone a distribution, these simply aren't there. When you update, they stay put. If you installed the same distribution on five machines, you have five isolated sets of this data — one per machine.
+:::caution
+This exclusion runs at **install / update time on the installer's machine**. It does **not** prevent an author from commiting sensitive/unnecessary files. Authors must use a [`.gitignore`](#step-3--create-a-gitignore-before-the-first-commit) to keep secrets out of the repo.
+:::
 
 ## Security and trust
 

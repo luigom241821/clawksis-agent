@@ -572,8 +572,20 @@ def test_env_sourced_oauth_status_is_not_disconnectable(monkeypatch):
 def test_xai_dashboard_poller_seeds_single_entry_and_clears_suppression(
     tmp_path, monkeypatch
 ):
-    """The worker exchanges the callback code and marks the session approved."""
+    """The dashboard device-code poller must leave exactly ONE pool entry — the
+    singleton-seeded ``device_code`` source — and must NOT create a parallel
+    ``manual:dashboard_*`` entry.
 
+    Dedupe: a parallel dashboard entry would share the singleton's single-use
+    refresh token, and two entries racing the same rotation ->
+    ``refresh_token_reused`` (on main, the dashboard login inserted exactly
+    such a duplicate alongside the singleton seed). The poller writes the
+    singleton only; the seed is the single source of truth.
+
+    Suppression: an interactive dashboard login must also clear any
+    ``device_code`` suppression left by a prior ``clawk auth remove
+    xai-oauth``.
+    """
     from clawk_cli import auth as auth_mod
     from agent.credential_pool import load_pool
 
@@ -600,15 +612,16 @@ def test_xai_dashboard_poller_seeds_single_entry_and_clears_suppression(
 
     monkeypatch.setattr(
         auth_mod,
-        "_xai_wait_for_callback",
-        lambda *a, **k: {"code": "auth-code", "state": "st"},
+        "_xai_oauth_discovery",
+        lambda *a, **k: {"token_endpoint": "https://auth.x.ai/token"},
     )
     monkeypatch.setattr(
         auth_mod,
-        "_xai_oauth_exchange_code_for_tokens",
-        lambda **k: {
-            "access_token": "xai-access",
-            "refresh_token": "xai-refresh",
+        "_xai_oauth_poll_device_token",
+        lambda client, **kwargs: {
+            "access_token": "xai-dashboard-access",
+            "refresh_token": "rt-dashboard",
+            "id_token": "",
             "expires_in": 3600,
             "token_type": "Bearer",
         },
@@ -618,138 +631,13 @@ def test_xai_dashboard_poller_seeds_single_entry_and_clears_suppression(
     _web_server_oauth._oauth_sessions[session_id] = {
         "session_id": session_id,
         "provider": "xai-oauth",
-        "flow": "loopback",
+        "flow": "device_code",
         "created_at": time.time(),
         "status": "pending",
         "error_message": None,
-        "server": object(),
-        "thread": object(),
-        "callback_result": {},
-        "redirect_uri": "http://127.0.0.1:56121/callback",
-        "verifier": "verifier",
-        "challenge": "challenge",
-        "state": "expected-state",
-        "token_endpoint": "https://auth.x.ai/oauth2/token",
-        "discovery": {},
-    }
-
-    monkeypatch.setattr(
-        auth_mod,
-        "_xai_wait_for_callback",
-        lambda *a, **k: {"code": "auth-code", "state": "ATTACKER-state"},
-    )
-
-    def _boom(**kwargs):
-
-        raise AssertionError("token exchange must not run on state mismatch")
-
-    monkeypatch.setattr(auth_mod, "_xai_oauth_exchange_code_for_tokens", _boom)
-
-    try:
-        ws._xai_loopback_worker(session_id)
-
-        sess = ws._oauth_sessions[session_id]
-
-        assert sess["status"] == "error"
-
-        assert "state mismatch" in sess["error_message"].lower()
-
-    finally:
-        ws._oauth_sessions.pop(session_id, None)
-
-
-def test_xai_loopback_worker_skips_persist_when_cancelled(monkeypatch):
-    """If the session is cancelled while waiting, the worker must not persist."""
-
-    from clawk_cli import auth as auth_mod
-
-    from clawk_cli import web_server as ws
-
-    session_id = "xai-loopback-cancel-test"
-
-    ws._oauth_sessions[session_id] = {
-        "session_id": session_id,
-        "provider": "xai-oauth",
-        "flow": "loopback",
-        "created_at": time.time(),
-        "status": "pending",
-        "error_message": None,
-        "server": object(),
-        "thread": object(),
-        "callback_result": {},
-        "redirect_uri": "http://127.0.0.1:56121/callback",
-        "verifier": "verifier",
-        "challenge": "challenge",
-        "state": "st",
-        "token_endpoint": "https://auth.x.ai/oauth2/token",
-        "discovery": {},
-    }
-
-    def _wait_then_cancel(*args, **kwargs):
-
-        # Simulate the user cancelling (DELETE /sessions/{id}) while we were
-
-        # blocked on the callback: the session vanishes, then a valid code
-
-        # arrives. The worker must notice and bail before persisting.
-
-        ws._oauth_sessions.pop(session_id, None)
-
-        return {"code": "auth-code", "state": "st"}
-
-    monkeypatch.setattr(auth_mod, "_xai_wait_for_callback", _wait_then_cancel)
-
-    def _must_not_persist(*args, **kwargs):
-
-        raise AssertionError("tokens must not be persisted for a cancelled session")
-
-    monkeypatch.setattr(auth_mod, "_save_xai_oauth_tokens", _must_not_persist)
-
-    monkeypatch.setattr(ws, "_add_xai_oauth_pool_entry", _must_not_persist)
-
-    # Should return cleanly without raising and without persisting.
-
-    ws._xai_loopback_worker(session_id)
-
-    assert session_id not in ws._oauth_sessions
-
-
-def test_cancel_loopback_session_shuts_down_callback_server():
-    """Cancelling a loopback session must free the bound callback port now."""
-
-    from clawk_cli import web_server as ws
-
-    shutdown_calls = {"shutdown": 0, "close": 0, "join": 0}
-
-    class _FakeServer:
-        def shutdown(self):
-
-            shutdown_calls["shutdown"] += 1
-
-        def server_close(self):
-
-            shutdown_calls["close"] += 1
-
-    class _FakeThread:
-        def join(self, timeout=None):
-
-            shutdown_calls["join"] += 1
-
-    # callback_result is the dict the worker's _xai_wait_for_callback polls.
-
-    callback_result = {"code": None, "error": None}
-
-    session_id = "xai-loopback-cancel-shutdown-test"
-
-    ws._oauth_sessions[session_id] = {
-        "session_id": session_id,
-        "provider": "xai-oauth",
-        "flow": "loopback",
-        "created_at": time.time(),
-        "status": "pending",
-        "server": _FakeServer(),
-        "thread": _FakeThread(),
-        "callback_result": callback_result,
+        "device_code": "device-code",
+        "interval": 5,
+        "expires_at": time.time() + 600,
     }
     try:
         _web_server_oauth._xai_device_poller(session_id)

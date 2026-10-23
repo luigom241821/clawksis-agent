@@ -72,7 +72,7 @@ def test_view_built_with_org_pinned_url_and_identity(_logged_in_account):
     assert "$30.00" in "\n".join(view.balance_lines)
 
 
-# ── gateway _handle_credits_command ─────────────────────────────────────────
+# ── gateway _handle_topup_command (the messaging billing surface) ────────────
 
 
 class _FakeEvent:
@@ -80,7 +80,7 @@ class _FakeEvent:
 
 
 def _make_gateway_stub():
-    """Minimal object exposing the mixin's _handle_credits_command."""
+    """Minimal object exposing the mixin's _handle_topup_command."""
     from gateway.slash_commands import GatewaySlashCommandsMixin
 
     class _Stub(GatewaySlashCommandsMixin):

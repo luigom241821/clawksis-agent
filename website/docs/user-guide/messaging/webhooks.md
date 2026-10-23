@@ -125,8 +125,110 @@ platforms:
           events: ["push"]
           secret: "deploy-secret"
           prompt: "New push to {repository.full_name} branch {ref}: {head_commit.message}"
+          filters:
+            - field: "ref"
+              equals: "refs/heads/main"
           deliver: "telegram"
 ```
+
+### Payload Filters
+
+Use `filters` when a provider sends a broad event stream but only some payloads should wake the agent or trigger `deliver_only` delivery. Filters run after signature validation, body parsing, and `events`, but before prompt rendering, idempotency, agent dispatch, or direct delivery.
+
+```yaml
+platforms:
+  webhook:
+    extra:
+      routes:
+        todoist:
+          events: ["item:updated"]
+          secret: "todoist-secret"
+          filters:
+            - field: "payload.labels"
+              contains: "clawk"
+            - any:
+                - field: "payload.priority"
+                  equals: 4
+                - field: "payload.project_id"
+                  in_file: "~/.clawksis/data/todoist/watchlist.json"
+          prompt: "Todoist task changed: {payload.content}"
+```
+
+Supported operators:
+
+- `exists: true|false`
+- `missing: true`
+- `equals` / `not_equals`
+- `contains` for strings, lists, and dict keys
+- `in` for inline lists
+- `in_file` for JSON arrays, JSON objects (keys are used), or newline-delimited text files
+- `regex`
+- `all`, `any`, and `not` groups
+
+Field paths use dot notation. `payload.foo` reads from a top-level `payload` object when one exists, or from the root webhook body for flat payloads. `event` / `event_type` match the resolved event type, and `headers.<Name>` reads request headers.
+
+### Event Coalescing {#event-coalescing}
+
+Providers often fire several distinct events for the same logical entity in quick succession — five rapid pushes to one pull request, a burst of edits to one ticket, a flapping monitoring alert. Each event carries a fresh delivery ID, so the idempotency cache cannot suppress them and every event wakes a separate agent run.
+
+Set `coalesce` on a route to debounce these into a single run per entity:
+
+```yaml
+platforms:
+  webhook:
+    extra:
+      routes:
+        github-pr:
+          events: ["pull_request"]
+          secret: "github-webhook-secret"
+          coalesce:
+            key: "{repository.full_name}#{pull_request.number}"
+            window_seconds: 30      # quiet window (default 30)
+            max_wait_seconds: 300   # dispatch cap (default 300)
+          prompt: "Review PR #{pull_request.number}: {pull_request.title}"
+          deliver: "github_comment"
+          deliver_extra:
+            repo: "{repository.full_name}"
+            pr_number: "{pull_request.number}"
+```
+
+How it works:
+
+- Events are grouped per route by the rendered `key`. A bare dotted field (`pull_request.number`) or a full template (`{repository.full_name}#{pull_request.number}`) both work.
+- Each new event **replaces** the pending one and pushes the quiet-window timer back. When `window_seconds` pass with no new event, the group dispatches **one** agent run using the latest event's payload, prompt, and delivery templates.
+- `max_wait_seconds` caps total buffering from the group's first event, so a steady event stream cannot postpone dispatch forever.
+- When more than one event was coalesced, the prompt gets a short note telling the agent how many earlier events were superseded.
+- If the `key` does not resolve for an event (the payload lacks the field — e.g. an `issue_comment` event on a route keyed by `pull_request.number`), that event is **dispatched immediately** instead of being coalesced, so unrelated entities never collapse into one group. Pick a key present on every event type the route accepts.
+- Coalesced requests return HTTP 202 with `{"status": "coalesced"}`. Delivery-ID idempotency still runs first, so provider retries of the same delivery are dropped rather than counted.
+- Pending groups are flushed (dispatched immediately) when the adapter disconnects — a gateway reconnect or `clawk gateway stop` — not dropped. Buffered events live in memory, so a hard process kill loses at most the current window's buffered burst.
+- `coalesce` applies to agent-mode routes only; combining it with `deliver_only` or `cron_job` is rejected at startup.
+
+### Script Filters and Transforms
+
+Use `script` when declarative filters are not enough. Scripts must live under `~/.clawksis/scripts/` for the active profile; relative paths resolve there, and path traversal outside that directory is blocked. `.sh` and `.bash` scripts run with bash, and all other extensions run with the current Python interpreter.
+
+The route payload is sent to stdin as JSON:
+
+```python
+# ~/.clawksis/scripts/todoist-clawk-label.py
+import json
+import sys
+
+payload = json.load(sys.stdin)
+labels = payload.get("payload", {}).get("labels", [])
+if "clawk" not in labels:
+    print("[SILENT]")
+    raise SystemExit(0)
+
+payload["body"] = payload["payload"]["content"]
+print(json.dumps(payload))
+```
+
+Script outcomes:
+
+- JSON object stdout replaces the payload used by `prompt` and `deliver_extra`.
+- Non-JSON text stdout is added to the payload as `script_output`.
+- Empty stdout, exact `[SILENT]`, `{"__clawk_ignore__": true}`, timeout, missing script, or nonzero exit code returns HTTP 200 with `{"status":"ignored","reason":"script"}`.
 
 ### Prompt Templates
 
@@ -539,12 +641,17 @@ platforms:
       max_body_bytes: 2097152  # 2 MB
 ```
 
-
-### Prompt injection risk
+### Authenticated does not mean trusted
 
 :::warning
+**HMAC validation authenticates the _sender_, not the _content_.** A valid signature only proves the request came from a party holding the route's secret (e.g. GitHub). It says nothing about who wrote the _business fields_ inside the payload — PR titles, commit messages, issue descriptions, and any other upstream text are authored by arbitrary third parties and must be treated as untrusted.
 
-Webhook payloads contain attacker-controlled data — PR titles, commit messages, issue descriptions, etc. can all contain malicious instructions. Run the gateway in a sandboxed environment (Docker, VM) when exposed to the internet. Consider using the Docker or SSH terminal backend for isolation.
+This is the same trust model that applies to everything the agent reads: web pages, files, and tool output are all untrusted input. Clawksis does not — and cannot reliably — sanitize untrusted text with a blocklist; phrasing, encoding, and translation make that trivially bypassable. **The trust boundary is the agent's capability surface, not the input channel.** Harden there:
+
+- **Sandbox the runtime.** Run the gateway with the Docker or SSH terminal backend (or in a VM) when exposed to the internet, so a hijacked turn cannot touch the host.
+- **Scope the toolset.** Disable `terminal`, `file`, and outbound-action tools on webhook-triggered sessions if the route only needs to read and summarize. Fewer capabilities means a smaller blast radius if a payload field carries injected instructions.
+- **Keep approvals on** for any destructive or outbound operation, so an injected instruction cannot act unattended.
+- **Template narrowly.** Prefer a specific `prompt` with named fields (`{pull_request.title}`) over `{__raw__}` or an empty template that dumps the whole payload, so only the fields you intend reach the prompt.
 :::
 
 ---

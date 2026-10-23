@@ -62,59 +62,39 @@ repair a Nix store path with pip.
 No clone needed. Nix fetches, builds, and runs everything:
 
 ```bash
-
-# Run directly (builds on first use, cached after)
-
-nix run github:samuelgradientai-sys/clawksis-agent -- setup
-
-nix run github:samuelgradientai-sys/clawksis-agent -- chat
+# Run the desktop app
+nix run github:samuelgradientai-sys/clawksis-agent#desktop
 
 # Or install persistently
+nix profile install github:samuelgradientai-sys/clawksis-agent#desktop
+
+# run the tui
+nix run github:samuelgradientai-sys/clawksis-agent -- setup
+nix run github:samuelgradientai-sys/clawksis-agent -- --tui
+
+# or install it in your profile
 nix profile install github:samuelgradientai-sys/clawksis-agent
 clawk setup
-
-clawk chat
+clawk --tui
 ```
 
 After `nix profile install`, `clawk`, `clawksis-agent`, and `clawk-acp` are on your PATH. From here, the workflow is identical to the [standard installation](./installation.md) — `clawk setup` walks you through provider selection, `clawk gateway install` sets up a launchd (macOS) or systemd user service, and config lives in `~/.clawksis/`.
 
 :::warning Messaging platforms (Discord, Telegram, Slack)
+The default package includes ALL libraries clawksis-agent might need. if you want a smaller variant, check the other flake outputs.
 
-The default package doesn't include messaging platform libraries — they were moved to on-demand installation, which can't work in Nix's read-only environment. If you plan to connect the agent to Discord, Telegram, or Slack, install the `messaging` variant:
-
-
-```bash
-
-nix profile install github:samuelgradientai-sys/clawksis-agent#messaging
-
-```
-
-
-For all optional extras (voice, all providers, all platforms):
-
-
-```bash
-
-nix profile install github:samuelgradientai-sys/clawksis-agent#full
-
-```
-
-
-The `full` variant adds ~700 MB to the closure. If you only need messaging platforms, `#messaging` adds just ~33 MB.
+The `default` package adds ~700 MB to the closure. If you only need messaging platforms, `#messaging` adds just ~33 MB.
 
 :::
 
 <details>
-
-<summary><strong>Building from a local clone</strong></summary>
+<summary><strong>Running from a local clone</strong></summary>
 
 ```bash
 git clone https://github.com/samuelgradientai-sys/clawksis-agent.git
 cd clawksis-agent
-
-nix build
-
-./result/bin/clawk setup
+nix develop
+clawk setup
 ```
 
 </details>

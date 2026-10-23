@@ -1,5 +1,7 @@
 import sys
 
+import pytest
+
 
 def test_sessions_delete_accepts_unique_id_prefix(monkeypatch, capsys):
     import clawk_cli.main as main_mod

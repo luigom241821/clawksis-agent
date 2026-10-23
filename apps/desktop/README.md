@@ -1,4 +1,4 @@
-# Clawksis Desktop ∇
+# Clawksis Desktop ☤
 
 <p align="center">
   <a href="https://github.com/samuelgradientai-sys/clawksis-agent/releases"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-FFD700?style=for-the-badge" alt="Download"></a>
@@ -41,7 +41,6 @@ clawk desktop
 It builds and launches the GUI against your existing install — same config, keys, sessions, and skills. If Desktop cannot find a usable runtime or saved remote connection, first launch lets you connect to an existing Clawksis gateway or install Clawksis locally. Local onboarding then walks you through choosing a provider and model.
 
 ### Prebuilt installers
-
 
 When a release ships desktop installers they're attached to its [releases page](https://github.com/samuelgradientai-sys/clawksis-agent/releases) — `.dmg` (macOS), `.exe` / `.msi` (Windows), `.AppImage` / `.deb` / `.rpm` (Linux). These are published manually, so the install-with-Clawksis path above is the most reliable way to get the latest.
 
@@ -95,6 +94,8 @@ npm run dev          # Vite renderer + Electron, which boots the Python backend
 Point the app at a specific source checkout, or sandbox it away from your real config:
 
 ```bash
+# throwaway CLAWK_HOME, separate Electron userData, distinct app name to avoid the single-instance lock
+../../scripts/dev-sandbox.sh npm run dev
 CLAWK_DESKTOP_CLAWK_ROOT=/path/to/clone npm run dev
 CLAWK_HOME=$HOME/.clawksis/cache/scratch/throwaway npm run dev
 npm run dev:fake-boot   # exercise the startup overlay with deterministic delays
@@ -219,12 +220,14 @@ Run before opening a PR (lint may surface pre-existing warnings but must exit cl
 
 ```bash
 npm run fix
-
-npm run type-check
+npm run typecheck
 npm run lint
-
-npm run test:desktop:all
+npm run test:ui
+npm run test:desktop:platforms
 ```
+
+Run `npm run test:desktop:all` for install, boot, update, packaging, or other
+release-path changes.
 
 ### Troubleshooting
 
@@ -234,10 +237,8 @@ Boot logs land in `CLAWK_HOME/logs/desktop.log` (includes backend output and rec
 
 ```bash
 # Force a clean first-launch setup
-
 rm "$HOME/.clawksis/clawksis-agent/.clawk-bootstrap-complete"
 # Rebuild a broken Python venv
-
 rm -rf "$HOME/.clawksis/clawksis-agent/venv"
 # Reset a stuck macOS microphone prompt (macOS only)
 

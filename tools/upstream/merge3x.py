@@ -271,22 +271,38 @@ def compiles(text: str) -> bool:
         return False
 
 
-def merge_file(fp: str, base_rev: str) -> tuple[str, str | None, int]:
+def merge_file(
+    fp: str,
+    base_rev: str,
+    ours_rev: str | None = None,
+    target: str | None = None,
+) -> tuple[str, str | None, int]:
     """-> (estado, texto, n_conflictos). estado in
-    merged|conflict|nocompile|nous|skip."""
+    merged|conflict|nocompile|nous|skip.
+
+    ours_rev: leer el lado fork de git (p.ej. el main previo al sync) en vez
+    del working tree. target: generar el lado upstream rebrandeando ese
+    tag/commit (rebrand actual) en vez de leer pending/<f>.theirs."""
     dest = ROOT / fp
-    theirs_f = PENDING / f"{fp.replace('/', '__')}.theirs"
-    if not dest.is_file() or not theirs_f.exists():
-        return "skip", None, 0
-    theirs_b = theirs_f.read_bytes()
-    if not theirs_b.strip():
+    if target:
+        up = unmap_path(fp)
+        raw = show(target, up)
+        theirs_b = rebrand(raw, up) if raw is not None else None
+    else:
+        theirs_f = PENDING / f"{fp.replace('/', '__')}.theirs"
+        theirs_b = theirs_f.read_bytes() if theirs_f.exists() else None
+    if ours_rev:
+        ours_b = show(ours_rev, fp)
+    else:
+        ours_b = dest.read_bytes() if dest.is_file() else None
+    if ours_b is None or theirs_b is None or not theirs_b.strip():
         return "skip", None, 0
     base_b = base_rebranded(fp, base_rev)
     if base_b is None:
         return "skip", None, 0
     try:
         base_t = base_b.decode("utf-8")
-        ours_t = dest.read_bytes().decode("utf-8")
+        ours_t = ours_b.decode("utf-8")
         theirs_t = theirs_b.decode("utf-8")
     except UnicodeDecodeError:
         return "skip", None, 0
@@ -319,11 +335,27 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--write-conflicts", action="store_true")
     ap.add_argument("--stdout", action="store_true")
+    ap.add_argument(
+        "--base-map",
+        help="TSV 'path<TAB>base_rev' para fijar la base por archivo",
+    )
+    ap.add_argument("--ours-rev", help="leer el lado fork de este rev de git")
+    ap.add_argument(
+        "--target", help="generar el lado upstream rebrandeando este tag/commit"
+    )
     args = ap.parse_args()
 
     base_rev = merge_base()
+    bmap: dict[str, str] = {}
+    if args.base_map:
+        for ln in Path(args.base_map).read_text(encoding="utf-8").splitlines():
+            if "\t" in ln:
+                k, v = ln.split("\t", 1)
+                bmap[k.strip()] = v.strip()
     if args.file:
-        st, text, n = merge_file(args.file, base_rev)
+        st, text, n = merge_file(
+            args.file, bmap.get(args.file, base_rev), args.ours_rev, args.target
+        )
         print(f"[merge3x] {args.file}: {st} ({n} conflictos)", file=sys.stderr)
         if args.stdout and text is not None:
             sys.stdout.write(text)
@@ -338,7 +370,9 @@ def main() -> int:
         k: [] for k in ("merged", "conflict", "nocompile", "nous", "skip")
     }
     for fp in files:
-        st, text, n = merge_file(fp, base_rev)
+        st, text, n = merge_file(
+            fp, bmap.get(fp, base_rev), args.ours_rev, args.target
+        )
         buckets[st].append(fp if st != "conflict" else f"{fp}\t{n}")
         if text is None:
             continue

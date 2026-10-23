@@ -1,16 +1,13 @@
 ---
 slug: /
 sidebar_position: 0
-
 title: "Clawksis Documentation"
 description: "The self-improving AI agent built by Nous Research. A built-in learning loop that creates skills from experience, improves them during use, and remembers across sessions."
 hide_table_of_contents: true
 displayed_sidebar: docs
 ---
 
-
-import Link from '@docusaurus/Link';
-
+import Link from "@docusaurus/Link";
 
 # Clawksis
 
@@ -27,15 +24,26 @@ The self-improving AI agent built by [Nous Research](https://nousresearch.com). 
 
 ## Install
 
-**Linux / macOS / WSL2**
+### Windows or macOS
+
+To easily install the command-line and desktop applications, [download the Clawksis Desktop installer](https://clawksis-agent.nousresearch.com/) from our website and run it.
+
+### Without Clawksis Desktop:
+
+For a command-line only install without Clawksis Desktop, run:
+
+For aarch64 Android devices, use the separate [Termux APT guide](./getting-started/termux.md).
+
+#### Linux / macOS / WSL2
 
 ```bash
 
 curl -fsSL https://raw.githubusercontent.com/NousResearch/clawksis-agent/main/scripts/install.sh | bash
 ```
 
+#### Windows (native)
 
-**Windows (native, PowerShell)** — *[details →](/user-guide/windows-native)*
+Run in powershell:
 
 ```powershell
 
@@ -45,9 +53,8 @@ iex (irm https://raw.githubusercontent.com/NousResearch/clawksis-agent/main/scri
 See the full **[Installation Guide](./getting-started/installation.md)** for what the installer does, installation ownership and data locations, and Windows-specific notes. For the complete platform support matrix, see **[Platform Support](./getting-started/platform-support.md)**.
 
 :::tip Fastest path to a working agent
-After installing, run `hermes setup --portal` — one OAuth covers a model plus all four Tool Gateway tools (web search, image generation, TTS, browser). See [Nous Portal](./integrations/nous-portal.md).
+After installing, run `clawk setup --portal` — one OAuth covers a model plus all four Tool Gateway tools (web search, image generation, TTS, browser). See [Nous Portal](./integrations/nous-portal.md).
 :::
-
 
 ## What is Clawksis?
 
@@ -66,14 +73,14 @@ It's not a coding copilot tethered to an IDE or a chatbot wrapper around a singl
 | 🔧 **[Tools & Toolsets](./user-guide/features/tools.md)**                   | 60+ built-in tools and how to configure them                          |
 | 🧠 **[Memory System](./user-guide/features/memory.md)**                     | Persistent memory that grows across sessions                          |
 | 📚 **[Skills System](./user-guide/features/skills.md)**                     | Procedural memory the agent creates and reuses                        |
-| 🔌 **[MCP Integration](./user-guide/features/mcp.md)**                      | Connect to MCP servers, filter their tools, and extend Hermes safely  |
-| 🧭 **[Use MCP with Hermes](./guides/use-mcp-with-hermes.md)**               | Practical MCP setup patterns, examples, and tutorials                 |
+| 🔌 **[MCP Integration](./user-guide/features/mcp.md)**                      | Connect to MCP servers, filter their tools, and extend Clawksis safely  |
+| 🧭 **[Use MCP with Clawksis](./guides/use-mcp-with-clawk.md)**               | Practical MCP setup patterns, examples, and tutorials                 |
 | 🎙️ **[Voice Mode](./user-guide/features/voice-mode.md)**                    | Real-time voice interaction in CLI, Telegram, Discord, and Discord VC |
-| 🗣️ **[Use Voice Mode with Hermes](./guides/use-voice-mode-with-hermes.md)** | Hands-on setup and usage patterns for Hermes voice workflows          |
-| 🎭 **[Personality & SOUL.md](./user-guide/features/personality.md)**        | Define Hermes' default voice with a global SOUL.md                    |
+| 🗣️ **[Use Voice Mode with Clawksis](./guides/use-voice-mode-with-clawk.md)** | Hands-on setup and usage patterns for Clawksis voice workflows          |
+| 🎭 **[Personality & SOUL.md](./user-guide/features/personality.md)**        | Define Clawksis' default voice with a global SOUL.md                    |
 | 📄 **[Context Files](./user-guide/features/context-files.md)**              | Project context files that shape every conversation                   |
 | 🔒 **[Security](./user-guide/security.md)**                                 | Command approval, authorization, container isolation                  |
-| 💡 **[Tips & Best Practices](./guides/tips.md)**                            | Quick wins to get the most out of Hermes                              |
+| 💡 **[Tips & Best Practices](./guides/tips.md)**                            | Quick wins to get the most out of Clawksis                              |
 | 🏗️ **[Architecture](./developer-guide/architecture.md)**                    | How it works under the hood                                           |
 | ❓ **[FAQ & Troubleshooting](./reference/faq.md)**                          | Common questions and solutions                                        |
 
@@ -82,7 +89,6 @@ It's not a coding copilot tethered to an IDE or a chatbot wrapper around a singl
 - **A closed learning loop** — Agent-curated memory with periodic nudges, autonomous skill creation, skill self-improvement during use, FTS5 cross-session recall with LLM summarization, and [Honcho](https://github.com/plastic-labs/honcho) dialectic user modeling
 - **Runs anywhere, not just your laptop** — 6 built-in terminal backends (local, Docker, SSH, Daytona, Modal, Vercel Sandbox) plus plugin backends such as Singularity. Daytona and Modal offer serverless persistence — your environment hibernates when idle, costing nearly nothing
 - **Lives where you do** — CLI, Telegram, Discord, Slack, WhatsApp, Signal, Matrix, Mattermost, Email, SMS, DingTalk, Feishu, WeCom, Weixin, QQ Bot, Yuanbao, BlueBubbles, Home Assistant, Microsoft Teams, Google Chat, and more — 20+ platforms from one gateway
-
 - **Built by model trainers** — Created by [Nous Research](https://nousresearch.com), the lab behind Clawksis, Nomos, and Psyche. Works with [Nous Portal](https://portal.nousresearch.com), [OpenRouter](https://openrouter.ai), OpenAI, or any endpoint
 - **Scheduled automations** — Built-in cron with delivery to any platform
 - **[Bot Mode](./user-guide/bot-mode.md)** — Build a durable team of specialist Bots that work together in group chats and through `@mentions`
@@ -90,7 +96,6 @@ It's not a coding copilot tethered to an IDE or a chatbot wrapper around a singl
 - **Open standard skills** — Compatible with [agentskills.io](https://agentskills.io). Skills are portable, shareable, and community-contributed via the Skills Hub
 - **Full web control** — Search, extract, browse, vision, image generation, TTS — one subscription via [Nous Portal](./integrations/nous-portal.md) bundles all of them
 - **MCP support** — Connect to any MCP server for extended tool capabilities
-
 - **Research-ready** — Batch processing, trajectory export, RL training with Atropos. Built by [Nous Research](https://nousresearch.com) — the lab behind Clawksis, Nomos, and Psyche models
 
 ## For LLMs and coding agents

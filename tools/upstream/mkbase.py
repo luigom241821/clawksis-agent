@@ -5,11 +5,13 @@ ya rebrandeada hermes->clawksis, para poder calcular el delta propio del fork.
 
 Uso:
   python tools/upstream/mkbase.py <fork_path>  > /tmp/base.py
+  MKBASE_REV=<tag|commit> python tools/upstream/mkbase.py <fork_path>   # otra base
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -35,7 +37,11 @@ def main() -> int:
     # merge_base_commit = base real del ciclo de merges en curso. Ojo:
     # last_synced_commit ya apunta al TARGET después de `sync.py --apply`,
     # usarlo daría base==theirs y un delta-del-fork falso.
-    last = state.get("merge_base_commit") or state["last_synced_commit"]
+    last = (
+        os.environ.get("MKBASE_REV")
+        or state.get("merge_base_commit")
+        or state["last_synced_commit"]
+    )
     up_path = unmap_path(fork_path)
     base = show(last, up_path)
     if base is None and up_path != fork_path:

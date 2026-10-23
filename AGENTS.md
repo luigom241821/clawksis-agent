@@ -26,21 +26,66 @@ and every root-to-area chain at 30k, so it loads whole on 128k+ models: long for
 
 **Never give up on the right solution.**
 
+## What Clawksis Is
+
+Clawksis is a personal AI agent that runs the same agent core across a CLI, a messaging
+gateway (Telegram, Discord, Slack, ~20 platforms), a TUI, and an Electron desktop app. It
+learns across sessions (memory + skills), delegates to subagents, runs scheduled jobs, and
+drives a real terminal and browser. It is extended primarily through **plugins and skills**,
+not by growing the core.
+
+Two invariants shape almost every design decision and are the lens for reviewing any change:
+
+- **Per-conversation prompt caching is sacred.** Mutating past context, swapping toolsets,
+  reloading memories or rebuilding the system prompt mid-conversation breaks the cached prefix and
+  multiplies the user's cost; the ONE exception is context compression. Slash commands that change
+  system-prompt state defer to the next session, with an opt-in `--now` (`/skills install --now`).
+- **The core is a narrow waist; capability lives at the edges.** Every model tool is sent on
+  every API call, so the bar for a new *core* tool is high. New capability should arrive as a
+  CLI command + skill, a service-gated tool, or a plugin — not as core surface.
+
+## Contribution rubric
+
+The project's intent layer, for contributors and for the triage sweeper (which may only close on
+`implemented_on_main`, `cannot_reproduce` or `incoherent`; taste-based closes are a maintainer's
+call, and when in doubt a PR stays open). Long form with examples:
+`website/docs/developer-guide/contributing.md` § Contribution rubric.
+
+**Wanted:** real bug fixes (repro on `main`, the exact line, the whole class incl. sibling paths);
+reach at the edges (adapters, providers, models, UI features) wired into the existing setup UX;
+god-file → module refactors; extending before duplicating (3+ PRs in one category → an ABC +
+orchestrator); behaviour-contract tests; E2E with real imports against a temp `CLAWK_HOME` for
+resolution, config, security and I/O changes; salvage by cherry-pick so authorship survives.
+
+**Rejected even when well-built:** hooks with no concrete consumer; new `CLAWK_*` env vars for
+non-secret config (`.env` is secrets only, behaviour goes in `config.yaml`); a new core tool when
+terminal + file or a skill already does the job; `offset`/`limit` pagination on instructional tools;
+"fixes" that destroy the feature they secure; outbound telemetry without an opt-in gate;
+change-detector tests; plugins that touch core files; third-party products in the core tree (ship a
+standalone plugin repo).
+
+**Before you call it a bug,** verify the claim AND the intent (`git log -p -S "<symbol>"`): the
+isolation is often the design (profiles are islands on purpose), an absence can be load-bearing,
+and a fix that cannot point to the line where the bug manifests has an unverified premise.
+
+**Security:** `SECURITY.md` is the scope authority. A §3.1 finding goes private (GitHub Security
+Advisories or security@nousresearch.com), never into a public issue, PR, commit or comment; §3.2
+hardening is ordinary public work. Name the §2 boundary crossed, with a repro on `main`.
+
+**Footprint ladder** (take the highest rung that solves it): extend existing code → CLI command +
+skill → service-gated tool (`check_fn` answers reachability/opt-in, never per-session surface:
+`tools/AGENTS.md`) → plugin → MCP server in the catalog → new core tool (fundamental, broadly useful,
+unreachable otherwise).
+
 ## Development Environment
 
-```bash
-
-# Prefer .venv; fall back to venv if that's what your checkout has.
-
-source .venv/bin/activate   # or: source venv/bin/activate
-
-```
-
-`scripts/run_tests.sh` probes `.venv` first, then `venv`, then
-
-`$HOME/.clawksis/clawksis-agent/venv` (for worktrees that share a venv with the
-
-main checkout).
+`source ./activate` (fish: `activate.fish`, PowerShell: `activate.ps1`) provisions and activates the
+PM environment; pick an isolated `CLAWK_HOME`/`CLAWK_RUNTIME_DIR` first
+(`website/docs/reference/package-management.md#developer-workflow`). Tests need the separate test
+environment in `CONTRIBUTING.md`. **`python scripts/check`** runs every blocking lint check CI
+runs, with CI's pinned tools; `--install-hook pre-push` runs it on every push (re-run after
+pulling to refresh the hook). `# noqa` does not waive a ratchet finding:
+`# health: allow <RULE> -- <why>` does.
 
 ## Project Structure
 
@@ -477,7 +522,7 @@ The registry handles schema collection, dispatch, availability checking, and err
 
 **Path references in tool schemas**: If the schema description mentions file paths (e.g. default output directories), use `display_clawk_home()` to make them profile-aware. The schema is generated at import time, which is after `_apply_profile_override()` sets `CLAWK_HOME`.
 
-**State files**: If a tool stores persistent state (caches, logs, checkpoints), use `get_clawk_home()` for the base directory — never `Path.home() / ".clawksis"`. This ensures each profile gets its own state.
+**State files**: If a tool stores persistent state (caches, logs, checkpoints), use `get_clawk_home()` for the base directory — never `Path.home() / ".clawk"`. This ensures each profile gets its own state.
 
 **Agent-level tools** (todo, memory): intercepted by `run_agent.py` before `handle_function_call()`. See `tools/todo_tool.py` for the pattern.
 
@@ -1410,7 +1455,7 @@ automatically scope to the active profile.
 
 1. **Use `get_clawk_home()` for all CLAWK_HOME paths.** Import from `clawk_constants`.
 
-   NEVER hardcode `~/.clawksis` or `Path.home() / ".clawksis"` in code that reads/writes state.
+   NEVER hardcode `~/.clawksis` or `Path.home() / ".clawk"` in code that reads/writes state.
 
    ```python
    # GOOD
@@ -1421,7 +1466,7 @@ automatically scope to the active profile.
 
    # BAD — breaks profiles
 
-   config_path = Path.home() / ".clawksis" / "config.yaml"
+   config_path = Path.home() / ".clawk" / "config.yaml"
    ```
 
 2. **Use `display_clawk_home()` for user-facing messages.** Import from `clawk_constants`.
@@ -1444,11 +1489,11 @@ automatically scope to the active profile.
 
    which is AFTER `_apply_profile_override()` sets the env var. Just use `get_clawk_home()`,
 
-   not `Path.home() / ".clawksis"`.
+   not `Path.home() / ".clawk"`.
 
 4. **Tests that mock `Path.home()` must also set `CLAWK_HOME`** — since code now uses
 
-   `get_clawk_home()` (reads env var), not `Path.home() / ".clawksis"`:
+   `get_clawk_home()` (reads env var), not `Path.home() / ".clawk"`:
 
    ```python
 
@@ -1472,7 +1517,7 @@ automatically scope to the active profile.
 
 6. **Profile operations are HOME-anchored, not CLAWK_HOME-anchored** — `_get_profiles_root()`
 
-   returns `Path.home() / ".clawksis" / "profiles"`, NOT `get_clawk_home() / "profiles"`.
+   returns `Path.home() / ".clawk" / "profiles"`, NOT `get_clawk_home() / "profiles"`.
 
    This is intentional — it lets `clawk -p coder profile list` see all profiles regardless
 

@@ -6,145 +6,120 @@ description: "Install Clawksis with desktop bundles, source installers, Docker, 
 
 # Installation
 
+Get Clawksis up and running in under two minutes!
 
-Get Clawksis up and running in under two minutes with the one-line installer.
-
+:::tip Platform Support
+For the full platform support matrix (which OSes, distribution methods, and
+platform-gated features are supported), see **[Platform Support](./platform-support.md)**.
+:::
 
 ## Quick Install
+### Desktop packages on macOS or Windows
 
+Download the package for your platform from the
+[Clawksis website](https://clawksis-agent.nousresearch.com/).
 
-### Desktop App (macOS + Windows)
+- **Windows:** open the `.appinstaller` download with Windows App Installer.
+  It installs the signed MSIX bundle and records its update source.
+  Microsoft Store packages have separate Store ownership.
+- **macOS:** open the DMG, then copy `Clawksis.app` to Applications. The ZIP
+  artifact carries the signed app used by the automatic updater.
 
+Bundled packages contain the agent, Python, supported dependencies, and prebuilt
+interfaces. First launch does not build that base runtime. Provider access and
+optional integrations can still require network access.
 
-Prefer a native installer?
+A `Clawksis-Setup` bootstrap installer is different: it downloads a source
+installation and builds the desktop app. See [Clawksis Desktop](../user-guide/desktop.md).
 
+There is no separate remote-only Desktop download. To use Desktop with a Clawksis
+backend on another machine, install one of the packages above and connect it
+from **Settings → Gateways**; see
+[Connecting to a remote backend](../user-guide/desktop.md#connecting-to-a-remote-backend).
 
-- **Desktop downloads:** [GitHub Releases](https://github.com/samuelgradientai-sys/clawksis-agent/releases/latest)
+:::note
+The macOS installer is **Apple Silicon only**. macOS on x86 (Intel) processors is [not a supported platform](./platform-support.md#unsupported).
+:::
 
+### Without Clawksis Desktop:
+For a command-line only install without Clawksis Desktop, run:
 
-Desktop builds ship signed/notarized macOS artifacts and Windows installers with checksum files.
-
-
-### One-Line CLI Installer (Linux / macOS / WSL2)
-
-
-For a git-based install that tracks `main` and gives you the latest changes immediately:
-
-
+#### Linux / macOS / WSL2
 ```bash
-
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
-
+curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
 ```
 
+#### Windows (native)
 
-### Windows (native, PowerShell)
-
-
-Native Windows runs Clawksis without WSL — the CLI, gateway, TUI, and tools all work natively. (Both native and WSL2 installs coexist cleanly; see the feature note below for the one WSL2-only feature.) Found a bug? Please [file issues](https://github.com/samuelgradientai-sys/clawksis-agent/issues).
-
-
-Open PowerShell and run:
-
-
+Run in powershell:
 ```powershell
-
-iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)
-
+iex (irm https://clawksis-agent.nousresearch.com/install.ps1)
 ```
 
-
-The installer handles **everything**: `uv`, Python 3.11, Node.js 22, `ripgrep`, `ffmpeg`, **and a portable Git Bash** (PortableGit — a self-contained Git-for-Windows distribution that ships `bash.exe` and the full POSIX toolchain Clawksis uses for shell commands; on 32-bit Windows the installer falls back to MinGit, which lacks bash and disables terminal-tool / agent-browser features).  It clones the repo under `%LOCALAPPDATA%\clawk\clawksis-agent`, creates a virtualenv, and adds `clawk` to your **User PATH**.  Restart your terminal (or open a new PowerShell window) after the install so PATH picks up.
-
-
-**How Git is handled:**
-
-1. If `git` is already on your PATH, the installer uses your existing install.
-
-2. Otherwise it downloads portable **PortableGit** (~50MB, from the official `git-for-windows` GitHub release) and unpacks it to `%LOCALAPPDATA%\clawk\git`.  No admin rights required.  Completely isolated — it won't interfere with any system Git install, broken or otherwise.  (On 32-bit Windows it falls back to MinGit because PortableGit ships only 64-bit and ARM64 assets; bash-dependent Clawksis features won't work on 32-bit hosts.)
-
-
-**Why not use winget?**  Earlier designs auto-installed Git via `winget install Git.Git`, but winget fails badly when a system Git install is in a partial or broken state (exactly when users need the installer to just work).  The portable Git approach sidesteps winget, the Windows installer registry, and any existing system Git entirely.  If the Clawksis Git install itself ever breaks, `Remove-Item %LOCALAPPDATA%\clawk\git` and re-run the installer — no system impact, no uninstall drama.
-
-
-The installer also sets `CLAWK_GIT_BASH_PATH` to the located `bash.exe` so Clawksis resolves it deterministically in fresh shells.
-
-
-If you prefer WSL2, the Linux installer above works inside it; both native and WSL installs can coexist without conflict (native data lives under `%LOCALAPPDATA%\clawk`, WSL data lives under `~/.clawksis`).
-
-
-**Desktop installer (alternative):** A thin GUI installer is also available — download Clawksis Desktop, run the `.exe`, and on first launch it calls `install.ps1` under the hood to provision Python (via `uv`), Node, PortableGit, and the rest of the dependencies. The desktop app and the PowerShell-installed CLI share the same install and data directories, so you can use either or both. See the [Windows (Native) guide](../user-guide/windows-native#desktop-installer-alternative) for details.
-
+If you want to install & run Clawksis Desktop after a command-line only install, simply run
+```bash
+clawk desktop
+```
 
 ### Android / Termux
 
+Use the [Termux APT package](./termux.md) on aarch64 Android devices.
+Configure its signed repository before running `pkg install clawksis-agent`.
+The desktop/server scripts are not the Termux installation path.
 
-Clawksis now ships a Termux-aware installer path too:
+### What the source installer does
 
+The scripts clone the source, bootstrap uv, and delegate dependency preparation
+to PM. PM provides pinned Python, Node.js, npm, ripgrep, and FFmpeg. The source
+installation selects the `all` Python extra, not every optional extra.
+PM also installs the browser and computer-use tools by default: `agent-browser`
+and its pinned Chromium, and `cua-driver` (the computer-use driver, on macOS,
+Windows and glibc Linux). If a download fails, the install still completes and
+prints the command to retry. The default browser driver (browser-harness, the
+engine of the Browser Use CLI) is a regular Python dependency, so every install,
+the Desktop app included, already has it.
+Other optional tools use their feature-specific installation paths.
 
-```bash
+A new install lands on the latest stable release, the channel `clawk update`
+follows from then on (see [Updating](./updating.md)). To install the tip of
+`main` instead, pass `--channel main` on POSIX or `-Channel main` on Windows
+(or set `CLAWK_INSTALL_CHANNEL=main` first, for the one-liners).
 
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
+To leave the browser tools out, pass `--skip-browser` on POSIX or `-SkipBrowser`
+on Windows; for the computer-use driver, `--skip-computer-use` /
+`-SkipComputerUse`. Clawksis remembers these choices: later installs and
+`clawk update` do not add them back. Run `clawk pm install agent-browser` or
+`clawk pm install cua-driver` to install them and undo the choice.
 
-```
+The scripts create a launcher and prepare the data directory. Interactive runs
+also invoke setup and gateway configuration. `--non-interactive` on POSIX, or
+`-NonInteractive` on Windows, skips stages that need input. The optional
+`--include-desktop` / `-IncludeDesktop` stage builds the desktop from source.
 
+On a terminal the scripts show one status line per step and write the output
+of git, uv and the builds to `logs/install.log` under the Clawksis data
+directory; a failed step prints its last lines and the log path. CI (`CI` or
+`GITHUB_ACTIONS` set), redirected output, `--verbose` / `-Verbose` or
+`CLAWK_INSTALL_VERBOSE=1` stream everything instead.
 
-The installer detects Termux automatically and switches to a tested Android flow:
+#### Install layout
 
-- uses Termux `pkg` for system dependencies (`git`, `python`, `nodejs`, `ripgrep`, `ffmpeg`, build tools)
-
-- creates the virtualenv with `python -m venv`
-
-- exports `ANDROID_API_LEVEL` automatically for Android wheel builds
-
-- prefers the broad `.[termux-all]` extra and falls back to the smaller `.[termux]` extra (and finally a base install) if the first attempt fails to compile
-
-- skips the untested browser / WhatsApp bootstrap by default
-
-
-If you want the fully explicit path, follow the dedicated [Termux guide](./termux.md).
-
-
-:::note Windows Feature Parity
-
-
-Everything except the browser-based dashboard chat terminal runs natively on Windows:
-
-- **CLI (`clawk chat`, `clawk setup`, `clawk gateway`, …)** — native, uses your default terminal
-
-- **Gateway (Telegram, Discord, Slack, …)** — native, runs as a background PowerShell process
-
-- **Cron scheduler** — native
-
-- **Browser tool** — native (Chromium via Node.js)
-
-- **MCP servers** — native (stdio and HTTP transports both supported)
-
-- **Dashboard `/chat` terminal pane** — **WSL2 only** (uses a POSIX PTY; native Windows has no equivalent).  The rest of the dashboard (sessions, jobs, metrics) works natively — only the embedded PTY terminal tab is gated.
-
-
-Set `CLAWK_DISABLE_WINDOWS_UTF8=1` in your environment if you hit an encoding-related bug and want to fall back to the legacy cp1252 stdio path (useful for bisecting).
-:::
-
-### What the Installer Does
-
-The installer handles everything automatically — all dependencies (Python, Node.js, ripgrep, ffmpeg), the repo clone, virtual environment, global `clawk` command setup, and LLM provider configuration. By the end, you're ready to chat.
-
-#### Install Layout
-
-Where the installer puts things depends on whether you're installing as a normal user or as root:
-
-| Installer | Code lives at | `clawk` binary | Data directory |
-
+| Method | Code | CLI entry point | Default user data |
 |---|---|---|---|
+| POSIX source script | `~/.clawksis/clawksis-agent/` | `~/.local/bin/clawk` wrapper | `~/.clawksis/` |
+| Windows source script | `%LOCALAPPDATA%\clawk\clawksis-agent\` | `%LOCALAPPDATA%\clawk\bin\` | `%LOCALAPPDATA%\clawk\` |
+| Desktop bundle | Inside the installed app package | Packaged launchers; Windows execution aliases | Platform default Clawksis data directory |
+| Docker | `/opt/clawksis/` | Image entrypoint and `clawk` shim | Mounted `/opt/data/` |
+| Termux APT | `$PREFIX/lib/clawksis-agent/` | Symlinks in `$PREFIX/bin/` | `~/.clawksis/` |
 
-| pip install | Python site-packages | `~/.local/bin/clawk` (console_scripts) | `~/.clawksis/` |
+`CLAWK_HOME` selects user data. The POSIX script's `--dir` selects its source
+checkout independently. Windows provides `-ClawkHome` and `-InstallDir`.
+Running the POSIX script as root does not select an automatic FHS layout:
+it uses root's home unless you provide an explicit source path.
 
-| Per-user (git installer) | `~/.clawksis/clawksis-agent/` | `~/.local/bin/clawk` (symlink) | `~/.clawksis/` |
-
-| Root-mode (`sudo curl … \| sudo bash`) | `/usr/local/lib/clawksis-agent/` | `/usr/local/bin/clawk` | `/root/.clawksis/` (or `$CLAWK_HOME`) |
-
-The root-mode **FHS layout** (`/usr/local/lib/…`, `/usr/local/bin/clawk`) matches where other system-wide developer tools land on Linux. It's useful for shared-machine deployments where one system install should serve every user. Per-user config (auth, skills, sessions) still lives under each user's `~/.clawksis/` or explicit `CLAWK_HOME`.
+PM's tool store and per-install Python generations have separate lifetimes.
+See [Package management](../reference/package-management.md) for their locations.
+Do not remove the data root to repair an application installation.
 
 ### After Installation
 
@@ -162,6 +137,7 @@ clawk model          # Choose your LLM provider and model
 clawk tools          # Configure which tools are enabled
 clawk gateway setup  # Set up messaging platforms
 clawk config set     # Set individual config values
+clawk config get     # Inspect individual config values
 clawk setup          # Or run the full setup wizard to configure everything at once
 ```
 
@@ -210,8 +186,7 @@ the install cannot run, the error names the exact command for the package
 manager it found.
 
 :::tip Nix users
-
-If you use Nix (on NixOS, macOS, or Linux), there's a dedicated setup path with a Nix flake, declarative NixOS module, and optional container mode. See the **[Nix & NixOS Setup](./nix-setup.md)** guide.
+Nix is **no longer an explicitly supported install path** (best-effort only). If you already use Nix (on NixOS, macOS, or Linux), there's a dedicated setup path with a Nix flake, declarative NixOS module, and optional container mode. See the **[Nix & NixOS Setup](./nix-setup.md)** guide.
 :::
 
 ---
@@ -235,8 +210,7 @@ configuration, and launcher must belong to that user.
 2. As the service user, run the regular installer:
 
    ```bash
-
-   curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
+   curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
    ```
 
 3. Add the actual launcher directory to the service user's shell environment:

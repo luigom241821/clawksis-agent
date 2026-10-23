@@ -6,63 +6,103 @@ description: "Install Clawksis on Android from its signed Termux APT repository"
 
 # Clawksis on Android with Termux
 
-This is the tested path for running Clawksis directly on an Android phone through [Termux](https://termux.dev/).
+:::danger Termux is currently broken
+The Termux package does not work right now. A fix is in progress and will
+ship soon. Until then, the steps below may fail or install a package that
+does not run.
+:::
 
-It gives you a working local CLI on the phone, plus the core extras that are currently known to install cleanly on Android.
+The Termux package runs Clawksis on **aarch64 (arm64-v8a)** Android devices.
+Two APT channels are published under
+`https://clawk-assets.nousresearch.com/releases/termux/<channel>`:
 
-## What is supported in the tested path?
+| Channel | APT suite | Contents |
+| --- | --- | --- |
+| `stable` | `clawk-stable` | Tagged `vMAJOR.MINOR.PATCH` releases that passed the stable release gate |
+| `canary` | `clawk-canary` | Prerelease builds from canary tags; versions carry `~canary.<timestamp>` |
 
-The tested Termux bundle installs:
-- the Clawksis CLI
-- cron support
-- PTY/background terminal support
-- Telegram gateway support (manual / best-effort background runs)
-- MCP support
-- Honcho memory support
-- ACP support
+The steps below use `stable`. To follow prereleases, replace `stable` with
+`canary` and `clawk-stable` with `clawk-canary` in steps 2 and 4. Both
+channels are signed with the same key.
 
-Concretely, it maps to:
+The package includes Python, Node.js, npm, uv, ripgrep, ffmpeg, and their runtime libraries.
+CI builds the native Python wheels and the TUI before it creates the package.
+The device does not compile core dependencies or assemble its base Python
+environment during installation. The package uses Python 3.14 with the bionic
+interpreter pin; it does not require the same patch version as desktop CPython.
+The wheel closure is core plus `acp`, not all desktop extras.
 
-```bash
-python -m pip install -e '.[termux]' -c constraints-termux.txt
-```
+## Install
 
-## What is not part of the tested path yet?
+Use the standard [Termux](https://termux.dev/) application.
+The package requires its standard prefix, `/data/data/com.termux/files/usr`.
+Other architectures and renamed Termux application packages are not supported.
+The wheels target Android API 24 (`android_24_arm64_v8a`).
+Do not use the desktop/server `install.sh` or a glibc Linux archive on this target.
 
-A few features still need desktop/server-style dependencies that are not published for Android, or have not been validated on phones yet:
+1. Install the tools for repository setup:
 
-- `.[all]` is not supported on Android today
-- the `voice` extra is blocked by `faster-whisper -> ctranslate2`, and `ctranslate2` does not publish Android wheels
-- automatic browser / Playwright bootstrap is skipped in the Termux installer
-- Docker-based terminal isolation is not available inside Termux
-- Android may still suspend Termux background jobs, so gateway persistence is best-effort rather than a normal managed service
+   ```bash
+   pkg install curl gnupg
+   ```
 
-That does not stop Clawksis from working well as a phone-native CLI agent — it just means the recommended mobile install is intentionally narrower than the desktop/server install.
+2. Download the public key:
 
----
+   ```bash
+   mkdir -p "$PREFIX/etc/apt/keyrings"
+   curl -fsSL \
+     https://clawk-assets.nousresearch.com/releases/termux/stable/key.asc \
+     -o "$PREFIX/etc/apt/keyrings/clawksis-agent.asc"
+   ```
 
-## Option 1: One-line installer
+3. Verify its primary fingerprint:
 
-Clawksis now ships a Termux-aware installer path:
+   ```bash
+   gpg --show-keys --with-fingerprint "$PREFIX/etc/apt/keyrings/clawksis-agent.asc"
+   ```
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
-```
+   The repository key fingerprint is:
 
-On Termux, the installer automatically:
-- uses `pkg` for system packages
-- creates the venv with `python -m venv`
-- attempts the broad `.[termux-all]` extra first and falls back to the smaller `.[termux]` extra (then a base install) — the curl installer matches this order automatically
-- links `clawk` into `$PREFIX/bin` so it stays on your Termux PATH
-- skips the untested browser / WhatsApp bootstrap
+   ```text
+   C572 B5FD D1A2 9CCF A9A9 12B6 840B 0848 E139 156D
+   ```
 
-If you want the explicit commands or need to debug a failed install, use the manual path below.
+   If the fingerprint differs, stop. Do not disable signature verification.
 
----
+4. Add the repository:
 
-## Option 2: Manual install (fully explicit)
+   ```bash
+   printf '%s\n' \
+     "deb [signed-by=$PREFIX/etc/apt/keyrings/clawksis-agent.asc] https://clawk-assets.nousresearch.com/releases/termux/stable clawk-stable main" \
+     > "$PREFIX/etc/apt/sources.list.d/clawksis-agent.list"
+   ```
 
-### 1. Update Termux and install system packages
+5. Install Clawksis:
+
+   ```bash
+   pkg update
+   pkg install clawksis-agent
+   ```
+
+6. Configure a provider, then start the TUI:
+
+   ```bash
+   clawk setup
+   clawk --tui
+   ```
+
+The `clawk`, `clawksis-agent`, and `clawk-acp` commands use the packaged runtimes.
+They do not require Termux's `python` or `nodejs` packages.
+
+## Files and updates
+
+| Contents | Location |
+| --- | --- |
+| Package files | `$PREFIX/lib/clawksis-agent/` |
+| Command symlinks | `$PREFIX/bin/clawk`, `$PREFIX/bin/clawksis-agent`, `$PREFIX/bin/clawk-acp` |
+| Configuration and user data | `~/.clawksis/`, or the selected `CLAWK_HOME` |
+
+Update through APT:
 
 ```bash
 pkg update

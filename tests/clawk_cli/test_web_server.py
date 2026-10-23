@@ -1,5 +1,6 @@
 """Tests for clawk_cli.web_server and related config utilities."""
 
+import asyncio
 import os
 import json
 import re
@@ -8,6 +9,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -81,6 +83,25 @@ def _install_example_plugin(_isolate_clawk_home):
     if dst.exists():
         shutil.rmtree(dst)
     shutil.copytree(_EXAMPLE_PLUGIN_FIXTURE, dst)
+
+    # The dashboard now gates user-plugin asset serving + backend import
+    # behind the ``plugins.enabled`` allow-list (GHSA-mcfc-hp25-cjv7).
+    # An installed-but-not-enabled user plugin has its API mount skipped
+    # and its assets 404'd — which is the whole point of the gate. These
+    # fixtures exist to exercise the *serving* paths, so opt the example
+    # plugin in exactly as a real operator would with `clawk plugins
+    # enable example`.
+    from clawk_cli.config import load_config, save_config
+
+    _cfg = load_config()
+    _plugins_cfg = _cfg.setdefault("plugins", {})
+    _enabled = _plugins_cfg.get("enabled")
+    if not isinstance(_enabled, list):
+        _enabled = []
+    if "example" not in _enabled:
+        _enabled.append("example")
+    _plugins_cfg["enabled"] = _enabled
+    save_config(_cfg)
 
     # Snapshot the existing routes BEFORE mounting so we can:
     #   1. Identify the routes the mount call appends.
@@ -3274,166 +3295,148 @@ class TestNewEndpoints:
         else:
             assert data["active_provider"] is None
 
-    def test_get_toolset_config_reflects_selected_provider(self):
-        """Selecting a provider is reflected in the next /config read.
+    def test_get_toolset_config_reports_truthful_provider_status(self, monkeypatch):
+        """Each provider row carries a server-computed readiness `status`.
 
-        Regression: the GUI's provider panel highlighted the first keyless
-
-        provider on relaunch because /config never reported which provider was
-
-        actually active. After selecting one, is_active / active_provider must
-
-        point at it.
-
+        Regression: the GUI pilled every zero-env-var row "Ready" — including
+        logged-out Nous Subscription rows, xAI TTS without Grok OAuth, and
+        never-installed KittenTTS/Piper. The endpoint now reports the honest
+        state so keyless ≠ ready.
         """
+        from clawk_cli import tools_config
+        from clawk_cli.nous_account import NousPortalAccountInfo
 
-        sel = self.client.put(
+        # Logged out of Nous Portal → managed subscription rows need sign-in.
+        monkeypatch.setattr(
+            "clawk_cli.nous_subscription.get_nous_portal_account_info",
+            lambda *a, **k: NousPortalAccountInfo(
+                logged_in=False, source="none", fresh=False, paid_service_access=None
+            ),
+        )
+        # No xAI credentials → the Grok OAuth-backed row needs sign-in.
+        from clawk_cli import tools_config_post_setup
+
+        monkeypatch.setattr(tools_config, "_xai_credentials_present", lambda: False)
+        # Local TTS engines not installed → their rows need setup.
+        monkeypatch.setattr(
+            tools_config_post_setup, "_module_installed", lambda name: False
+        )
+        monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+
+        resp = self.client.get("/api/tools/toolsets/tts/config")
+        assert resp.status_code == 200
+        data = resp.json()
+        by_name = {p["name"]: p for p in data["providers"]}
+
+        valid = {"ready", "needs_keys", "needs_auth", "needs_setup"}
+        assert all(p["status"] in valid for p in data["providers"])
+        # Genuinely-free keyless row stays Ready.
+        assert by_name["Microsoft Edge TTS"]["status"] == "ready"
+        # Keyless ≠ ready for gated rows:
+        assert by_name["Nous Subscription"]["status"] == "needs_auth"
+        assert by_name["xAI TTS"]["status"] == "needs_auth"
+        assert by_name["KittenTTS"]["status"] == "needs_setup"
+        assert by_name["Piper"]["status"] == "needs_setup"
+        # Keyed row with the key unset:
+        assert by_name["ElevenLabs"]["status"] == "needs_keys"
+
+    def test_select_managed_nous_provider_reports_needs_nous_auth(self, monkeypatch):
+        """Selecting a managed Nous row while logged out flags needs_nous_auth.
+
+        Regression: the GUI PUT wrote browser.cloud_provider + use_gateway
+        but skipped the Portal entitlement handshake the CLI runs inline
+        (ensure_nous_portal_access) — so the row never activated and nothing
+        told the user to sign in. The endpoint now reports the entitlement
+        gap so the client can drive the existing Nous OAuth flow.
+        """
+        from clawk_cli.nous_account import NousPortalAccountInfo
+
+        monkeypatch.setattr(
+            "clawk_cli.nous_subscription.get_nous_portal_account_info",
+            lambda *a, **k: NousPortalAccountInfo(
+                logged_in=False, source="none", fresh=False, paid_service_access=None
+            ),
+        )
+
+        resp = self.client.put(
+            "/api/tools/toolsets/browser/provider",
+            json={"provider": "Nous Subscription (Browser Use cloud)"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        assert data["needs_nous_auth"] is True
+        assert data["feature"] == "browser"
+        # The selection is still persisted — activation is what's gated.
+        # Managed rows store the single 'nous' provider string (the runtime
+        # maps it to the Browser Use cloud through the Nous Tool Gateway).
+        from clawk_cli.config import load_config
+
+        cfg = load_config()
+        assert cfg["browser"]["cloud_provider"] == "nous"
+        assert "use_gateway" not in cfg["browser"]
+
+    # -- Web capability split (search vs extract backends) ------------------
+
+    def test_select_web_search_backend_matches_runtime_resolution(self, monkeypatch):
+        """PUT provider with capability=search writes web.search_backend and the
+        runtime search dispatcher resolves to it — while extract is untouched."""
+        # Make SearXNG available so both the endpoint gate and the runtime
+        # availability check agree it's usable.
+        monkeypatch.setenv("SEARXNG_URL", "http://localhost:8888")
+        # Give extract an explicit shared backend so the assertion isn't
+        # hostage to whatever creds exist on the machine running the tests.
+        monkeypatch.setenv("FIRECRAWL_API_URL", "http://localhost:3002")
+        base = self.client.put(
             "/api/tools/toolsets/web/provider",
             json={"provider": "Firecrawl Self-Hosted"},
         )
-
-        assert sel.status_code == 200
-
-        resp = self.client.get("/api/tools/toolsets/web/config")
-
-        assert resp.status_code == 200
-
-        data = resp.json()
-
-        assert data["active_provider"] == "Firecrawl Self-Hosted"
-
-        active = [p["name"] for p in data["providers"] if p["is_active"]]
-
-        # The first active row is what the GUI highlights; it must be the
-
-        # selected provider.
-
-        assert active, "expected at least one provider flagged active"
-
-        assert active[0] == "Firecrawl Self-Hosted"
-
-    def test_get_toolset_config_no_category_toolset(self):
-        """A toolset without a TOOL_CATEGORIES entry returns has_category False."""
-
-        resp = self.client.get("/api/tools/toolsets/todo/config")
-
-        assert resp.status_code == 200
-
-        data = resp.json()
-
-        assert data["name"] == "todo"
-
-        assert data["has_category"] is False
-
-        assert data["providers"] == []
-
-    def test_get_toolset_config_unknown_returns_400(self):
-
-        resp = self.client.get("/api/tools/toolsets/not_a_real_toolset/config")
-
-        assert resp.status_code == 400
-
-    def test_select_toolset_provider_persists_backend(self):
-        """PUT .../provider writes the backend selection to config."""
+        assert base.status_code == 200
 
         resp = self.client.put(
             "/api/tools/toolsets/web/provider",
-            json={"provider": "Firecrawl Self-Hosted"},
+            json={"provider": "SearXNG", "capability": "search"},
         )
-
         assert resp.status_code == 200
-
         body = resp.json()
-
         assert body["ok"] is True
-
-        assert body["name"] == "web"
-
-        assert body["provider"] == "Firecrawl Self-Hosted"
+        assert body["capability"] == "search"
 
         from clawk_cli.config import load_config
 
         cfg = load_config()
-
+        assert cfg["web"]["search_backend"] == "searxng"
+        # The shared backend selected first must be preserved for extract.
         assert cfg["web"]["backend"] == "firecrawl"
 
-    def test_select_toolset_provider_unknown_provider_returns_400(self):
+        # The REAL runtime resolution — not a parallel reimplementation.
+        from tools.web_tools import _get_extract_backend, _get_search_backend
 
-        resp = self.client.put(
-            "/api/tools/toolsets/web/provider",
-            json={"provider": "No Such Provider"},
-        )
+        assert _get_search_backend() == "searxng"
+        assert _get_extract_backend() == "firecrawl"
 
-        assert resp.status_code == 400
+        # And the config endpoint reports the same split.
+        data = self.client.get("/api/tools/toolsets/web/config").json()
+        assert data["active_search_backend"] == "searxng"
+        assert data["active_extract_backend"] == "firecrawl"
 
-    def test_select_toolset_provider_unknown_toolset_returns_400(self):
+    # -- Terminal execution backend picker ---------------------------------
 
-        resp = self.client.put(
-            "/api/tools/toolsets/not_a_real_toolset/provider",
-            json={"provider": "whatever"},
-        )
+    def test_terminal_ssh_probe_ready_when_configured(self, monkeypatch):
+        """SSH host + user in config.yaml -> ready."""
+        from clawk_cli.config import load_config, save_config
 
-        assert resp.status_code == 400
+        monkeypatch.setattr(shutil, "which", lambda name: None)
+        config = load_config()
+        config.setdefault("terminal", {})
+        config["terminal"]["ssh_host"] = "devbox.example.com"
+        config["terminal"]["ssh_user"] = "clawk"
+        save_config(config)
 
-    def test_config_raw_get(self):
-
-        resp = self.client.get("/api/config/raw")
-
-        assert resp.status_code == 200
-
-        assert "yaml" in resp.json()
-
-    def test_config_raw_put_valid(self):
-
-        resp = self.client.put(
-            "/api/config/raw",
-            json={"yaml_text": "model: test\ntoolsets:\n  - all\n"},
-        )
-
-        assert resp.status_code == 200
-
-        assert resp.json()["ok"] is True
-
-    def test_config_raw_put_invalid(self):
-
-        resp = self.client.put(
-            "/api/config/raw",
-            json={"yaml_text": "- this is a list not a dict"},
-        )
-
-        assert resp.status_code == 400
-
-    def test_analytics_usage(self):
-
-        resp = self.client.get("/api/analytics/usage?days=7")
-
-        assert resp.status_code == 200
-
-        data = resp.json()
-
-        assert "daily" in data
-
-        assert "by_model" in data
-
-        assert "totals" in data
-
-        assert "skills" in data
-
-        assert isinstance(data["daily"], list)
-
-        assert "total_sessions" in data["totals"]
-
-        assert "total_api_calls" in data["totals"]
-
-        assert data["skills"] == {
-            "summary": {
-                "total_skill_loads": 0,
-                "total_skill_edits": 0,
-                "total_skill_actions": 0,
-                "distinct_skills_used": 0,
-            },
-            "top_skills": [],
-        }
+        body = self.client.get("/api/tools/terminal/backends").json()
+        ssh = next(r for r in body["backends"] if r["name"] == "ssh")
+        assert ssh["status"] == "ready"
+        assert "clawk@devbox.example.com" in ssh["detail"]
 
     def test_analytics_usage_includes_skill_breakdown(self):
         from clawk_state import SessionDB
@@ -5299,6 +5302,7 @@ class TestPtyWebSocket:
         # its own fake argv via ``web_server_chat._resolve_chat_argv``.
         self.ws_module = ws
         monkeypatch.setattr(ws, "_DASHBOARD_EMBEDDED_CHAT_ENABLED", True)
+        ws.app.state.pty_active_session_files = {}
         self.token = ws._SESSION_TOKEN
         self.client = TestClient(ws.app)
 
@@ -5340,7 +5344,11 @@ class TestPtyWebSocket:
         monkeypatch.setattr(
             _web_server_chat,
             "_resolve_chat_argv",
-            lambda resume=None, sidecar_url=None: (["/bin/cat"], None, None),
+            lambda resume=None, sidecar_url=None, profile=None: (
+                ["/bin/cat"],
+                None,
+                None,
+            ),
         )
         # Patch PtyBridge.spawn at the web_server_chat module's binding.
         monkeypatch.setattr(

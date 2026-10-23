@@ -36,8 +36,7 @@ A child should wait for its builds, tests, and other bounded background commands
 ```python
 delegate_task(
     goal="Debug why tests fail",
-    context="Error: assertion in test_foo.py line 42",
-    toolsets=["terminal", "file"],
+    context="Error: assertion in test_foo.py line 42"
 )
 ```
 
@@ -46,13 +45,11 @@ delegate_task(
 Up to 10 concurrent subagents by default (configurable, no hard ceiling):
 
 ```python
-delegate_task(
-    tasks=[
-        {"goal": "Research topic A", "toolsets": ["web"]},
-        {"goal": "Research topic B", "toolsets": ["web"]},
-        {"goal": "Fix the build", "toolsets": ["terminal", "file"]},
-    ]
-)
+delegate_task(tasks=[
+    {"goal": "Research topic A", "context": "Focus on recent primary sources"},
+    {"goal": "Research topic B", "context": "Compare the leading explanations"},
+    {"goal": "Fix the build", "context": "Project root: /home/user/project"}
+])
 ```
 
 ## Structured Output (`output_schema`)
@@ -134,25 +131,20 @@ Forwarding is best-effort: unreadable paths are skipped with a log line, and any
 Research multiple topics simultaneously and collect summaries:
 
 ```python
-delegate_task(
-    tasks=[
-        {
-            "goal": "Research the current state of WebAssembly in 2025",
-            "context": "Focus on: browser support, non-browser runtimes, language support",
-            "toolsets": ["web"],
-        },
-        {
-            "goal": "Research the current state of RISC-V adoption in 2025",
-            "context": "Focus on: server chips, embedded systems, software ecosystem",
-            "toolsets": ["web"],
-        },
-        {
-            "goal": "Research quantum computing progress in 2025",
-            "context": "Focus on: error correction breakthroughs, practical applications, key players",
-            "toolsets": ["web"],
-        },
-    ]
-)
+delegate_task(tasks=[
+    {
+        "goal": "Research the current state of WebAssembly in 2025",
+        "context": "Focus on: browser support, non-browser runtimes, language support"
+    },
+    {
+        "goal": "Research the current state of RISC-V adoption in 2025",
+        "context": "Focus on: server chips, embedded systems, software ecosystem"
+    },
+    {
+        "goal": "Research quantum computing progress in 2025",
+        "context": "Focus on: error correction breakthroughs, practical applications, key players"
+    }
+])
 ```
 
 ### Code Review + Fix
@@ -166,8 +158,7 @@ delegate_task(
     Auth module files: src/auth/login.py, src/auth/jwt.py, src/auth/middleware.py.
     The project uses Flask, PyJWT, and bcrypt.
     Focus on: SQL injection, JWT validation, password handling, session management.
-    Fix any issues found and run the test suite (pytest tests/auth/).""",
-    toolsets=["terminal", "file"],
+    Fix any issues found and run the test suite (pytest tests/auth/)."""
 )
 ```
 
@@ -186,8 +177,7 @@ delegate_task(
     - print(f"Debug: ...") -> logger.debug(...)
     - Other prints -> logger.info(...)
     Don't change print() in test files or CLI output.
-    Run pytest after to verify nothing broke.""",
-    toolsets=["terminal", "file"],
+    Run pytest after to verify nothing broke."""
 )
 ```
 
@@ -654,6 +644,7 @@ For **durable execution** that must survive session closure or process restart, 
 ## Key Properties
 
 - Each subagent gets its **own terminal session** (separate from the parent)
+- Subagents inherit the parent's enabled toolsets; the model cannot select or widen them per call
 - **Nested delegation is opt-in** — only `role="orchestrator"` children can delegate further, and only when `max_spawn_depth` is raised from its default of 1 (flat). Disable globally with `orchestrator_enabled: false`.
 - Leaf subagents **cannot** call: `delegate_task`, `clarify`, `memory`, `send_message`, `cronjob`. Orchestrator subagents retain `delegate_task` but keep the other blocks. Both roles retain `execute_code` (programmatic tool calling) so children can batch mechanical work instead of burning reasoning iterations.
 - **Cancellation follows ownership** — `/stop` or closing/resetting the owning session ends its background children and the synchronous descendants beneath them; each returns an interrupted completion carrying its partial output

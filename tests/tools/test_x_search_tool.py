@@ -78,6 +78,7 @@ def test_x_search_posts_responses_request(monkeypatch):
     )
     assert captured["json"]["model"]
     assert captured["json"]["store"] is False
+    assert "reasoning" not in captured["json"]
     assert tool_def["type"] == "x_search"
     assert tool_def["allowed_x_handles"] == ["xai", "grok"]
     assert tool_def["from_date"] == "2026-04-01"

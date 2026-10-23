@@ -10,8 +10,7 @@ Clawksis is designed with a defense-in-depth security model. This page covers ev
 
 ## Overview
 
-
-The security model has seven layers:
+The security model has eight layers:
 
 1. **User authorization** — who can talk to the agent (allowlists, DM pairing)
 2. **Dangerous command approval** — human-in-the-loop for destructive operations
@@ -55,10 +54,8 @@ The full set of keys:
 
 | Mode | Behavior |
 |------|----------|
-
-| **manual** (default) | Always prompt the user for approval on dangerous commands |
-
-| **smart** | Use an auxiliary LLM to assess risk. Low-risk commands (e.g., `python -c "print('hello')"`) are auto-approved. Genuinely dangerous commands are auto-denied. Uncertain cases escalate to a manual prompt. |
+| **smart** (default) | Use an auxiliary LLM to assess risk. Low-risk commands (e.g., `python -c "print('hello')"`) are auto-approved for that command only. Genuinely dangerous commands are auto-denied. Uncertain cases escalate to a manual prompt. |
+| **manual** | Always prompt the user for approval on dangerous commands. |
 | **off** | Disable all approval checks — equivalent to running with `--yolo`. All commands execute without prompts. |
 
 :::warning
@@ -154,6 +151,37 @@ The blocklist is the floor below `--yolo`. It trips **before** the approval laye
 | Piping untrusted URLs to `sh` at the rootfs top level | Remote-code-execution attack vector too broad to approve |
 
 If you hit the blocklist, the tool call returns an explanatory error to the agent and nothing runs. If a legitimate workflow needs one of these commands (you're the operator of a wipe-and-reinstall pipeline, for example), run it outside the agent.
+
+The floor also fails closed on a command whose shell quoting cannot be parsed (`grep 'unterminated`): the error says `malformed executable payload`. Quoting is judged on the command exactly as written, so shell-valid escapes inside a quoted pattern (`grep -o "[^\"]*" file`) are not malformed, and an escaped quote before a separator (`echo "a\"b"; reboot`) does not hide the command that follows it.
+
+### User-Defined Deny Rules (`approvals.deny`)
+
+The hardline blocklist is fixed and code-shipped. `approvals.deny` is its user-editable counterpart: a list of glob patterns that block matching terminal commands unconditionally — **before** `--yolo`, `/yolo`, and `approvals.mode: off` are consulted. Use it to run yolo-with-exceptions: "let the agent do everything, except these specific things, ever."
+
+```yaml
+approvals:
+  deny:
+    - "git push --force*"
+    - "*curl*|*sh*"
+    - "dd if=* of=/dev/*"
+```
+
+Details:
+
+- Patterns are [fnmatch](https://docs.python.org/3/library/fnmatch.html) globs (`*`, `?`, `[...]`) matched **case-insensitively** against the whole command text and individual executable-command candidates. `git push --force*` matches `git push --force origin main` but not `git push origin main`.
+- Matching runs over the same normalized/deobfuscated command variants the dangerous-pattern detector uses, so simple quoting tricks (`git pu""sh --force`) don't slip past a rule.
+- Executable candidates retain the literal path and also match its basename: `sudo *` covers `/usr/bin/sudo -n id` and `./sudo -n id`. A path-specific rule such as `/usr/bin/sudo *` does **not** become a rule for every binary named `sudo`.
+- Quote-aware parsing exposes commands after assignments, leading redirections, `;`, `&&`, `||`, pipelines, groups, command substitutions, and ordinary `if`/`then`/`else`/`do` transitions. Supported launchers include `sudo`, `env`, `command`, `exec`, `nohup`, `setsid`, `time`, `nice`, `timeout`, `stdbuf`, `ionice`, `chrt`, `taskset`, and `chroot`. Known option operands are skipped; `command -v`/`-V` lookups are not executions. Shell `-c` payloads are inspected recursively. Literal executable-and-argument strings in `env -S` / `--split-string` use GNU quoting and escapes (including `\_` word boundaries and `\c` termination), with the remaining command arguments appended; shell punctuation inside those arguments stays data unless an actual shell `-c` consumes it. `env -a` / `--argv0` values are arguments, not executable names. Shell and GNU split-string comments do not introduce executable candidates.
+- In the additional executable candidates, whitespace **between** words is collapsed, but quoted argument content and argument paths are retained. An exact rule such as `git status` therefore also matches `env git\tstatus; echo done` (where `\t` represents a tab). Quoted mentions such as `echo 'sudo -n id'` are not promoted to commands. Existing whole-input globs such as `*sudo*` still intentionally match mentions anywhere.
+- **YAML quoting:** always quote patterns. A bare leading `*` is a YAML alias and fails to parse; `{`, `!`, and `: ` have their own YAML meanings. Single quotes are safest for shell-ish content.
+- User-defined deny rules apply to all terminal backends, including isolated containers, before any backend-specific approval shortcut.
+- A denied command returns a BLOCKED error to the agent telling it not to retry or rephrase. Nothing runs.
+
+Like the rest of the approval config, changes take effect immediately (the config cache is mtime-keyed) — no session restart needed.
+
+:::note Threat model
+Deny rules are a shell-command policy, not a complete shell interpreter or an OS capability sandbox. Normalization does not resolve arbitrary variables (including GNU `env -S` `${NAME}` expansion), aliases, functions, renamed binaries, scripts, interpreter programs, or every shell/launcher grammar (for example, case-pattern syntax, clustered launcher options, or options embedded inside an `env -S` string). Do not use a basename deny rule as a guarantee that a capability cannot be reached by other means. For containment, use OS permissions and an isolated backend with appropriately restricted mounts, credentials, and network access. This matching behavior does not change the configured approval mode or the empty-deny-list default.
+:::
 
 ### Approval Timeout
 
@@ -280,6 +308,113 @@ your configuration file.
 Use `clawk config edit` to review or remove patterns from your permanent allowlist.
 :::
 
+:::caution
+The list is read when Clawksis starts. A pattern you remove while a session is
+already running stays approved in that session until it next writes the file
+(the next time you answer `always` to a prompt) or you restart Clawksis. If you
+removed it for safety reasons, restart.
+:::
+
+### Mining Approval History (`clawk approvals suggest`)
+
+Instead of answering the same prompt session after session, you can mine your
+past approval decisions into allowlist proposals:
+
+```bash
+clawk approvals suggest            # dry run — prints a numbered proposal
+clawk approvals suggest --apply 1,3  # merge picks into command_allowlist
+clawk approvals suggest --json     # machine-readable output
+```
+
+The command scans the session database (`~/.clawksis/state.db`) for
+dangerous-classified commands that actually executed — i.e. commands you
+approved — aggregates them into patterns (`git push *`, or the dangerous-class
+key for compound commands), and ranks them by approval frequency:
+
+```
+Proposed command_allowlist additions (from approval history, last 90 days):
+
+  1. git push *    — approved 14x
+  2. docker restart/stop/kill (container lifecycle)    — approved 9x (class key)
+```
+
+Safety rules:
+
+- **Nothing is ever applied automatically** — the default run is read-only;
+  only an explicit `--apply N[,M...]` writes to `config.yaml`.
+- **Destructive classes are never proposed**, no matter how often they were
+  approved: recursive deletes, `sudo`, disk/device writes, credential and
+  system-config edits, pipe-to-shell, SQL DROP/TRUNCATE, process kills, and
+  every hardline class are excluded outright. `rm -rf build/` approved 100
+  times still never yields an `rm` entry.
+- Proposals already covered by your existing `command_allowlist` are skipped.
+- **Credentials inside mined commands are masked** (`ghp_…`, `bot<id>:<token>`
+  URLs, `KEY=value` assignments, bearer tokens) in both the printed `e.g.`
+  examples and the `--json` payload, using the same redactor as terminal
+  output. Masked text is never used as an allowlist pattern: a command whose
+  glob would embed a credential (`TOKEN=… git …`) is proposed under its
+  dangerous-class key instead. The session database itself still holds the
+  command as it was executed.
+
+Useful flags: `--days N` (history window, default 90), `--min-count N`
+(minimum approvals to qualify, default 2), `--limit N`, and `--db PATH`.
+
+## File Write Safety {#file-write-safety}
+
+Before `write_file` or `patch` touches disk, Clawksis checks the target path against a denylist and an optional sandbox. Blocked writes return an error to the agent immediately — **there is no approval prompt** and no way to override from the chat UI. The model may still claim the edit succeeded; when `display.file_mutation_verifier` is on (default), trust the [file-mutation verifier footer](./configuration.md#file-mutation-verifier) over the assistant's closing summary.
+
+### Protected paths (always blocked)
+
+These categories are always denied, even when `CLAWK_WRITE_SAFE_ROOT` is unset:
+
+| Category | Examples |
+|----------|----------|
+| OS credential stores | `~/.ssh/` (keys, `authorized_keys`), `~/.aws/`, `~/.kube/`, `/etc/sudoers`, `~/.netrc` |
+| Clawksis secret stores | `.env`, `.anthropic_oauth.json`, `auth/google_oauth.json`, Bitwarden cache (`cache/bws_cache.json`, `cache/bws_cache.enc.json`), `vault/`, `browser-profile/`, `mcp-tokens/`, `pairing/` under CLAWK_HOME (active profile and global root). Control files (`auth.json`, `config.yaml`, `webhook_subscriptions.json`) are read-denied but stay writable. |
+| Windows NT/device-namespace paths | `\??\...`, `\\.\...`, `\\?\UNC\...`, `\\?\GLOBALROOT...` — rejected for both reads and writes on every platform. On Windows, merely *resolving* such a path (e.g. `\??\UNC\host\share`) triggers outbound SMB authentication and can leak the user's NTLM hash; the prefixes also bypass normal path normalization. Ordinary extended-length local paths (`\\?\C:\...`) and plain UNC shares (`\\server\share`) are unaffected. |
+
+Project-local `.env`, `.env.local`, `.env.production` and `.envrc` files are **read-denied** anywhere on disk (the file tools refuse to read them) but remain writable: the agent can create or edit them for you, it just cannot read the values back.
+
+Sensitive paths inside the safe root are still blocked — pointing `CLAWK_WRITE_SAFE_ROOT` at `$HOME` does not allow writing `~/.ssh/id_rsa`.
+
+The `~` in the OS-credential rows means *every* home a write can land in, not just the process `HOME`: the OS user's real home, the profile home (`{CLAWK_HOME}/home` under `TERMINAL_HOME_MODE=profile`, containers and spawned workers, where the process `HOME` is pinned), and named accounts (`~root/.ssh/authorized_keys`). An absolute path to the real home's `~/.aws/credentials` is denied even when the agent process runs with `HOME` pointed elsewhere.
+
+Safe-root violations return `Write denied: '…' is outside CLAWK_WRITE_SAFE_ROOT (…)`. Credential-path blocks use `Write denied: '…' is a protected system/credential file.`
+
+**Exception — `~/.ssh/config` is approval-gated, not hard-blocked.** The SSH
+*client config* holds no private-key material and editing it (host aliases,
+`ProxyJump`, VS Code Remote-SSH targets) is a routine task, so `write_file` /
+`patch` route it through the same approve-once/session/always prompt the
+terminal tool already uses for `~/.ssh` writes — instead of the flat refusal
+that used to apply. It can still carry `ProxyCommand` / `Match exec` directives
+that run commands, so the write is never silent. Non-interactive callers (ACP
+file bridge, background jobs with no human channel) fail closed. Private keys,
+`authorized_keys`, and everything else under `~/.ssh/` remain hard-blocked.
+
+### CLAWK_WRITE_SAFE_ROOT (optional sandbox)
+
+When set, `write_file` and `patch` may only target paths inside the listed directory prefix(es). Anything outside is **hard-blocked** — not routed through dangerous-command approval.
+
+- Set automatically in the [official Docker image](https://github.com/samuelgradientai-sys/clawksis-agent) (`CLAWK_WRITE_SAFE_ROOT=/opt/data`)
+- Supports multiple roots separated by `:` on Unix or `;` on Windows
+- **Do not add to `~/.clawksis/.env` casually.** If you set it to a project directory, the agent cannot write to `~/.clawksis/cron/jobs.json`, profile skills, or other Clawksis state outside that prefix
+
+To allow both a workspace and Clawksis home:
+
+```bash
+export CLAWK_WRITE_SAFE_ROOT=/path/to/project:/home/you/.clawksis
+```
+
+Unset the variable to restore unrestricted writes (subject to the protected-path denylist). Full reference: [CLAWK_WRITE_SAFE_ROOT](../reference/environment-variables.md#clawk_write_safe_root).
+
+### Cron and other Clawksis state
+
+Do not ask the agent to `patch` `~/.clawksis/cron/jobs.json` directly. Use the `cronjob_manage` tool, [`clawk cron`](./features/cron.md), or `/cron` — they update the job store through the supported API. The same applies to other Clawksis control files when write safety blocks direct edits.
+
+:::note Defense-in-depth, not a hard boundary
+Write guards apply to `write_file` and `patch` only, with one exception: the Windows NT/device-namespace row is also enforced on reads — `read_file`, `search_files`, `@file:`/`@folder:` context references and the ACP file bridge all refuse those paths on the raw string, before anything resolves them. The `terminal` tool runs as the same OS user and can still `cat` or overwrite denied paths via shell commands. The denylist reduces accidental damage and gives models a clear stop signal; it does not sandbox a hostile or compromised agent.
+:::
+
 ## User Authorization (Gateway)
 
 When running the messaging gateway, Clawksis controls who can interact with the bot through a layered authorization system.
@@ -348,9 +483,10 @@ whatsapp:
   unauthorized_dm_behavior: ignore
 ```
 
-
-- `pair` is the default. Unauthorized DMs get a pairing code reply.
+- `pair` is the default for chat-style DM platforms. Unauthorized DMs get a pairing code reply.
 - `ignore` silently drops unauthorized DMs.
+- `decline` sends one short, polite decline ("I can only chat with my owner") instead of a pairing code, then ignores further messages from that sender for 24 hours. Customize the text with `unauthorized_dm_decline_message`.
+- Email defaults to `ignore` unless `platforms.email.unauthorized_dm_behavior: pair` is set, because inboxes can contain unrelated unread mail.
 - Platform sections override the global default, so you can keep pairing on Telegram while keeping WhatsApp silent.
 
 **Security features** (based on OWASP + NIST SP 800-63-4 guidance):
@@ -382,6 +518,24 @@ clawk pairing revoke telegram 123456789
 clawk pairing clear-pending
 ```
 
+:::tip Docker users: run pairing commands as the `clawk` user
+The official Docker image runs the gateway as the unprivileged `clawk` user
+(uid 10000) via `gosu`, but `docker exec` defaults to root. Approval files
+created by root are written with mode `0600 root:root` and the gateway
+cannot read them — the approval is silently ignored ([#10270][i10270]).
+
+Always pass `-u clawk`:
+
+```bash
+docker exec -u clawk clawksis-agent clawk pairing approve telegram ABC12DEF
+```
+
+If you already ran the command as root and the user is still unauthorized,
+restart the container — the entrypoint will fix ownership on the next start.
+
+[i10270]: https://github.com/samuelgradientai-sys/clawksis-agent/issues/10270
+:::
+
 **Storage:** Pairing data is stored in `~/.clawksis/pairing/` with per-platform JSON files:
 - `{platform}-pending.json` — pending pairing requests
 - `{platform}-approved.json` — approved users
@@ -408,6 +562,8 @@ _BASE_SECURITY_ARGS = [
     "--tmpfs", "/var/tmp:rw,noexec,nosuid,size=256m",  # No-exec /var/tmp
 ]
 ```
+
+`SETUID`/`SETGID` are **not** in the base list — they're added conditionally when the container starts as root and an init/entrypoint must drop privileges (the s6 privilege-drop path). They're skipped when the container already runs as a non-root `--user`. The `/run` tmpfs is also split out from the base list and mounted per-image (hardened `noexec` by default, `exec` only for s6-overlay images that exec from `/run`).
 
 ### Resource Limits
 

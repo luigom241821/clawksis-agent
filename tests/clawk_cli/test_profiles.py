@@ -12,6 +12,7 @@ import socket
 import stat
 import sys
 import tarfile
+import types
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -38,7 +39,10 @@ from clawk_cli.profiles import (
     export_profile,
     _get_default_clawk_home,
     NO_BUNDLED_SKILLS_MARKER,
+    backfill_profile_envs,
+    profiles_to_serve,
 )
+from clawk_cli.config import DEFAULT_CONFIG
 
 
 # ---------------------------------------------------------------------------
@@ -144,40 +148,91 @@ class TestGetProfileDir:
 class TestCreateProfile:
     """Tests for create_profile()."""
 
-    def test_creates_directory_with_subdirs(self, profile_env):
+    def test_seeds_placeholder_env_file(self, profile_env):
+        """Fresh profiles get their own .env (owner-only) so channel/env
+        writes are profile-scoped from day one instead of falling through
+        to the shell environment / root install."""
+        import stat
+
+        profile_dir = create_profile("coder", no_alias=True)
+        env_path = profile_dir / ".env"
+        assert env_path.exists()
+        content = env_path.read_text(encoding="utf-8-sig")
+        # Placeholder only — no credentials leak in from anywhere.
+        assert all(
+            line.startswith("#") or not line.strip() for line in content.splitlines()
+        )
+        mode = stat.S_IMODE(env_path.stat().st_mode)
+        assert mode == 0o600
+
+    def test_fresh_profile_inherits_a_usable_model(self, profile_env):
+        """A profile created without a clone source still resolves a provider.
+
+        Without this it gets no config.yaml at all, so its very first turn dies
+        with "No LLM provider configured" — created, but unable to run. Fresh
+        means fresh skills and SOUL, not unreachable.
+        """
+        default_home = profile_env / ".clawk"
+        (default_home / "config.yaml").write_text(
+            "model:\n  provider: nous\n  default: some/model\n", encoding="utf-8"
+        )
 
         profile_dir = create_profile("coder", no_alias=True)
 
-        assert profile_dir.is_dir()
+        cfg = yaml.safe_load(
+            (profile_dir / "config.yaml").read_text(encoding="utf-8-sig")
+        )
+        assert cfg["model"]["provider"] == "nous"
+        assert cfg["model"]["default"] == "some/model"
 
-        for subdir in [
-            "memories",
-            "sessions",
-            "skills",
-            "skins",
-            "logs",
-            "plans",
-            "workspace",
-            "cron",
-        ]:
-            assert (profile_dir / subdir).is_dir(), f"Missing subdir: {subdir}"
+    def test_fresh_profile_inherits_its_custom_provider_gateway(self, profile_env):
+        """The inherited model may point at a custom `providers:` gateway (self-hosted / local
+        endpoint). Copying `model` alone left the new bot with `model.provider: my-gateway` and
+        "Unknown provider 'my-gateway'" on its first turn (#101885 / #94071 class); the provider
+        definition must travel with the model it backs, and nothing else from `providers:` does.
+        """
+        default_home = profile_env / ".clawk"
+        (default_home / "config.yaml").write_text(
+            "model:\n  provider: my-gateway\n  default: my-finetune\n"
+            "providers:\n  my-gateway:\n    api: https://llm.internal.example.com/v1\n    key_env: GW_KEY\n"
+            "  unrelated:\n    api: https://other.example.com/v1\n",
+            encoding="utf-8",
+        )
 
-    def test_duplicate_raises_file_exists(self, profile_env):
+        profile_dir = create_profile("coder", no_alias=True)
 
-        create_profile("coder", no_alias=True)
+        cfg = yaml.safe_load(
+            (profile_dir / "config.yaml").read_text(encoding="utf-8-sig")
+        )
+        assert cfg["model"] == {"provider": "my-gateway", "default": "my-finetune"}
+        assert cfg["providers"] == {
+            "my-gateway": {
+                "api": "https://llm.internal.example.com/v1",
+                "key_env": "GW_KEY",
+            }
+        }
 
-        with pytest.raises(FileExistsError):
-            create_profile("coder", no_alias=True)
+    def test_fresh_profile_model_is_copied_not_linked(self, profile_env):
+        """Profiles stay independent islands.
 
-    def test_default_raises_value_error(self, profile_env):
+        The model block is copied at creation, so later edits to the source
+        profile never reach one already created from it.
+        """
+        default_home = profile_env / ".clawk"
+        (default_home / "config.yaml").write_text(
+            "model:\n  provider: nous\n  default: some/model\n", encoding="utf-8"
+        )
+        profile_dir = create_profile("coder", no_alias=True)
 
-        with pytest.raises(ValueError, match="default"):
-            create_profile("default", no_alias=True)
+        (default_home / "config.yaml").write_text(
+            "model:\n  provider: other\n  default: changed/model\n", encoding="utf-8"
+        )
 
-    def test_invalid_name_raises_value_error(self, profile_env):
-
-        with pytest.raises(ValueError):
-            create_profile("INVALID!", no_alias=True)
+        cfg = yaml.safe_load(
+            (profile_dir / "config.yaml").read_text(encoding="utf-8-sig")
+        )
+        assert cfg["model"]["provider"] == "nous"
+        assert cfg["model"]["default"] == "some/model"
 
     def test_clone_config_copies_files(self, profile_env):
         tmp_path = profile_env
@@ -1262,6 +1317,14 @@ class TestAliasCollision:
             )
             result = check_alias_collision("mybot")
         assert result is None  # our own wrapper, safe to overwrite
+
+    def test_traversal_alias_rejected_before_path_lookup(self, profile_env):
+        """A path-traversal alias is rejected without ever shelling out to which/where."""
+        with patch("subprocess.run") as mock_run:
+            result = check_alias_collision("../../.bashrc")
+        assert result is not None
+        assert "invalid alias name" in result.lower()
+        mock_run.assert_not_called()
 
 
 # ===================================================================

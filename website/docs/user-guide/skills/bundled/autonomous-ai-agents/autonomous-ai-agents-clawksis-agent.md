@@ -53,12 +53,10 @@ People use Clawksis for software development, research, system administration, d
 ## Quick Start
 
 ```bash
+# Install (shell installer — bootstraps PM, Python, dependencies, and the launcher)
+curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
 
-# Install
-
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
-
-# Interactive chat (default)
+# Interactive chat (default surface; set display.interface: tui to launch the Ink TUI instead)
 clawk
 
 # Single query

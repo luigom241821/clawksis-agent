@@ -207,8 +207,7 @@ This scanner protects against common injection patterns, but it's not a substitu
 | Tail truncation ratio | 20% |
 | Truncation marker | 10% (shows char counts and suggests using file tools) |
 
-
-When a file exceeds 20,000 characters, the truncation message reads:
+When a file exceeds the configured limit, the truncation message reads:
 
 ```
 [...truncated AGENTS.md: kept 14000+4000 of 25000 chars. Use file tools to read the full file.]
@@ -217,8 +216,7 @@ When a file exceeds 20,000 characters, the truncation message reads:
 ## Tips for Effective Context Files
 
 :::tip Best practices for AGENTS.md
-
-1. **Keep it concise** — stay well under 20K chars; the agent reads it every turn
+1. **Keep it concise** — stay under your configured `context_file_max_chars`; the agent reads it every turn
 2. **Structure with headers** — use `##` sections for architecture, conventions, important notes
 3. **Include concrete examples** — show preferred code patterns, API shapes, naming conventions
 4. **Mention what NOT to do** — "never modify migration files directly"

@@ -5,7 +5,6 @@ import json
 import threading
 from datetime import datetime
 from pathlib import Path
-"""Regression tests for dashboard cron job profile routing."""
 
 import pytest
 from fastapi import HTTPException

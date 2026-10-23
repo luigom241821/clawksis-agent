@@ -26,8 +26,7 @@ Clawksis supports multiple AI inference providers out of the box. Use `clawk mod
 
 ## Web Search Backends
 
-
-The `web_search` and `web_extract` tools support four backend providers, configured via `config.yaml` or `clawk tools`:
+The `web_search` and `web_extract` tools support eight backend providers, configured via `config.yaml` or `clawk tools`:
 
 | Backend | Env Var | Search | Extract | Crawl |
 |---------|---------|--------|---------|-------|
@@ -36,6 +35,8 @@ The `web_search` and `web_extract` tools support four backend providers, configu
 | **Brave** (free tier) | `BRAVE_SEARCH_API_KEY` | ✔ | — | — |
 | **DuckDuckGo** (ddgs) | _(none)_ | ✔ | — | — |
 | **Exa** | `EXA_API_KEY` | ✔ | ✔ | — |
+| **Parallel** | `PARALLEL_API_KEY` | ✔ | ✔ | — |
+| **xAI** | `XAI_API_KEY` | ✔ | — | — |
 
 Quick setup example:
 

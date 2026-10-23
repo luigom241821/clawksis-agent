@@ -153,7 +153,6 @@ fi
 ```bash
 # Crontab entry
 0 9 * * * /usr/local/bin/generate-metrics.sh \
-
   | /home/me/.clawksis/bin/clawk send \
       --to telegram --subject "Daily metrics $(date +%Y-%m-%d)"
 ```
@@ -245,13 +244,10 @@ IDs.
 | Raw `curl` to each platform | Each scripted separately | Manual | No | Critical watchdogs |
 | `cron` job with `--deliver` | ✅ | ✅ | No | Scheduled agent tasks |
 
-| `send_message` agent tool | ✅ | ✅ | No | Inside an agent loop |
-
 `clawk send` is intentionally the simplest possible surface. If you need
-
-an agent to decide what to say, use the `send_message` tool from within a
-
-chat or cron job. If you need a scheduled run with LLM-generated content,
+an agent to decide what to say, schedule a cron job — the agent's final
+response is auto-delivered to the configured `deliver:` target (the agent
+no longer fires messages itself). If you need a scheduled run with LLM-generated content,
 use `cronjob(action='create', prompt=...)` with `deliver='telegram:...'`.
 If you just need to pipe a raw string, reach for `clawk send`.
 

@@ -132,7 +132,7 @@ class TestBaseUrlValidation:
         """Pressing Enter (empty) should not change the base URL."""
         from clawk_cli.auth import PROVIDER_REGISTRY
 
-        pconfig = PROVIDER_REGISTRY.get("zai")
+        pconfig = PROVIDER_REGISTRY.get("minimax")
         if not pconfig:
             pytest.skip("minimax not in PROVIDER_REGISTRY")
 

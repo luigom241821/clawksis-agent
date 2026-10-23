@@ -62,7 +62,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-LOG_FILE = Path.home() / ".clawksis" / "hooks" / "my-hook" / "activity.log"
+
+LOG_FILE = Path.home() / ".clawk" / "hooks" / "my-hook" / "activity.log"
 
 async def handle(event_type: str, context: dict):
     """Called for each subscribed event. Must be named 'handle'."""
@@ -158,7 +159,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-LOG = Path.home() / ".clawksis" / "logs" / "command_usage.jsonl"
+
+LOG = Path.home() / ".clawk" / "logs" / "command_usage.jsonl"
 
 def handle(event_type: str, context: dict):
     LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -224,10 +226,8 @@ Create `~/.clawksis/BOOT.md`. Write it as if you were giving instructions to a h
 # Startup Checklist
 
 1. Run `clawk cron list` and check if any scheduled jobs failed overnight.
-
-2. If any failed, send a summary to Discord #ops using the `send_message` tool.
-
-3. Check if `/opt/app/deploy.log` has any ERROR lines from the last 24 hours. If yes, summarize them and include in the same Discord message.
+2. If any failed, summarize them for Discord #ops (the hook delivers your final response to its configured target).
+3. Check if `/opt/app/deploy.log` has any ERROR lines from the last 24 hours. If yes, summarize them and include in the same report.
 4. If nothing went wrong, reply with only `[SILENT]` so no message is sent.
 ```
 
@@ -261,7 +261,8 @@ from pathlib import Path
 
 logger = logging.getLogger("hooks.boot-md")
 
-BOOT_FILE = Path.home() / ".clawksis" / "BOOT.md"
+
+BOOT_FILE = Path.home() / ".clawk" / "BOOT.md"
 
 
 def _build_prompt(content: str) -> str:
@@ -271,8 +272,9 @@ def _build_prompt(content: str) -> str:
         "---\n"
         f"{content}\n"
         "---\n\n"
-        "Execute each instruction. Use the send_message tool to deliver any "
-        "messages to platforms like Discord or Slack.\n"
+        "Execute each instruction. Put any user-facing summary in your "
+        "final response — the hook delivers it to the configured channel "
+        "(e.g. Discord or Slack); you do not send messages yourself.\n"
         "If nothing needs attention and there is nothing to report, reply "
         "with ONLY: [SILENT]"
     )
@@ -298,10 +300,8 @@ def _run_boot_agent(content: str) -> None:
             max_iterations=20,
         )
         result = agent.run_conversation(_build_prompt(content))
-
-        response = result.get("final_response", "")
-
-        if response and "[SILENT]" not in response:
+        response = (result.get("final_response", "") or "").strip()
+        if response.upper() not in {"[SILENT]", "SILENT", "NO_REPLY", "NO REPLY"}:
             logger.info("boot-md completed: %s", response[:200])
         else:
             logger.info("boot-md completed (nothing to report)")
@@ -349,8 +349,7 @@ Watch the logs:
 clawk logs --follow --level INFO | grep boot-md
 ```
 
-
-You should see `Running BOOT.md (N chars)` followed by either `boot-md completed: ...` (summary of what the agent did) or `boot-md completed (nothing to report)` when the agent replied `[SILENT]`.
+You should see `Running BOOT.md (N chars)` followed by either `boot-md completed: ...` (summary of what the agent did) or `boot-md completed (nothing to report)` when the agent replied with an exact silence token such as `[SILENT]`.
 
 Delete `~/.clawksis/BOOT.md` to disable the checklist — the hook stays loaded but silently skips when the file isn't there.
 
@@ -848,6 +847,71 @@ def log_response_length(session_id, assistant_response, model, **kwargs):
 def register(ctx):
     ctx.register_hook("post_llm_call", log_response_length)
 ```
+
+---
+
+### `pre_verify`
+
+Fires **once per turn when the agent edited code**, just before it finishes (after the built-in verify-on-stop guard). This is a user/plugin policy gate: a callback can keep the agent going — run a check, defer it, tidy the diff — instead of letting it stop.
+
+Clawksis' shipped verification guidance is not a default `pre_verify` hook. It is appended to the evidence-based verify-on-stop nudge when edited code lacks fresh verification evidence, so it does not create a second default continuation path. Set `agent.verify_guidance: false` to keep that built-in evidence nudge terse.
+
+**Callback signature:**
+
+```python
+def my_callback(session_id: str, platform: str, model: str, coding: bool,
+                attempt: int, final_response: str, changed_paths: list, **kwargs):
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `session_id` | `str` | Unique identifier for the current session |
+| `platform` | `str` | Where the session is running (`"cli"`, `"telegram"`, …) |
+| `model` | `str` | The model identifier |
+| `coding` | `bool` | Whether the turn is in the coding posture (in a code workspace) — scope your hook on this |
+| `attempt` | `int` | How many times this turn has already been nudged (0 on the first) — self-throttle on this |
+| `final_response` | `str` | The answer the agent is about to deliver |
+| `changed_paths` | `list` | Files the agent edited this turn (sorted, always non-empty here) |
+
+Scope a hook to the coding context by checking `coding` and make it one-shot with `attempt` (shell hooks read both from `.extra`), the same way a `pre_tool_call` hook scopes on `tool_name` — so you can register several `pre_verify` hooks, each firing only where it should.
+
+**Fires:** In `agent/conversation_loop.py`, at the point the agent would accept a final answer, immediately after the verify-on-stop check — but only when the agent edited code this turn and at least one `pre_verify` hook is registered.
+
+**Return value — keep the agent going:**
+
+```python
+return {"action": "continue", "message": "Run the formatter on your changes, then finish."}
+```
+
+The `message` is appended as a synthetic user turn and the loop runs again. The Claude-Code Stop shape (`{"decision": "block", "reason": "..."}`, where blocking the stop means *keep going*) is accepted too. A directive with no message — or any other return — lets the turn finish.
+
+**Bounded:** consecutive continue directives in one turn are capped by `agent.max_verify_nudges` (default 3), so a hook that always says continue can never trap the loop. The attempted answer is kept in history but not surfaced to the user while the agent is being nudged.
+
+**Make it idempotent:** the hook re-fires after each nudge, so gate on `attempt` (`if attempt: return None`) — otherwise it just nudges until the bound is hit.
+
+**Use cases:** defer tests/lints during creative iteration, require green checks for certain paths, block "done" until a changelog entry exists, run a project-specific verification checklist.
+
+**Example — defer checks on creative UI work, scoped + one-shot:**
+
+```python
+UI = (".tsx", ".jsx", ".css", ".scss")
+
+def defer_ui_checks(coding, attempt, changed_paths, **kwargs):
+    if attempt or not coding:
+        return None  # one-shot, coding only
+    if not all(p.endswith(UI) for p in changed_paths):
+        return None  # only pure-UI edits
+    return {
+        "action": "continue",
+        "message": "This is UI work — don't run tests/lints yet; ask the user to "
+                   "eyeball it first, and clean the diff before any commit.",
+    }
+
+def register(ctx):
+    ctx.register_hook("pre_verify", defer_ui_checks)
+```
+
+For standing guidance that should shape the built-in missing-evidence nudge, use `agent.verify_guidance`. For broader coding posture rules that don't need to *gate* verification, prefer `agent.coding_instructions` in `config.yaml` — it rides the coding brief and costs no extra turn.
 
 ---
 
@@ -1418,8 +1482,7 @@ def my_callback(
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-
-| `command` | `str` | The shell command awaiting approval |
+| `command` | `str` | Terminal command or `execute_code` script being assessed. Smart and gateway payloads are redacted before observer dispatch. Smart observer redaction is mandatory even when `security.redact_secrets` is disabled; if redaction fails, smart hooks are skipped. |
 | `description` | `str` | Human-readable reason(s) the command is flagged (combined when multiple patterns match) |
 | `pattern_key` | `str` | Primary pattern key that triggered the approval (e.g. `"rm_rf"`, `"sudo"`) |
 | `pattern_keys` | `list[str]` | All pattern keys that matched |
@@ -1909,6 +1972,10 @@ profile's `CLAWK_HOME`. `tool_name` and `tool_input` are `null` for non-tool eve
 // Inject context for pre_llm_call:
 {"context": "Today is Friday, 2026-04-17"}
 
+// Keep the agent going at the verify gate (pre_verify); both shapes accepted:
+{"action": "continue", "message": "Run the formatter, then finish."}
+{"decision": "block",  "reason":  "Run the formatter, then finish."}
+
 // Silent no-op — any empty / non-matching output is fine:
 ```
 
@@ -2055,6 +2122,23 @@ Three escape hatches bypass the interactive prompt — any one is sufficient:
 Only a foreground `clawk chat` (or `clawk rl`) ever asks. The gateway, cron, `clawk mcp-serve --tools` (the mcp-serve plugin), `clawk acp` and CI never prompt, even when stdin looks like a terminal (a hidden console from a Windows login-item launcher does), so they need one of these three or an allowlist entry. Otherwise a newly-added hook stays un-registered and a warning names the profile's allowlist file it is missing from (`profiles/<name>/shell-hooks-allowlist.json` for a non-default profile). `clawk gateway run --accept-hooks` (like `CLAWK_ACCEPT_HOOKS=1` on the gateway) approves the hooks of every profile that gateway serves, including hooks added after it started.
 
 **Script edits are silently trusted.** The allowlist keys on the exact command string, not the script's hash, so editing the script on disk does not invalidate consent. `clawk hooks doctor` flags mtime drift so you can spot edits and decide whether to re-approve.
+
+#### Manual allowlisting
+
+Manual allowlisting is useful for non-TTY or service-account deployments where an operator cannot answer the first-use prompt interactively. The allowlist file is `~/.clawksis/shell-hooks-allowlist.json`, and the expected format is an `approvals` array. Each approval records the hook `event` and the exact `command` string:
+
+```json
+{
+  "approvals": [
+    {
+      "event": "post_llm_call",
+      "command": "/home/clawk/.clawksis/hooks/my-hook.py"
+    }
+  ]
+}
+```
+
+The command string must match the configured hook command exactly. A path-keyed object with a `sha256` field is not the expected format and will not approve the hook. Verify manual entries with `clawk hooks list`.
 
 ### The `clawk hooks` CLI
 

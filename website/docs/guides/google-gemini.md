@@ -1,16 +1,12 @@
 ---
 sidebar_position: 16
 title: "Google Gemini"
-
-description: "Use Clawksis with Google Gemini — native AI Studio API, API-key setup, OAuth option, tool calling, streaming, and quota guidance"
+description: "Use Clawksis with Google Gemini — native AI Studio API, API-key setup, tool calling, streaming, and quota guidance"
 ---
 
 # Google Gemini
 
 Clawksis supports Google Gemini as a native provider using the **Google AI Studio / Gemini API** — not the OpenAI-compatible endpoint. This lets Clawksis translate its internal OpenAI-shaped message and tool loop into Gemini's native `generateContent` API while preserving tool calling, streaming, multimodal inputs, and Gemini-specific response metadata.
-
-
-Clawksis also supports a separate **Google Gemini (OAuth)** provider that uses the same Cloud Code Assist backend as Google's Gemini CLI. Use the API-key provider (`gemini`) for the lowest-risk official API path.
 
 ## Prerequisites
 
@@ -261,22 +257,7 @@ clawk doctor
 The doctor checks:
 
 - Whether `GOOGLE_API_KEY` or `GEMINI_API_KEY` is available
-
-- Whether Gemini OAuth credentials exist for `google-gemini-cli`
 - Whether configured provider credentials can be resolved
-
-
-For OAuth quota usage, run this inside a Clawksis session:
-
-
-```text
-
-/gquota
-
-```
-
-
-`/gquota` applies to the `google-gemini-cli` OAuth provider, not the AI Studio API-key provider.
 
 ## Gateway (Messaging Platforms)
 
@@ -338,12 +319,6 @@ Change it to the native endpoint or remove the override:
 ```bash
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 ```
-
-
-### OAuth login warning
-
-
-The `google-gemini-cli` provider uses a Gemini CLI / Cloud Code Assist OAuth flow. Clawksis warns before starting it because this is distinct from the official AI Studio API-key path. Use `provider: gemini` with `GOOGLE_API_KEY` for the official API-key integration.
 
 ### Tool calling fails with schema errors
 

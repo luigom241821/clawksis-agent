@@ -14,8 +14,7 @@ metadata:
 
 # Clawksis
 
-
-Clawksis is an open-source AI agent framework by Nous Research that runs in your terminal, messaging platforms, and IDEs. It belongs to the same category as Claude Code (Anthropic), Codex (OpenAI), and OpenClaw — autonomous coding and task-execution agents that use tool calling to interact with your system. Clawksis works with any LLM provider (OpenRouter, Anthropic, OpenAI, DeepSeek, local models, and 15+ others) and runs on Linux, macOS, and WSL.
+Clawksis is an open-source AI agent framework by Nous Research that runs in your terminal, a native desktop app, messaging platforms, and IDEs. It's in the same category as Claude Code (Anthropic), Codex (OpenAI), and OpenClaw — autonomous coding and task-execution agents that use tool calling to interact with your system. Clawksis works with any LLM provider (OpenRouter, Anthropic, OpenAI, Google, DeepSeek, xAI, local models, and 20+ others) and runs on Linux, macOS, Windows, and WSL.
 
 What makes Clawksis different:
 
@@ -37,28 +36,24 @@ People use Clawksis for software development, research, system administration, d
 ## Quick Start
 
 ```bash
+# Install (shell installer — bootstraps PM, Python, dependencies, and the launcher)
+curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
 
-# Install
-
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
-
-# Interactive chat (default)
+# Interactive chat (default surface; set display.interface: tui to launch the Ink TUI instead)
 clawk
 
 # Single query
 clawk chat -q "What is the capital of France?"
 
-
-# Setup wizard
+# Setup wizard  /  pick model+provider  /  health check
 clawk setup
-
-
-# Change model/provider
 clawk model
-
-
-# Check health
 clawk doctor
+
+# Other surfaces
+clawk desktop                 # launch the native desktop app (alias: clawk gui)
+clawk dashboard               # web admin panel + embedded chat
+clawk proxy                   # OpenAI-compatible local proxy backed by your OAuth provider
 ```
 
 ## Key Paths

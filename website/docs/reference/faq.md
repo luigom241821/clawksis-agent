@@ -24,7 +24,7 @@ Clawksis works with any OpenAI-compatible API. Supported providers include:
 - **[Nous Portal](../integrations/nous-portal.md)** — Nous Research's subscription gateway — 300+ models plus web/image/TTS/browser through one OAuth login (recommended for newcomers)
 - **OpenAI** — GPT-5.4, GPT-5-codex, GPT-4.1, GPT-4o, etc.
 - **Anthropic** — Claude models (direct API, OAuth via `clawk auth add anthropic`, OpenRouter, or any compatible proxy)
-- **Google** — Gemini models (direct API via `gemini` provider, the `google-gemini-cli` OAuth provider, OpenRouter, or compatible proxy)
+- **Google** — Gemini models (direct API via `gemini` provider, OpenRouter, or compatible proxy)
 - **z.ai / ZhipuAI** — GLM models
 - **Kimi / Moonshot AI** — Kimi models
 - **MiniMax** — global and China endpoints
@@ -52,20 +52,6 @@ See:
 
 - [Use MCP with Clawksis](../guides/use-mcp-with-clawk.md#wsl2-bridge-clawk-in-wsl-to-windows-chrome)
 - [Browser Automation](../user-guide/features/browser.md#wsl2--windows-chrome-prefer-mcp-over-browser-connect)
-
-### Does it work on Android / Termux?
-
-Yes — Clawksis now has a tested Termux install path for Android phones.
-
-Quick install:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
-```
-
-For the fully explicit manual steps, supported extras, and current limitations, see the [Termux guide](../getting-started/termux.md).
-
-Important caveat: the full `.[all]` extra is not currently available on Android because the `voice` extra depends on `faster-whisper` → `ctranslate2`, and `ctranslate2` does not publish Android wheels. Use the tested `.[termux]` extra instead.
 
 ### Is my data sent anywhere?
 
@@ -725,6 +711,10 @@ For one-off model switches without delegation, use `/model` in the CLI:
 # ... write your content ...
 /model openai/gpt-5.4                   # switch back
 ```
+
+:::warning
+Each `/model` switch resets the prompt cache — the cache key includes the model, so the first message after every switch re-reads the whole conversation at full input price. On long sessions, prefer delegation (subagents get their own fresh context) or a new session over repeated back-and-forth switching.
+:::
 
 See [Subagent Delegation](../user-guide/features/delegation.md) for more on how delegation works.
 

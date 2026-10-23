@@ -47,6 +47,24 @@ We value contributions in this order:
 
 ---
 
+## Before You Start: Search First
+
+A quick search before you build saves your time and keeps the PR queue clean — duplicates are common here, so it's worth a minute up front.
+
+- **Search both open *and* merged PRs and issues** for your topic or error symptom — the duplicate-check in the PR template fires at review time, after you've already done the work:
+  ```bash
+  gh search issues --repo samuelgradientai-sys/clawksis-agent "<your terms>"
+  gh search prs --repo samuelgradientai-sys/clawksis-agent --state all "<your terms>"
+  ```
+  Or use the web UI: [issues](https://github.com/samuelgradientai-sys/clawksis-agent/issues?q=) · [PRs (all states)](https://github.com/samuelgradientai-sys/clawksis-agent/pulls?q=is%3Apr).
+- **The issue tracker can lag the code.** Many requested features are already implemented in-tree, so also search the source (`search_files`, or your editor's grep) for the capability before proposing it.
+- **If an open PR already addresses it**, consider reviewing or improving that one instead of opening a competing duplicate.
+- **For larger work**, comment on the issue to signal you're working on it, so others don't start the same thing.
+
+Related: #38284 covers the agent-side analog — Clawksis itself checking existing issues and PRs before deep self-troubleshooting. This section is the human-contributor complement.
+
+---
+
 ## Should it be a Skill or a Tool?
 
 This is the most common question for new contributors. The answer is almost always **skill**.
@@ -96,6 +114,31 @@ This isn't a quality bar — it's a coupling-and-maintenance decision. Memory pr
 
 ---
 
+## Third-Party Product Integrations: Ship as a Standalone Plugin
+
+The same rule extends to **any plugin that integrates someone else's product or project** — observability/metrics backends, vendor SaaS connectors, analytics dashboards, paid-service tie-ins, and similar third-party integrations. **These do not land in this repo.**
+
+The reason is maintenance load, not quality. Every external product absorbed into the core tree becomes ours to keep working against a fast-moving codebase, for a backend we don't own and can't control. Clawksis ships a lot and the core moves quickly; coupling third-party products into it creates an open-ended burden on the maintainers.
+
+Publish these as a **standalone plugin repo** instead:
+
+- Implement the relevant ABC and use the existing plugin discovery path (`~/.clawksis/plugins/`, project `.clawk/plugins/`, or a pip entry point) — see [Build a Clawksis Plugin](https://clawksis-agent.nousresearch.com/docs/guides/build-a-clawk-plugin)
+- Register lifecycle hooks (`pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`), tools (`ctx.register_tool`), and CLI subcommands (`ctx.register_cli_command`) through the surface we already expose — no core changes needed
+- If your plugin needs a capability the framework doesn't expose, that's a feature request to **widen the generic plugin surface** (a new hook or `ctx` method) — never special-case your plugin in core
+- Promote it in the [Nous Research Discord](https://discord.gg/NousResearch) `#plugins-skills-and-skins` channel so users can find and install it
+
+A well-built third-party-product plugin can clear automated review and still be closed for this reason — it's a placement decision, not a verdict on the code. PRs that add such a directory under `plugins/` will be closed with a pointer to publish it as its own repo.
+
+---
+
+## Submitting a Plugin to the Catalog
+
+A standalone plugin reaches users through the [plugin catalog](https://clawksis-agent.nousresearch.com/docs/plugins): a PR to this repo adding one `plugin-catalog/<name>.yaml` file that pins your repo at an exact commit. Read **[Submitting to the plugin catalog](https://clawksis-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission)** before opening one. It covers what to check first (`clawk plugins validate --install-deps`), how review works, and every admission rule. The canonical rules live in [`plugin-catalog/README.md`](plugin-catalog/README.md); if you change them, change the mirrored block in the docs page in the same PR (a test keeps the two identical).
+
+The rules that most often send a submission back: the plugin must extend Clawksis only through public hooks, `ctx.register_*` APIs and the Desktop SDK (no patching core code or Desktop markup at runtime), must not update itself, must declare the capabilities it registers, and must disclose risky behaviour.
+
+---
+
 ## Development Setup
 
 ### Prerequisites
@@ -103,86 +146,124 @@ This isn't a quality bar — it's a coupling-and-maintenance decision. Memory pr
 | Requirement | Notes |
 |-------------|-------|
 | **Git** | With the `git-lfs` extension installed |
+| **Python 3.14** | The project requires `>=3.14,<3.15`; PM provides the pinned interpreter |
+| **Node.js** | Use the PM pin, or a version accepted by root `package.json`: `^22.22.0`, `^24.11.0`, or `>=26.0.0` |
 
-| **Python 3.11+** | uv will install it if missing |
+### PM developer environment
 
-| **uv** | Fast Python package manager ([install](https://docs.astral.sh/uv/)) |
+Use the [PM developer workflow](website/docs/reference/package-management.md#developer-workflow) for preparation, activation, everyday commands,
+dependency changes, and test environments. Select your development
+home before setup so experimental code does not migrate production data.
 
-| **Node.js 20+** | Optional — needed for browser tools and WhatsApp bridge (matches root `package.json` engines) |
+Activate from the repository root in each new shell. Activation runs setup's
+runtime-only path, so it provisions a fresh checkout and syncs stale dependencies.
 
-### Clone and install
-
-```bash
-
-git clone https://github.com/samuelgradientai-sys/clawksis-agent.git
-
-cd clawksis-agent
-
-# Create venv with Python 3.11
-
-uv venv venv --python 3.11
-
-export VIRTUAL_ENV="$(pwd)/venv"
-
-# Install with all extras (messaging, cron, CLI menus, dev tools)
-
-uv pip install -e ".[all,dev]"
-
-# Optional: browser tools
-
-npm install
-
-```
-
-### Configure for development
+Bash:
 
 ```bash
-
-mkdir -p ~/.clawksis/{cron,sessions,logs,memories,skills}
-
-cp cli-config.yaml.example ~/.clawksis/config.yaml
-
-touch ~/.clawksis/.env
-
-# Add at minimum an LLM provider key:
-
-echo "OPENROUTER_API_KEY=***" >> ~/.clawksis/.env
-
+source ./activate
+clawk --version
 ```
 
-### Run
+fish:
+
+```fish
+source ./activate.fish
+clawk --version
+```
+
+PowerShell:
+
+```powershell
+. .\activate.ps1
+clawk --version
+```
+
+Run `clawk` for this checkout. Activation defines it as a function for this
+worktree, so it hides a global `clawk` command or MSIX alias and refuses
+outside the worktree. PM activation
+syncs tools and Python dependencies before adding them to the shell. It does not
+install JS workspaces or rewrite launchers and shell configuration. `deactivate`
+restores the prior shell environment and removes the function.
+
+To run one command in the environment without activating a shell, use
+`scripts/run-in-clawk-env CMD...`.
+
+### Manual development and test environment
+
+Use the [PM developer workflow](website/docs/reference/package-management.md#developer-workflow) to prepare Python 3.14 (`>=3.14,<3.15`) first.
+Run these commands from that checkout with its prepared Python. Keep the same
+development `CLAWK_HOME`. PM must be able to start before it can build another
+environment. On Windows, initialize the native C++ build environment for your
+architecture before building source dependencies.
+
+Build an independent interpreter for tests and editor tools:
 
 ```bash
-
-# Symlink for global access
-
-mkdir -p ~/.local/bin
-
-ln -sf "$(pwd)/venv/bin/clawk" ~/.local/bin/clawk
-
-# Verify
-
-clawk doctor
-
-clawk chat -q "Hello"
-
+python -m pm.build_env --source . --out .venv --group dev --group test
 ```
+
+PM builds from the committed lock and checks dependency consistency before
+returning the new interpreter. The `test` group includes native launcher test
+dependencies and does not enter the application runtime. If tests require
+another declared feature, add its `--extra`.
+
+The output must not exist, even as an empty directory or symlink. To regenerate
+it after a dependency change, stop its processes and intentionally remove only
+that disposable environment first. PM does not delete an existing destination.
+Do not run raw pip or uv commands to change a PM-built environment.
+
+To keep the test environment outside the checkout, replace `.venv` with a fresh absolute
+path. Set `CLAWK_PYTHON` to that environment's interpreter:
+
+- POSIX: `export CLAWK_PYTHON="/absolute/path/to/clawk-dev/bin/python"`
+- PowerShell: `$env:CLAWK_PYTHON = 'C:\absolute\path\to\clawk-dev\Scripts\python.exe'`
+
+The canonical runner discovers repository `.venv` automatically. It clears
+`PYTHONPATH`, so pytest must be installed in the interpreter's own environment.
+This test environment does not replace PM's application selection or tool
+store. Do not point a bundled app at it or install into an MSIX payload.
+
+For an isolated development instance, select a disposable `CLAWK_HOME` before
+starting the source command. Use `clawk setup` to configure it rather
+than copying production credentials into the checkout.
+
+### JavaScript workspaces and website
+
+From the repository root, run `npm ci` for the desktop, TUI, dashboard, and
+shared JS workspaces. The website is separate:
+
+```bash
+npm ci --prefix website
+npm run build:fast --prefix website
+```
+
+Use a Node/npm version accepted by the corresponding `package.json` engines.
+Native desktop dependencies can also require the platform build toolchain.
+
+Logos and icons are generated from `assets/nous-girl-*.svg` and
+`assets/backgrounds/`. `node scripts/generate-icons.mjs` renders them with the
+Clawksis runtime Python (`CLAWK_PYTHON`, else `python` on PATH): Pillow and
+resvg-py are core dependencies. Generated outputs are committed and CI fails if
+they are stale; rerun the generator and commit after changing any source SVG.
 
 ### Run tests
 
+Use the canonical runner on every host:
+
 ```bash
-
-# Preferred — matches CI (hermetic env, 4 xdist workers); see AGENTS.md
-
 scripts/run_tests.sh
-
-# Alternative (activate the venv first). The wrapper is still recommended
-
-# for parity with GitHub Actions before you open a PR:
-
-pytest tests/ -v
-
+scripts/run_tests.sh tests/agent/ -v
 ```
+
+On Windows, run the script through Bash. When no local `.venv` or `venv`
+contains pytest, the runner accepts the explicit `CLAWK_PYTHON` above. It
+clears credentials, isolates `CLAWK_HOME`, and runs each test file in a separate
+subprocess through `scripts/run_tests_parallel.py`. It does not use xdist.
+
+Run the relevant JS workspace checks for JS changes. Native install/update
+E2E runs on disposable CI hosts, never against the developer's live app.
+See [Package management](website/docs/reference/package-management.md) for PM commands and runtime ownership.
 
 ---
 
@@ -448,6 +529,12 @@ Brief intro.
 
 ## When to Use
 Trigger conditions — when should the agent load this skill?
+
+## Prerequisites
+Env vars, install steps, MCP setup, API key sourcing.
+
+## How to Run
+Canonical invocation through the `terminal` tool.
 
 ## Quick Reference
 Table of common commands or API calls.
