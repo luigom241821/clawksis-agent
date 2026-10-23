@@ -2806,9 +2806,9 @@ from clawk_cli.config_defaults_env import (
     _msg,
     _prov,
     _setting,
-    _skill,
     _tool,
 )
+from clawk_cli.config_defaults_skill_env import SKILL_ENV_VARS
 
 
 # Optional environment variables that enhance functionality. Feeds the dashboard keys page and setup
@@ -3254,29 +3254,8 @@ OPTIONAL_ENV_VARS = {
         "GitHub Token",
         "https://github.com/settings/tokens",
     ),
-    # ── Bundled skills (opt-in) ── category="skill" (not "tool") so the sandbox env blocklist in
-    # tools/environments/local.py does NOT rewrite them; skills need them passed through to curl
-    # via tools/env_passthrough.py.
-    "NOTION_API_KEY": _skill(
-        "Notion integration token (used by the `notion` skill)",
-        "Notion API key",
-        "https://www.notion.so/my-integrations",
-    ),
-    "LINEAR_API_KEY": _skill(
-        "Linear personal API key (used by the `linear` skill)",
-        "Linear API key",
-        "https://linear.app/settings/account/security",
-    ),
-    "AIRTABLE_API_KEY": _skill(
-        "Airtable personal access token (used by the `airtable` skill)",
-        "Airtable API key",
-        "https://airtable.com/create/tokens",
-    ),
-    "TENOR_API_KEY": _skill(
-        "Tenor API key for GIF search (used by the `gif-search` skill)",
-        "Tenor API key",
-        "https://developers.google.com/tenor/guides/quickstart",
-    ),
+    # ── Bundled skills (opt-in), category="skill": clawk_cli/config_defaults_skill_env.py ──
+    **SKILL_ENV_VARS,
     # ── Honcho ──
     "HONCHO_API_KEY": _tool(
         "Honcho API key for AI-native persistent memory",

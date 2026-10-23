@@ -74,6 +74,12 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 |-------|-------------|------|
 | [`emil-design-eng`](../user-guide/skills/bundled/emil-design-eng/emil-design-eng-emil-design-eng.md) | Design-engineering rules for polished UI and animation. | `emil-design-eng` |
 
+## finance
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| [`kronos`](../user-guide/skills/bundled/finance/finance-kronos.md) | Forecast stock/crypto prices; read eToro data and portfolio. | `finance/kronos` |
+
 ## integrations
 
 | Skill | Description | Path |

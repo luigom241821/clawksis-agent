@@ -109,6 +109,7 @@ You are in a plain terminal (CLI). Markdown does NOT render — asterisks, heade
 ===== volatile =====
 ## Skills
 Before replying, scan the skills below. If a skill matches or is even partially relevant to your task, you MUST load it with skill_view(name) and follow its instructions. Err on the side of loading — it is always better to have context you don't need than to miss critical steps, pitfalls, or established workflows. Skills contain specialized knowledge — API endpoints, tool-specific commands, and proven workflows that outperform general-purpose approaches. Load the skill even if you think you could handle the task with basic tools like web_search or terminal. Skills also encode the user's preferred approach, conventions, and quality standards for tasks like code review, planning, and testing — load them even for tasks you already know how to do, because the skill defines how it should be done here.
+Match by meaning, not wording: users describe goals in their own words and in any language (a price forecast, their broker portfolio, a contract to review) without naming a skill, and the descriptions below are short English summaries. When the user asks what you can do or whether you can help with something, answer from this list — it is what this installation can actually do — and name the relevant skills instead of answering from general knowledge.
 If a skill has issues, fix it with skill_manage(action='patch').
 After difficult/iterative tasks, offer to save as a skill. If a skill you loaded was missing steps, had wrong commands, or needed pitfalls you discovered, update it before finishing.
 
@@ -145,6 +146,8 @@ After difficult/iterative tasks, offer to save as a skill. If a skill you loaded
     - himalaya: Himalaya CLI: IMAP/SMTP email from terminal.
   emil-design-eng:
     - emil-design-eng: Design-engineering rules for polished UI and animation.
+  finance: Skills for markets and personal investing — stock and crypto price forecasts, broker data (eToro), portfolio review, and backtests of forecasting models.
+    - kronos: Forecast stock/crypto prices; read eToro data and portfolio.
   integrations:
     - notion-mcp: Conecta y automatiza Notion vía su servidor MCP oficial.
     - supabase: Build on Supabase: Postgres, auth, RLS, storage, functions.
