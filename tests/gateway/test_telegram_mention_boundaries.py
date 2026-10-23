@@ -43,7 +43,7 @@ def _mention_entity(text, mention="@clawksis_bot"):
     return SimpleNamespace(type="mention", offset=offset, length=len(mention))
 
 
-def _telegram_mention_entity(text, mention="@clawk_bot", entity_type="mention"):
+def _telegram_mention_entity(text, mention="@clawksis_bot", entity_type="mention"):
     """Build an entity with Telegram UTF-16 code-unit offset/length values."""
     start = text.index(mention)
     offset = len(text[:start].encode("utf-16-le")) // 2
@@ -85,7 +85,7 @@ class TestRealMentionsAreDetected:
 
     def test_mention_after_non_bmp_characters_uses_telegram_offsets(self):
         adapter = _make_adapter()
-        text = "\U0001f680\U0001f680 @clawk_bot hello"
+        text = "\U0001f680\U0001f680 @clawksis_bot hello"
         msg = _message(text=text, entities=[_telegram_mention_entity(text)])
         assert adapter._message_mentions_bot(msg) is True
 
@@ -118,7 +118,7 @@ class TestSubstringFalsePositivesAreRejected:
     def test_substring_inside_url_without_entity(self):
         """@handle inside a URL produces a URL entity, not a MENTION entity."""
         adapter = _make_adapter()
-        msg = _message(text="see https://example.com/@clawk_bot for details")
+        msg = _message(text="see https://example.com/@clawksis_bot for details")
         assert adapter._message_mentions_bot(msg) is False
 
     def test_email_substring_in_caption(self):
@@ -155,23 +155,23 @@ class TestCaseInsensitivity:
 
 class TestTelegramUtf16EntityOffsets:
     def test_extracts_bot_mention_username_after_non_bmp_characters(self):
-        text = "\U0001f9ea\U0001f9ea @clawk_bot please"
+        text = "\U0001f9ea\U0001f9ea @clawksis_bot please"
         msg = _message(text=text, entities=[_telegram_mention_entity(text)])
-        assert TelegramAdapter._extract_bot_mention_usernames(msg) == {"clawk_bot"}
+        assert TelegramAdapter._extract_bot_mention_usernames(msg) == {"clawksis_bot"}
 
     def test_bot_command_suffix_after_non_bmp_characters_mentions_bot(self):
         adapter = _make_adapter()
-        text = "\U0001f9ea\U0001f9ea /new@clawk_bot"
+        text = "\U0001f9ea\U0001f9ea /new@clawksis_bot"
         entity = _telegram_mention_entity(
-            text, mention="/new@clawk_bot", entity_type="bot_command"
+            text, mention="/new@clawksis_bot", entity_type="bot_command"
         )
         msg = _message(text=text, entities=[entity])
         assert adapter._message_mentions_bot(msg) is True
 
     def test_extracts_bot_command_target_after_non_bmp_characters(self):
-        text = "\U0001f9ea\U0001f9ea /new@clawk_bot"
+        text = "\U0001f9ea\U0001f9ea /new@clawksis_bot"
         entity = _telegram_mention_entity(
-            text, mention="/new@clawk_bot", entity_type="bot_command"
+            text, mention="/new@clawksis_bot", entity_type="bot_command"
         )
         msg = _message(text=text, entities=[entity])
-        assert TelegramAdapter._extract_bot_mention_usernames(msg) == {"clawk_bot"}
+        assert TelegramAdapter._extract_bot_mention_usernames(msg) == {"clawksis_bot"}

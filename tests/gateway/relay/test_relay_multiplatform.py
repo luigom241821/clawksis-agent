@@ -71,7 +71,9 @@ def test_bot_ids_malformed_json_degrades_to_empty(monkeypatch):
 
 def _arm(monkeypatch, *, url="wss://connector.example/relay", token="nas-token"):
     monkeypatch.setattr(relay, "relay_url", lambda: url)
-    monkeypatch.setattr("clawk_cli.auth.resolve_nous_access_token", lambda: token)
+    # The fork drops the Nous Portal identity mode (BYOK): stub the canonical resolver
+    # instead of the Nous refresh it no longer consults.
+    monkeypatch.setattr(relay, "_resolve_relay_identity_token", lambda: token)
 
 
 def test_self_provision_loops_per_platform(monkeypatch):

@@ -691,7 +691,7 @@ class TestResolveUpdatePrompt:
             1, "y", "Alice", open_id="ou_user1", chat_id="oc_12345"
         )
 
-        assert (tmp_path / ".clawk" / ".update_response").read_text() == "y"
+        assert (tmp_path / ".clawksis" / ".update_response").read_text() == "y"
         assert 1 not in adapter._update_prompt_state
 
     @pytest.mark.asyncio

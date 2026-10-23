@@ -102,7 +102,7 @@ class TestVenvDiscovery:
 
         dists = [
             SimpleNamespace(metadata={"Name": n}, version="0.0.0")
-            for n in ("clawk_agent", "requests")
+            for n in ("clawksis_agent", "requests")
         ]
         monkeypatch.setattr("importlib.metadata.distributions", lambda: dists)
         info = version_info.VersionInfo(
@@ -118,7 +118,7 @@ class TestVenvDiscovery:
 
     def test_placeholder_agent_version_resolves_to_running_release(self, monkeypatch):
         versions = self._versions(monkeypatch, "0.21.5")
-        assert versions["clawk_agent"] == "0.21.5"
+        assert versions["clawksis_agent"] == "0.21.5"
         assert (
             versions["requests"] == "0.0.0"
         )  # only the agent's own placeholder is rewritten

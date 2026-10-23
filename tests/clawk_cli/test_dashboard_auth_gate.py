@@ -366,7 +366,12 @@ def test_start_server_loopback_public_url_enables_gate(monkeypatch):
 
 
 def test_start_server_loopback_public_url_without_provider_fails_closed(monkeypatch):
-    """Trusting an external Host must never expose the loopback token mode."""
+    """Trusting an external Host must never expose the loopback token mode.
+
+    Fork-specific: while the first-run setup page can create the login, the server boots
+    with the gate ON (see test_start_server_public_without_insecure_records_auth_required);
+    it refuses to start only when that setup is unavailable.
+    """
     from clawk_cli.dashboard_auth import clear_providers
 
     monkeypatch.setenv(
@@ -383,6 +388,19 @@ def test_start_server_loopback_public_url_without_provider_fails_closed(monkeypa
         "trusted_public_hosts",
     )
 
+    web_server.app.state.auth_required = None
+    web_server.start_server(
+        host="127.0.0.1",
+        port=9119,
+        open_browser=False,
+        allow_public=False,
+    )
+    assert web_server.app.state.auth_required is True
+
+    monkeypatch.setattr(
+        "clawk_cli.dashboard_auth.first_run.setup_available", lambda: False
+    )
+    web_server.app.state.auth_required = None
     with pytest.raises(SystemExit, match=r"no auth providers"):
         web_server.start_server(
             host="127.0.0.1",

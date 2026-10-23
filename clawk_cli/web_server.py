@@ -409,19 +409,24 @@ def _resolve_trusted_public_hosts() -> frozenset[str]:
 def should_require_dashboard_auth(
     host: str,
     trusted_public_hosts: Optional[frozenset[str]] = None,
+    allow_public: bool = False,
 ) -> bool:
-    """Gate required for a non-loopback bind OR a non-loopback ``dashboard.public_url``.
+    """Gate required for a non-loopback bind (without ``--insecure``) OR a non-loopback
+    ``dashboard.public_url``.
 
     Callers may pass the already-resolved host set so startup and request
     validation share one snapshot. ``CLAWK_DASHBOARD_FORCE_GATE`` (written by
     ``clawk dashboard domain``) engages the gate even on a loopback bind: the
     dashboard listens on 127.0.0.1 but a local reverse proxy publishes it.
+    ``allow_public`` (``--insecure``, the fork's escape hatch) lifts only the bind trigger.
     """
     if trusted_public_hosts is None:
         trusted_public_hosts = _resolve_trusted_public_hosts()
     if _env_truthy("CLAWK_DASHBOARD_FORCE_GATE"):
         return True
-    return should_require_auth(host) or public_hosts_engage_gate(trusted_public_hosts)
+    return should_require_auth(host, allow_public) or public_hosts_engage_gate(
+        trusted_public_hosts
+    )
 
 
 @app.middleware("http")
@@ -630,9 +635,13 @@ async def _immutable_asset_cache(request: Request, call_next):
     revalidate) so it always re-resolves the current hashes — without an
     explicit header, browsers apply heuristic caching to the SPA shell and a
     stale index keeps pointing at deleted chunks after a server-side rebuild
-    (frozen navigation until a hard refresh)."""
+    (frozen navigation until a hard refresh).
+
+    Only a fallback: a response that already chose its policy keeps it. The SPA index and the
+    login page are served ``no-store`` (``web_server_dashboard._NO_STORE``,
+    ``dashboard_auth.routes``), which a blanket ``no-cache`` would weaken."""
     response = await call_next(request)
-    if response.status_code != 200:
+    if response.status_code != 200 or "cache-control" in response.headers:
         return response
     path = request.url.path
     if path.startswith("/assets/"):
@@ -2954,20 +2963,24 @@ def _configure_auth_gate(
         )
     else:
         app.state.auth_required = should_require_dashboard_auth(
-            host, app.state.trusted_public_hosts
+            host, app.state.trusted_public_hosts, allow_public
         )
 
-    # ``--insecure`` no longer disables the gate (June 2026 clawk-0day
-    # hardening); warn that it is a no-op rather than silently ignore it.
+    # Clawksis keeps ``--insecure`` as the explicit escape hatch for a non-loopback bind
+    # (upstream made it a no-op in its June 2026 hardening): no gate, loud warning.
     if allow_public and host not in _LOOPBACK_HOST_VALUES:
-        _log.warning(
-            "--insecure no longer bypasses dashboard authentication. A "
-            "non-loopback bind (%s) now ALWAYS requires an auth provider "
-            "(OAuth or the bundled password provider). Configure one — see "
-            "below — or bind to 127.0.0.1 and reach it over an SSH tunnel / "
-            "Tailscale.",
-            host,
-        )
+        if app.state.auth_required:
+            _log.warning(
+                "--insecure does not bypass the auth gate engaged by "
+                "dashboard.public_url / CLAWK_DASHBOARD_FORCE_GATE on %s.",
+                host,
+            )
+        else:
+            _log.warning(
+                "Binding to %s with --insecure — the dashboard has no robust "
+                "authentication. Only use on trusted networks.",
+                host,
+            )
 
     if app.state.auth_required:
         # No escape hatch serves a gated dashboard without a provider.

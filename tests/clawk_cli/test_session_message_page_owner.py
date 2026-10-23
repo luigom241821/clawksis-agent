@@ -12,7 +12,7 @@ def test_message_pages_identify_the_serving_profile(
     from clawk_state import SessionDB
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    default_home = tmp_path / ".clawk"
+    default_home = tmp_path / ".clawksis"
     work_home = (
         default_home / "profiles" / "work"
         if serving_profile
@@ -70,7 +70,7 @@ def test_message_pages_type_untyped_failed_turn_rows(tmp_path, monkeypatch):
     )
     from clawk_state import SessionDB
 
-    home = tmp_path / ".clawk"
+    home = tmp_path / ".clawksis"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(home))

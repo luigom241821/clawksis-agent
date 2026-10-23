@@ -59,6 +59,9 @@ async def _drive_detached_hygiene(agent: SimpleNamespace) -> None:
     async def _cleanup(*_args, **_kwargs):
         return None
 
+    async def _notify(*_args, **_kwargs):
+        return None
+
     gateway = SimpleNamespace(
         _hmwa_hygiene_build_agent=_build_agent,
         _hmwa_hygiene_wait_for_summary=_wait_for_summary,
@@ -66,13 +69,22 @@ async def _drive_detached_hygiene(agent: SimpleNamespace) -> None:
         _track_deferred_agent_worker=lambda *_a: None,
         _evict_cached_agent=lambda _key: None,
         _cleanup_agent_resources_off_loop=_cleanup,
+        # Clawksis: a large session gets a visible "compacting" notice first.
+        _hmwa_hygiene_notify=_notify,
     )
     attempt = GatewayRunner._HygieneAttempt(agent=None, meta=None)
     await GatewayRunner._hmwa_hygiene_detached_attempt(
         gateway,
         attempt,
         SimpleNamespace(total_ceiling_seconds=60.0),
-        SimpleNamespace(approx_tokens=100_000),
+        # The real plan shape: the fork's count-trigger guard and notice read msg_count and
+        # count_triggered too.
+        GatewayRunner._HygienePlan(
+            needs_compress=True,
+            approx_tokens=100_000,
+            msg_count=4,
+            warn_token_threshold=0,
+        ),
         _history(),
         _history(),
         "m",

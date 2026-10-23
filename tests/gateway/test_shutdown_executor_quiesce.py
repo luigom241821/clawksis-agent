@@ -438,7 +438,10 @@ async def test_default_executor_worker_is_seen_by_the_close_guard():
 
     attempt = gw_mod.GatewayRunner._HygieneAttempt(agent=None, meta=None)
     hs = SimpleNamespace(total_ceiling_seconds=60.0)
-    plan = SimpleNamespace(approx_tokens=100)
+    # The real plan shape: the fork's count-trigger guard reads count_triggered/msg_count too.
+    plan = gw_mod.GatewayRunner._HygienePlan(
+        needs_compress=True, approx_tokens=100, msg_count=4, warn_token_threshold=0
+    )
     turn = asyncio.create_task(
         gw._hmwa_hygiene_detached_attempt(
             attempt,

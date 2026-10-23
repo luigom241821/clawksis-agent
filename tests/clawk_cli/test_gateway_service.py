@@ -2280,7 +2280,7 @@ class TestRemapPathForUser:
             str(tmp_path / "root" / ".clawksis" / "clawksis-agent"),
             str(tmp_path / "alice"),
         )
-        assert result == str(tmp_path / "alice" / ".clawk" / "clawksis-agent")
+        assert result == str(tmp_path / "alice" / ".clawksis" / "clawksis-agent")
 
 
 class TestSystemUnitPathRemapping:

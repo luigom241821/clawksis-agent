@@ -62,16 +62,30 @@ def gated_app():
         "canary\r\nSet-Cookie: injected=1",
     ],
 )
-def test_empty_provider_login_page_is_safe_through_real_route(gated_app, next_value):
+def test_empty_provider_login_page_is_safe_through_real_route(
+    gated_app, next_value, monkeypatch
+):
     clear_providers()
 
+    # Clawksis: with zero providers /login is the first-run setup form while it can still
+    # create the login; it must be just as safe.
+    setup = gated_app.get("/login", params={"next": next_value})
+    assert setup.status_code == 200
+    assert "no-store" in setup.headers["cache-control"]
+    assert next_value not in setup.text
+
+    # Without first-run setup it is the "sign-in unavailable" page.
+    monkeypatch.setattr(
+        "clawk_cli.dashboard_auth.first_run.setup_available", lambda: False
+    )
     response = gated_app.get("/login", params={"next": next_value})
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "no-store" in response.headers["cache-control"]
     assert "Sign-in unavailable" in response.text
-    assert "username/password provider" in response.text
+    # Fork wording names the built-in login and how to set it, not a generic provider.
+    assert "clawk dashboard password" in response.text
     assert "OAuth provider" in response.text
     assert "--insecure" not in response.text
     assert next_value not in response.text

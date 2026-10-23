@@ -40,6 +40,10 @@ def test_worker_lineage_and_settlement(tmp_path, mode, invariant):
     thread = threading.Thread(target=peer.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{peer.server_port}/v1"
+    # Clawksis exempts LOCAL (loopback) models from the 64K context floor and runs them with
+    # their real window (agent_init._model_is_local_endpoint), so the below-floor initialization
+    # failure needs a non-local endpoint. TEST-NET-1 is never dialed: init refuses first.
+    model_url = "http://192.0.2.1:9/v1" if invariant == "initialization" else url
     (home / "config.yaml").write_text(
         json.dumps(
             {
@@ -47,7 +51,11 @@ def test_worker_lineage_and_settlement(tmp_path, mode, invariant):
                     "multiplex_profiles": False,
                     "managed_workers": mode == "managed",
                 },
-                "model": {"provider": "custom", "default": "lineage", "base_url": url},
+                "model": {
+                    "provider": "custom",
+                    "default": "lineage",
+                    "base_url": model_url,
+                },
                 "auxiliary": {"title_generation": {"enabled": False}},
                 "platform_toolsets": {"cli": []},
             }
@@ -122,7 +130,7 @@ def test_worker_lineage_and_settlement(tmp_path, mode, invariant):
                 cwd=str(home),
                 model="lineage",
                 provider="custom",
-                base_url=url,
+                base_url=model_url,
                 toolsets=[],
                 safe_mode=mode == "safe",
                 ignore_user_config=mode == "safe",

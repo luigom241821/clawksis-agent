@@ -509,7 +509,7 @@ def test_unmanaged_root_home_child_ignores_sticky_active_profile(tmp_path, monke
     active_profile=other sticky, the spawned `gateway run` must still resolve the root home."""
     from clawk_cli import gateway_runtime_start as start
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     (root / "profiles" / "other").mkdir(parents=True)
     (root / "active_profile").write_text("other", encoding="utf-8")
     witness = tmp_path / "resolved.json"
@@ -550,7 +550,7 @@ def test_named_profile_without_multiplex_evidence_starts_the_host_gateway(
         gateway_runtime_start as start,
     )
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     home = root / "profiles" / "alpha"
     home.mkdir(parents=True, mode=0o700)
     if standalone:
@@ -592,7 +592,7 @@ def test_cold_start_target_follows_boot_multiplex_policy(
     )
 
     monkeypatch.delenv("GATEWAY_MULTIPLEX_PROFILES", raising=False)
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     home = root / "profiles" / "alpha"
     home.mkdir(parents=True, mode=0o700)
     (root / "config.yaml").write_text(
@@ -635,7 +635,7 @@ def test_reserved_root_never_suppresses_a_standalone_profile_start(
         gateway_runtime_start as start,
     )
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     home = root / "profiles" / "alpha"
     home.mkdir(parents=True, mode=0o700)
     (root / "config.yaml").write_text("model: {default: m}\n", encoding="utf-8")
@@ -672,7 +672,7 @@ def _standalone_host(tmp_path, monkeypatch, record):
         gateway_runtime_start as start,
     )
 
-    root = tmp_path / ".clawk"
+    root = tmp_path / ".clawksis"
     home = root / "profiles" / "alpha"
     home.mkdir(parents=True, mode=0o700)
     if record is not None:

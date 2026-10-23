@@ -36,7 +36,7 @@ def test_options_preflight_returns_cors_headers(client):
         headers={
             "Origin": "http://127.0.0.1:8092",
             "Access-Control-Request-Method": "GET",
-            "Access-Control-Request-Headers": "x-clawk-session-token",
+            "Access-Control-Request-Headers": "x-clawksis-session-token",
         },
     )
     assert resp.status_code == 200

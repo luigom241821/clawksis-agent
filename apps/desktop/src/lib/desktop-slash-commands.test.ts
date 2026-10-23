@@ -152,10 +152,11 @@ describe('desktop slash command curation', () => {
     expect(isDesktopSlashCommand('/my-skill')).toBe(true)
   })
 
-  it('does not run /login on desktop before the catalog is loaded', () => {
+  // Clawksis drops the Nous /login command, so a registry row with another no-desktop reason stands in.
+  it('does not run a registry-blocked command on desktop before the catalog is loaded', () => {
     rememberDesktopCommandsCatalog(undefined)
-    expect(isDesktopSlashCommand('/login')).toBe(false)
-    expect(desktopSlashUnavailableMessage('/login')).not.toBeNull()
+    expect(isDesktopSlashCommand('/gateway')).toBe(false)
+    expect(desktopSlashUnavailableMessage('/gateway')).not.toBeNull()
   })
 
   it('routes /compress through the session-compression action', () => {

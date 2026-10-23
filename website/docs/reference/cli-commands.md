@@ -1892,7 +1892,7 @@ Launch the web dashboard to manage configuration, API keys, and sessions. For a 
 | `--port` | `9119` | Port to run the web server on |
 | `--host` | `127.0.0.1` | Bind address |
 | `--no-open` | — | Don't auto-open the browser |
-| `--insecure` | off | **Deprecated / no-op.** Formerly bypassed auth on a non-loopback bind. Since the June 2026 hardening a public bind *always* requires an auth provider (password or OAuth). Bind `127.0.0.1` and tunnel to keep it local. |
+| `--insecure` | off | **DANGEROUS.** Serves a non-loopback bind without the auth gate (exposes API keys on the network). Lifts only the bind trigger: `dashboard.public_url` / `clawk dashboard domain` still engage the gate. Prefer `127.0.0.1` + an SSH tunnel, or a login via `clawk dashboard password`. |
 | `--skip-build` | off | Skip the web UI build step and serve the existing `dist` directly. Useful for non-interactive contexts (Windows Scheduled Tasks, CI) where npm isn't available. Pre-build with `cd web && npm run build`. |
 | `--isolated` | off | When launched from a named profile (`worker dashboard`), run a dedicated per-profile server instead of routing to the machine dashboard. |
 | `--stop` | — | Stop the running `clawk dashboard` / `clawk serve` backend **of this Clawksis home** and exit (`-p <profile>` / `CLAWK_HOME` select which; backends of other profiles, other installs on the machine, and the shell you typed the command into are never touched — a backend whose owner cannot be read is left alone). SIGTERM, a 10s grace, then SIGKILL; a hosted Chat TUI that outlives its backend is stopped too (it would otherwise keep the deleted `state.db-wal` open and block the next start). Messaging-gateway bots started from the dashboard are not touched. |

@@ -27,7 +27,7 @@ This starts a local web server and opens `http://127.0.0.1:9119` in your browser
 | `--port` | `9119` | Port to run the web server on |
 | `--host` | `127.0.0.1` | Bind address |
 | `--no-open` | — | Don't auto-open the browser |
-| `--insecure` | off | **Deprecated / no-op.** Formerly bypassed auth on a non-loopback bind; it no longer disables authentication — a public bind always requires an auth provider (password or OAuth) |
+| `--insecure` | off | **DANGEROUS.** Serves a non-loopback bind **without** the auth gate (exposes API keys and agent control on the network). Lifts only the bind trigger: `dashboard.public_url` and `clawk dashboard domain` still engage the gate. Prefer `127.0.0.1` + an SSH tunnel, or a login (`clawk dashboard password`) |
 | `--isolated` | off | When launched from a named profile (`worker dashboard`), run a dedicated per-profile server instead of routing to the machine dashboard |
 | `--remote` | — | `USER@HOST` — open a dashboard running on a remote host over an SSH tunnel, no manual `ssh -L`. The remote stays bound to `127.0.0.1`; this is entirely client-side |
 | `--start` | — | With `--remote`, also start `clawk dashboard` on the remote host over the SSH session (otherwise it's assumed already running) |
@@ -686,11 +686,12 @@ Operator-owned dashboards bound to loopback are unaffected — no auth, no login
 |-------|-----------|----------|
 | `clawk dashboard` (default — binds to `127.0.0.1`) | OFF | Local development |
 | `clawk dashboard --host 0.0.0.0` | **ON** | Remote / production — protect with the username/password provider or OAuth |
+| `clawk dashboard --host 0.0.0.0 --insecure` | OFF (loud warning) | Last resort on a fully trusted, firewalled single host — **never** for remote access |
 
-The gate is on if and only if the bind host is not `127.0.0.1`, `::1`, or `localhost`. Binding to `0.0.0.0` (or any RFC1918 / LAN address) engages the gate. The legacy `--insecure` flag **no longer disables it** — it's accepted for backward compatibility but ignored, with a warning.
+The bind engages the gate whenever the host is not `127.0.0.1`, `::1`, or `localhost`: binding to `0.0.0.0` (or any RFC1918 / LAN address) engages it. A non-loopback `dashboard.public_url` and `clawk dashboard domain` (`CLAWK_DASHBOARD_FORCE_GATE`) engage it even on a loopback bind. Clawksis keeps `--insecure` as an explicit escape hatch: it lifts **only** the bind trigger (with a loud warning), never the `public_url` / domain-mode gate.
 
-:::danger `--insecure` is a no-op — it does not disable auth
-Since the June 2026 hardening, `--insecure` no longer bypasses dashboard authentication: a non-loopback bind always requires an auth provider (the username/password provider or OAuth). If you want an auth-free dashboard, bind to `127.0.0.1` and reach it over an SSH tunnel or Tailscale.
+:::danger `--insecure` serves an unauthenticated dashboard
+Upstream turned `--insecure` into a no-op in its June 2026 hardening; Clawksis keeps it as a last-resort escape hatch for a fully trusted, firewalled single-host network. With it, a non-loopback bind serves the dashboard **without authentication** — anyone who can reach the port can read/write your `.env` (API keys, secrets) and drive the agent. Unauthenticated public dashboards were the entry point of the June 2026 MCP-config persistence campaign. Do not use it for remote access: bind to `127.0.0.1` and reach it over an SSH tunnel or Tailscale, or set a login with `clawk dashboard password` (or OAuth) and leave `--insecure` off.
 :::
 
 ### Fail-closed semantics

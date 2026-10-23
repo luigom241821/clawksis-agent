@@ -35,7 +35,8 @@ def test_show_status_includes_tavily_key(monkeypatch, capsys, tmp_path):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-1234567890abcdef")
 
-    show_status(SimpleNamespace(all=False, deep=False))
+    # The default `clawk status` is now a one-screen summary; API keys live under --full.
+    show_status(SimpleNamespace(full=True, deep=False))
 
     output = capsys.readouterr().out
     assert "Tavily" in output

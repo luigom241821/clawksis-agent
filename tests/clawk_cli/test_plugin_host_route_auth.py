@@ -22,7 +22,7 @@ async def config(request: Request):
     late("_require_token")(request)
     return {"pid": os.getpid(), "saved": True,
             "credentials": [k for k in request.headers if k in
-                {"authorization", "cookie", "x-clawk-session-token", "x-clawk-gateway-ticket"}]}
+                {"authorization", "cookie", "x-clawksis-session-token", "x-clawksis-gateway-ticket"}]}
 """
 
 

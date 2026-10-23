@@ -104,13 +104,14 @@ def _is_accepted_host(
 
 
 def should_require_auth(host: str, allow_public: bool = False) -> bool:
-    """True iff the auth gate must be active: any non-loopback bind.
+    """True iff the bind alone engages the auth gate: a non-loopback bind without ``--insecure``.
 
     RFC1918 / CGNAT / link-local are deliberately PUBLIC — a hostile LAN device
-    is the threat model. ``allow_public`` (legacy ``--insecure``) is accepted for
-    old launch scripts but IGNORED since the June 2026 clawk-0day campaign.
+    is the threat model. Clawksis keeps ``allow_public`` (``--insecure``) as the explicit
+    operator escape hatch upstream removed in its June 2026 hardening; it only lifts the
+    bind trigger (``dashboard.public_url`` and ``CLAWK_DASHBOARD_FORCE_GATE`` still engage).
     """
-    return host not in _LOOPBACK_HOST_VALUES
+    return host not in _LOOPBACK_HOST_VALUES and not allow_public
 
 
 def public_hosts_engage_gate(trusted_public_hosts: frozenset[str]) -> bool:

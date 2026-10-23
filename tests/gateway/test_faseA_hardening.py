@@ -4,6 +4,8 @@ Covers the inbound-media size cap (anti-OOM), user-maintained channel aliases,
 and hot-``git pull`` code-skew detection.
 """
 
+import json
+
 import pytest
 
 from gateway.platforms import base as gw_base
@@ -30,28 +32,30 @@ class TestInboundMediaSizeCap:
 
 
 class TestChannelAliases:
-    def test_rename_existing(self, monkeypatch):
-        monkeypatch.setattr(
-            cd, "_load_channel_aliases", lambda: {"whatsapp": {"123@g.us": "Ventas"}}
-        )
+    # Upstream folded the fork's ``_load_channel_aliases()`` into
+    # ``_load_json_dict(_aliases_path())``; drive the real file overlay instead.
+    @staticmethod
+    def _aliases(monkeypatch, tmp_path, aliases):
+        path = tmp_path / "channel_aliases.json"
+        path.write_text(json.dumps(aliases), encoding="utf-8")
+        monkeypatch.setattr(cd, "CHANNEL_ALIASES_PATH", path)
+
+    def test_rename_existing(self, monkeypatch, tmp_path):
+        self._aliases(monkeypatch, tmp_path, {"whatsapp": {"123@g.us": "Ventas"}})
         plats = {"whatsapp": [{"id": "123@g.us", "name": "Grupo", "type": "group"}]}
         cd._apply_channel_aliases(plats)
         assert plats["whatsapp"][0]["name"] == "Ventas"
 
-    def test_inject_placeholder_for_unknown(self, monkeypatch):
-        monkeypatch.setattr(
-            cd, "_load_channel_aliases", lambda: {"whatsapp": {"999@g.us": "Soporte"}}
-        )
+    def test_inject_placeholder_for_unknown(self, monkeypatch, tmp_path):
+        self._aliases(monkeypatch, tmp_path, {"whatsapp": {"999@g.us": "Soporte"}})
         plats = {}
         cd._apply_channel_aliases(plats)
         assert any(
             e["id"] == "999@g.us" and e["name"] == "Soporte" for e in plats["whatsapp"]
         )
 
-    def test_blank_alias_ignored(self, monkeypatch):
-        monkeypatch.setattr(
-            cd, "_load_channel_aliases", lambda: {"whatsapp": {"1@g.us": "  "}}
-        )
+    def test_blank_alias_ignored(self, monkeypatch, tmp_path):
+        self._aliases(monkeypatch, tmp_path, {"whatsapp": {"1@g.us": "  "}})
         plats = {"whatsapp": [{"id": "1@g.us", "name": "Keep", "type": "group"}]}
         cd._apply_channel_aliases(plats)
         assert plats["whatsapp"][0]["name"] == "Keep"

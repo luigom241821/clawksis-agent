@@ -730,7 +730,9 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
     try:
         from clawk_cli.web_server import should_require_dashboard_auth
 
-        if not should_require_dashboard_auth(host):
+        if not should_require_dashboard_auth(
+            host, allow_public=bool(getattr(args, "insecure", False))
+        ):
             return
     except Exception:
         return  # if we can't tell, defer to start_server's own gate
@@ -748,8 +750,8 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
 
     print(f"\n⚠ Dashboard authentication is required for this configuration ({host}).")
     print(
-        "  Non-loopback binds and configured external dashboard.public_url "
-        "values require authentication (--insecure does not bypass this)."
+        "  Non-loopback binds (without --insecure) and configured external "
+        "dashboard.public_url values require authentication."
     )
     print()
     print("  How do you want to authenticate the dashboard?")

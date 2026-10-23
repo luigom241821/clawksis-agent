@@ -3643,7 +3643,7 @@ class TestDesktopHostRendezvousIsolation:
 
         def _fake_urlopen(request, timeout=None):
             dialed.append(
-                (request.full_url, request.get_header("X-clawk-session-token"))
+                (request.full_url, request.get_header("X-clawksis-session-token"))
             )
             return _Reply(b'{"ok": true}')
 

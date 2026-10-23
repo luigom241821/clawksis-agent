@@ -24,10 +24,10 @@ def _add_server_runtime_args(parser) -> None:
     parser.add_argument(
         "--insecure",
         action="store_true",
-        help="DEPRECATED / NO-OP. Formerly bypassed auth on a non-loopback "
-        "bind. As of the June 2026 hardening it no longer disables "
-        "authentication — a public bind always requires an auth provider "
-        "(password or OAuth). Bind 127.0.0.1 + tunnel to keep it local.",
+        help="Allow a non-loopback bind WITHOUT the auth gate (DANGEROUS: "
+        "exposes API keys on the network). dashboard.public_url and "
+        "`clawk dashboard domain` still engage the gate. Prefer 127.0.0.1 + "
+        "an SSH tunnel, or a login (`clawk dashboard password`).",
     )
     parser.add_argument(
         "--skip-build",
