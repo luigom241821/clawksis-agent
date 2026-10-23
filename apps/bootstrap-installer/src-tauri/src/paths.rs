@@ -1,336 +1,300 @@
 //! Filesystem paths + logging setup.
-
 //!
-
 //! Mirrors `clawk_constants.get_clawk_home()` from the Python CLI:
-
-//!   Windows: %LOCALAPPDATA%\clawk
-
+//!   Windows: %LOCALAPPDATA%\clawksis
 //!   macOS:   ~/.clawksis
-
 //!   Linux:   ~/.clawksis  (override via $CLAWK_HOME)
-
 //!
-
 //! NOTE (macOS): Python's get_clawk_home(), scripts/install.sh, and the
-
-//! Electron desktop's resolveClawksisHome() ALL use ~/.clawksis on macOS — there
-
+//! Electron desktop's resolveClawkHome() ALL use ~/.clawksis on macOS — there
 //! is no ~/Library/Application Support branch anywhere else. An earlier
-
 //! version of this file used Application Support, which drifted from every
-
 //! other component: the installer wrote the install to one dir and the
-
 //! desktop looked for it in another, so first launch never found the backend.
-
 //!
-
 //! IMPORTANT: this must match exactly. Drift here means install.ps1
-
 //! writes to one place and the installer reads from another, breaking
-
 //! the bootstrap-complete check.
 
-
-
 use std::path::{Path, PathBuf};
-
+#[cfg(target_os = "macos")]
+use std::process::Command;
 use tracing_appender::non_blocking::WorkerGuard;
 
-
-
 /// Returns the canonical Clawksis home directory, respecting $CLAWK_HOME if set.
-
 pub fn clawk_home() -> PathBuf {
-
     if let Ok(override_path) = std::env::var("CLAWK_HOME") {
-
         if !override_path.trim().is_empty() {
-
             return PathBuf::from(override_path);
-
         }
-
     }
+    platform_default_home()
+}
 
+/// Root of the profile tree that holds this process's home. Mirrors
+/// `clawk_constants.get_default_clawk_root()`: a CLAWK_HOME under the
+/// platform default resolves to the default; otherwise a
+/// `<root>/profiles/<name>` home resolves to `<root>`; any other CLAWK_HOME
+/// is its own root; unset means the platform default. Host-wide state (the
+/// update marker) must live here, never in a per-profile home.
+pub fn clawk_root() -> PathBuf {
+    let env_home = std::env::var("CLAWK_HOME").ok();
+    clawk_root_from(env_home.as_deref(), &platform_default_home())
+}
 
+fn clawk_root_from(env_home: Option<&str>, native_home: &Path) -> PathBuf {
+    let Some(env_home) = env_home.map(str::trim).filter(|s| !s.is_empty()) else {
+        return native_home.to_path_buf();
+    };
+    let env_path = PathBuf::from(env_home);
+    let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    if canonical(&env_path).starts_with(canonical(native_home)) {
+        return native_home.to_path_buf();
+    }
+    match (env_path.parent(), env_path.parent().and_then(Path::parent)) {
+        (Some(parent), Some(grandparent))
+            if parent.file_name().is_some_and(|name| name == "profiles") =>
+        {
+            grandparent.to_path_buf()
+        }
+        _ => env_path,
+    }
+}
 
+fn platform_default_home() -> PathBuf {
+    platform_default_home_with(&std::env::var("CLAWK_DATA_DIR_SUFFIX").unwrap_or_default())
+}
+
+/// `suffix` is CLAWK_DATA_DIR_SUFFIX, appended literally to the leaf exactly as
+/// `clawk_constants._get_platform_default_clawk_home()` and the desktop's
+/// `platformDefaultClawkHome()` do: channel builds keep their own data dir,
+/// and with it their own update marker.
+fn platform_default_home_with(suffix: &str) -> PathBuf {
     #[cfg(target_os = "windows")]
-
     {
-
-        // %LOCALAPPDATA%\clawk — matches scripts/install.ps1's $ClawksisHome.
-
+        // %LOCALAPPDATA%\clawksis — matches scripts/install.ps1's $ClawkHome.
         if let Some(local_app_data) = dirs::data_local_dir() {
-
-            return local_app_data.join("clawksis");
-
+            return local_app_data.join(format!("clawksis{suffix}"));
         }
-
     }
-
-
 
     // macOS + Linux + fallback: ~/.clawksis (matches Python get_clawk_home(),
-
-    // install.sh, and the Electron desktop's resolveClawksisHome()).
-
+    // install.sh, and the Electron desktop's resolveClawkHome()).
     if let Some(home) = dirs::home_dir() {
-
-        return home.join(".clawksis");
-
+        return home.join(format!(".clawksis{suffix}"));
     }
-
-
 
     // Last resort — current dir, almost certainly wrong but at least
-
     // doesn't panic.
-
-    PathBuf::from(".clawksis")
-
+    PathBuf::from(format!(".clawksis{suffix}"))
 }
-
-
 
 pub fn log_dir() -> PathBuf {
-
     clawk_home().join("logs")
-
 }
-
-
 
 pub fn log_path() -> PathBuf {
-
     log_dir().join("bootstrap-installer.log")
-
 }
-
-
 
 pub fn bootstrap_cache_dir() -> PathBuf {
-
     clawk_home().join("bootstrap-cache")
-
 }
-
-
 
 /// Stable location the installer copies itself to after a successful install.
-
 /// The desktop app re-invokes this with `--update`, and the start-menu /
-
 /// desktop shortcuts can point users back to it. Lives directly under
-
 /// CLAWK_HOME so it survives repo checkout deletion (unlike anything under
-
 /// clawksis-agent/).
-
 ///
-
-/// On Windows this is `%LOCALAPPDATA%\clawk\clawk-setup.exe`; on other
-
+/// On Windows this is `%LOCALAPPDATA%\clawksis\clawk-setup.exe`; on other
 /// platforms the extension differs but the directory is the same.
-
 pub fn installer_dest() -> PathBuf {
-
     let name = if cfg!(target_os = "windows") {
-
         "clawk-setup.exe"
-
     } else {
-
         "clawk-setup"
-
     };
-
     clawk_home().join(name)
-
 }
 
-
+/// Marker the updater writes for the duration of an in-app update and removes
+/// when it finishes (see update.rs `UpdateMarkerGuard`). A freshly-launched
+/// desktop checks this before spawning its own local backend: spawning one
+/// mid-update re-locks the venv shim and triggers `force_kill_other_clawk`,
+/// which then kills that legitimate backend in a respawn loop (#50238).
+///
+/// Lives directly under the profile-tree ROOT (`clawk_root`), never a
+/// `profiles/<name>` home: it is one host-wide lock shared with
+/// `clawk_cli/update_lock.py` and the Electron gate, so a profile-scoped
+/// CLAWK_HOME must not split it into a second, unguarded file.
+pub fn update_in_progress_marker() -> PathBuf {
+    clawk_root().join(".clawk-update-in-progress")
+}
 
 /// Copy the currently-running installer binary to `installer_dest()` so it's
-
 /// available for future `--update` runs and shortcut launches.
-
 ///
-
 /// No-ops (returns Ok) when the running exe is ALREADY the destination — which
-
 /// is exactly the case during an `--update` run (the desktop launched us FROM
-
 /// that path), where copying onto ourselves would be a Windows sharing
-
 /// violation. Best-effort: a failure here must not fail the install, so the
-
 /// caller logs and continues.
-
+///
+/// NOTE: because of that no-op, a user's staged installer is only ever written
+/// by a full install/repair. Every later `--update` runs the ORIGINAL binary,
+/// so an installer-protocol change can strand the whole installed base on a
+/// binary that predates it (see `restage_from_checkout`, which repairs this
+/// from the freshly-updated checkout).
 pub fn copy_self_to_clawk_home() -> std::io::Result<()> {
-
     let src = std::env::current_exe()?;
-
     let dest = installer_dest();
 
-
-
     // Skip if we're already running from the destination (update re-invocation
-
     // or a prior copy). canonicalize both so symlinks / 8.3 short paths / case
-
     // differences don't trick us into a self-copy.
-
     let same = match (src.canonicalize(), dest.canonicalize()) {
-
         (Ok(a), Ok(b)) => a == b,
-
         _ => src == dest,
-
     };
-
     if same {
-
         tracing::info!(?dest, "installer already at destination; skipping self-copy");
-
         return Ok(());
-
     }
-
-
 
     if let Some(parent) = dest.parent() {
-
         std::fs::create_dir_all(parent)?;
-
     }
-
     std::fs::copy(&src, &dest)?;
-
+    repair_macos_installer_helper(&dest);
     tracing::info!(?src, ?dest, "copied installer to CLAWK_HOME");
-
     Ok(())
-
 }
 
+#[cfg(target_os = "macos")]
+fn repair_macos_installer_helper(path: &Path) {
+    // The staged helper may inherit quarantine from the downloaded installer.
+    // Desktop later launches this exact file for in-app updates, so make it
+    // executable before the update handoff reaches LaunchServices/Gatekeeper.
+    let _ = Command::new("/usr/bin/xattr")
+        .args(["-cr"])
+        .arg(path)
+        .status();
 
+    let verify = Command::new("/usr/bin/codesign")
+        .arg("--verify")
+        .arg(path)
+        .status();
 
-/// Where install.ps1 writes the bootstrap-complete marker (existence-only file
+    if !matches!(verify, Ok(status) if status.success()) {
+        let _ = Command::new("/usr/bin/codesign")
+            .args(["--force", "--sign", "-"])
+            .arg(path)
+            .status();
+    }
+}
 
-/// the Electron app also checks). Per main.cjs:
+#[cfg(not(target_os = "macos"))]
+fn repair_macos_installer_helper(_path: &Path) {}
 
+/// Where the bootstrap-complete marker lives (existence-only for the Rust
+/// installer fast path; JSON schema-checked by the Electron app). Per main.ts:
 ///   const BOOTSTRAP_COMPLETE_MARKER = path.join(ACTIVE_CLAWK_ROOT, '.clawk-bootstrap-complete')
-
 /// We don't always know ACTIVE_CLAWK_ROOT until install.ps1 reports it, so
-
 /// this is a probe helper, not a definitive path.
-
 pub fn likely_bootstrap_marker(install_root: &Path) -> PathBuf {
-
     install_root.join(".clawk-bootstrap-complete")
-
 }
-
-
 
 /// Initializes tracing to bootstrap-installer.log under CLAWK_HOME/logs/.
-
 /// Returns a guard that flushes the appender on drop — keep it alive for
-
 /// the lifetime of the process.
-
 pub fn init_logging() -> Option<WorkerGuard> {
-
     let dir = log_dir();
-
     if let Err(err) = std::fs::create_dir_all(&dir) {
-
         // No log dir → log to stderr only. Don't panic; the installer
-
         // should still be usable on an exotic filesystem.
-
         eprintln!("[clawk-setup] could not create log dir {dir:?}: {err}");
-
         return None;
-
     }
 
-
-
     let file_appender = tracing_appender::rolling::never(&dir, "bootstrap-installer.log");
-
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-
-
     let env_filter = tracing_subscriber::EnvFilter::try_from_env("CLAWK_BOOTSTRAP_LOG")
-
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
 
-
-
     tracing_subscriber::fmt()
-
         .with_env_filter(env_filter)
-
         .with_writer(non_blocking)
-
         .with_ansi(false)
-
         .with_target(true)
-
         .init();
 
-
-
     Some(guard)
-
 }
 
-
-
 // ---------------------------------------------------------------------------
-
 // Tauri commands
-
 // ---------------------------------------------------------------------------
 
-
-
 #[tauri::command]
-
 pub fn get_log_path() -> String {
-
     log_path().to_string_lossy().into_owned()
-
 }
 
-
-
 #[tauri::command]
-
 pub fn get_clawk_home() -> String {
-
     clawk_home().to_string_lossy().into_owned()
-
 }
-
-
 
 #[tauri::command]
-
 pub fn open_log_dir(app: tauri::AppHandle) -> Result<(), String> {
-
     use tauri_plugin_opener::OpenerExt;
-
     let path = log_dir();
-
     app.opener()
-
         .open_path(path.to_string_lossy(), None::<&str>)
-
         .map_err(|e| e.to_string())
-
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profile_home_resolves_to_its_tree_root() {
+        let native = Path::new("/nonexistent-native/.clawksis");
+        assert_eq!(
+            clawk_root_from(Some("/srv/clawk-root/profiles/work"), native),
+            PathBuf::from("/srv/clawk-root"),
+            "a profiles/<name> home must share the root's single update marker"
+        );
+        assert_eq!(
+            clawk_root_from(Some("/srv/clawk-root"), native),
+            PathBuf::from("/srv/clawk-root")
+        );
+        assert_eq!(
+            clawk_root_from(Some("/nonexistent-native/.clawksis/profiles/work"), native),
+            native.to_path_buf(),
+            "a home under the platform default resolves to the default"
+        );
+        assert_eq!(clawk_root_from(None, native), native.to_path_buf());
+        assert_eq!(clawk_root_from(Some("  "), native), native.to_path_buf());
+    }
+
+    #[test]
+    fn data_dir_suffix_names_the_default_home_and_its_marker_root() {
+        let plain = platform_default_home_with("");
+        let channel = platform_default_home_with("-channel-build-x");
+        assert_eq!(channel.parent(), plain.parent());
+        assert_eq!(
+            channel.file_name().unwrap().to_string_lossy(),
+            format!(
+                "{}-channel-build-x",
+                plain.file_name().unwrap().to_string_lossy()
+            ),
+            "the suffix is appended to the leaf, as Python and the desktop do"
+        );
+        assert_eq!(clawk_root_from(None, &channel), channel);
+    }
+}

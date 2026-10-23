@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router";
 // `fonts.css` + `globals.css` are pulled in via CSS `@import` inside
 // `index.css` (NOT here): Tailwind v4 only resolves `@apply` against the
 // design system when the DS stylesheet shares the same CSS root as
@@ -7,6 +7,7 @@ import { BrowserRouter } from "react-router-dom";
 // an isolated context where `@apply p-4` errors with "unknown utility class".
 import "./index.css";
 import App from "./App";
+import { ProfileProvider } from "./contexts/ProfileProvider";
 import { SystemActionsProvider } from "./contexts/SystemActions";
 import { I18nProvider } from "./i18n";
 import { exposePluginSDK } from "./plugins";
@@ -38,7 +39,10 @@ createRoot(document.getElementById("root")!).render(
     <I18nProvider>
       <ThemeProvider>
         <SystemActionsProvider>
-          <App />
+          {/* Above App, so its plugin loader follows the selected profile. */}
+          <ProfileProvider>
+            <App />
+          </ProfileProvider>
         </SystemActionsProvider>
       </ThemeProvider>
     </I18nProvider>
