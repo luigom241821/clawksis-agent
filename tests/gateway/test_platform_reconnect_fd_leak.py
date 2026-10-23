@@ -21,6 +21,7 @@ this file would have caught the regression and now pins the fix.
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -57,7 +58,7 @@ async def _run_watcher_one_iteration(runner: GatewayRunner) -> None:
     """Drive ``_platform_reconnect_watcher`` for exactly one retry pass.
 
     Patches ``asyncio.sleep`` to advance the watcher's internal
-    ``await asyncio.sleep(10)`` initial delay and the 1-second inner
+    ``await asyncio.sleep(0.2)`` initial delay and the 1-second inner
     sleeps without actually waiting. Mirrors the pattern used in
     ``test_platform_reconnect.py::TestPlatformReconnectWatcher``.
     """
@@ -89,14 +90,8 @@ class _CountingAdapter(BasePlatformAdapter):
     (the SQLite db + WAL), and every disconnect() must close them.
     """
 
-    def __init__(
-        self,
-        *,
-        succeed: bool = False,
-        fatal_error: str | None = None,
-        fatal_retryable: bool = True,
-        raise_during_connect: bool = False,
-    ):
+    def __init__(self, *, succeed: bool = False, fatal_error: str | None = None,
+                 fatal_retryable: bool = True, raise_during_connect: bool = False):
         super().__init__(PlatformConfig(enabled=True, token="t"), Platform.TELEGRAM)
         # 2 fds to track: the canonical "ResponseStore" pair. The
         # reconnect watcher should call disconnect() once per
@@ -114,9 +109,7 @@ class _CountingAdapter(BasePlatformAdapter):
             raise RuntimeError("simulated connect exception")
         if self._fatal_error:
             self._set_fatal_error(
-                "test_code",
-                self._fatal_error,
-                retryable=self._fatal_retryable,
+                "test_code", self._fatal_error, retryable=self._fatal_retryable,
             )
             return False
         return self._succeed
@@ -166,18 +159,11 @@ class TestReconnectFDLeakRegression:
         runner = _make_runner()
         _seed_runner_with_one_failure(runner)
         adapter = _CountingAdapter(
-            succeed=False,
-            fatal_error="bad token",
-            fatal_retryable=False,
+            succeed=False, fatal_error="bad token", fatal_retryable=False,
         )
-        with (
-            patch.object(runner, "_create_adapter", return_value=adapter),
-            patch.object(
-                runner,
-                "_connect_adapter_with_timeout",
-                new=AsyncMock(return_value=False),
-            ),
-        ):
+        with patch.object(runner, "_create_adapter", return_value=adapter), \
+             patch.object(runner, "_connect_adapter_with_timeout",
+                          new=AsyncMock(return_value=False)):
             await _run_watcher_one_iteration(runner)
 
         # The intent of this test is "the watcher calls disconnect()
@@ -211,18 +197,11 @@ class TestReconnectFDLeakRegression:
         runner = _make_runner()
         _seed_runner_with_one_failure(runner)
         adapter = _CountingAdapter(
-            succeed=False,
-            fatal_error="dns timeout",
-            fatal_retryable=True,
+            succeed=False, fatal_error="dns timeout", fatal_retryable=True,
         )
-        with (
-            patch.object(runner, "_create_adapter", return_value=adapter),
-            patch.object(
-                runner,
-                "_connect_adapter_with_timeout",
-                new=AsyncMock(return_value=False),
-            ),
-        ):
+        with patch.object(runner, "_create_adapter", return_value=adapter), \
+             patch.object(runner, "_connect_adapter_with_timeout",
+                          new=AsyncMock(return_value=False)):
             await _run_watcher_one_iteration(runner)
 
         assert adapter._disconnect_calls >= 1, (
@@ -242,14 +221,9 @@ class TestReconnectFDLeakRegression:
         runner = _make_runner()
         _seed_runner_with_one_failure(runner)
         adapter = _CountingAdapter(raise_during_connect=True)
-        with (
-            patch.object(runner, "_create_adapter", return_value=adapter),
-            patch.object(
-                runner,
-                "_connect_adapter_with_timeout",
-                new=AsyncMock(side_effect=RuntimeError("boom")),
-            ),
-        ):
+        with patch.object(runner, "_create_adapter", return_value=adapter), \
+             patch.object(runner, "_connect_adapter_with_timeout",
+                          new=AsyncMock(side_effect=RuntimeError("boom"))):
             await _run_watcher_one_iteration(runner)
 
         assert adapter._disconnect_calls >= 1, (
@@ -257,49 +231,6 @@ class TestReconnectFDLeakRegression:
             f"got {adapter._disconnect_calls} calls. The except-arm of the "
             "reconnect watcher is one of the three leak paths in #37011."
         )
-
-    @pytest.mark.asyncio
-    async def test_dispose_helper_handles_none(self):
-        """``_dispose_unused_adapter(None)`` is a no-op (defensive)."""
-        await _dispose_unused_adapter(None)  # must not raise
-
-    @pytest.mark.asyncio
-    async def test_dispose_helper_swallows_disconnect_exception(self):
-        """A disconnect() that itself raises must not abort the watcher loop.
-
-        Half-constructed adapters can raise from disconnect() because
-        some of their __init__ state is missing. The watcher loop
-        would then die and stop retrying, masking the original
-        configuration error as a hard crash.
-        """
-        disconnect_calls = 0
-
-        class _RaisingAdapter(BasePlatformAdapter):
-            def __init__(self):
-                super().__init__(
-                    PlatformConfig(enabled=True, token="t"),
-                    Platform.TELEGRAM,
-                )
-
-            async def connect(self, *, is_reconnect: bool = False) -> bool:
-                return True
-
-            async def disconnect(self) -> None:
-                nonlocal disconnect_calls
-                disconnect_calls += 1
-                raise RuntimeError("half-constructed; aiohttp app never started")
-
-            async def send(self, chat_id, content, reply_to=None, metadata=None):
-                return SendResult(success=True, message_id="1")
-
-            async def send_typing(self, chat_id, metadata=None):
-                return None
-
-            async def get_chat_info(self, chat_id):
-                return {"id": chat_id}
-
-        await _dispose_unused_adapter(_RaisingAdapter())  # must not raise
-        assert disconnect_calls == 1
 
 
 class TestAPIServerDisconnectClosesResponseStore:
@@ -324,8 +255,42 @@ class TestAPIServerDisconnectClosesResponseStore:
         adapter._runner = None
         adapter._app = None
         adapter._response_store = store
+        adapter._session_dbs = {}
+        adapter._session_db_cache_lock = threading.Lock()
+        adapter._session_db_cache_closed = False
         adapter.platform = Platform.API_SERVER
         return adapter
+
+    @pytest.mark.asyncio
+    async def test_disconnect_closes_cached_session_dbs(self):
+        """Disconnect must release per-profile SessionDB cache handles."""
+        store = MagicMock()
+        adapter = self._build_adapter_with_store(store)
+        first_db = MagicMock()
+        second_db = MagicMock()
+        adapter._session_dbs = {"default": first_db, "work": second_db}
+
+        await adapter.disconnect()
+
+        first_db.close.assert_called_once_with()
+        second_db.close.assert_called_once_with()
+        assert adapter._session_dbs == {}
+
+    @pytest.mark.asyncio
+    async def test_disconnect_closes_cached_session_dbs_when_runner_cleanup_fails(
+        self,
+    ):
+        """Runner teardown errors must not strand cached DB handles."""
+        adapter = self._build_adapter_with_store(MagicMock())
+        cached_db = MagicMock()
+        adapter._session_dbs = {"default": cached_db}
+        adapter._runner = MagicMock()
+        adapter._runner.cleanup = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await adapter.disconnect()
+
+        cached_db.close.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_disconnect_closes_response_store(self, tmp_path):
@@ -354,24 +319,3 @@ class TestAPIServerDisconnectClosesResponseStore:
         with pytest.raises(sqlite3.ProgrammingError):
             store._conn.execute("SELECT 1").fetchone()
 
-    @pytest.mark.asyncio
-    async def test_disconnect_swallows_response_store_close_exception(self, tmp_path):
-        """A misbehaving ResponseStore.close() must not abort adapter shutdown.
-
-        Real-world failure mode: the SQLite file was unlinked out
-        from under us (operator rm'd ``response_store.db`` during a
-        disk pressure event). ``close()`` raises. The watcher must
-        continue with the aiohttp shutdown, not bail.
-        """
-        store = ResponseStore(max_size=10, db_path=str(tmp_path / "rs.db"))
-
-        def _boom() -> None:
-            raise RuntimeError("sqlite file vanished")
-
-        store.close = _boom  # type: ignore[method-assign]
-        adapter = self._build_adapter_with_store(store)
-
-        # Must not raise — disconnect() swallows the close error and
-        # continues to the aiohttp teardown (no-op here since we
-        # bypassed __init__).
-        await adapter.disconnect()

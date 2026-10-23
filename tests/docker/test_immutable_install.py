@@ -3,13 +3,15 @@
 Build the real image and verify at runtime:
 
   1. /opt/clawksis is not writable by the clawk user (immutable install tree)
-  2. PYTHONDONTWRITEBYTECODE and CLAWK_DISABLE_LAZY_INSTALLS are set
-  3. /opt/clawksis/.install_method contains "docker" (code-scoped stamp)
-  4. $CLAWK_HOME/.install_method is NOT stamped as "docker" by stage2
-  5. A stale "docker" stamp in $CLAWK_HOME is healed (removed) on boot
-"""
+  2. A stale "docker" stamp in $CLAWK_HOME is healed (removed) on boot
 
+The hosted write-policy env (PYTHONDONTWRITEBYTECODE,
+CLAWK_WRITE_SAFE_ROOT, ...) is covered by
+test_immutable_install_permissions.py.
+"""
 from __future__ import annotations
+
+import pytest
 
 from tests.docker.conftest import (
     docker_exec,
@@ -19,9 +21,9 @@ from tests.docker.conftest import (
 )
 
 
+@pytest.mark.parametrize("uid", [10000, 23456])
 def test_install_tree_not_writable_by_clawk(
-    built_image: str,
-    container_name: str,
+    built_image: str, container_name: str, uid: int,
 ) -> None:
     """The clawk user must not be able to modify /opt/clawksis.
 
@@ -29,7 +31,39 @@ def test_install_tree_not_writable_by_clawk(
     root-owned and non-writable so an agent session cannot self-modify
     the installation and brick the gateway.
     """
-    start_container(built_image, container_name)
+    start_container(built_image, container_name, f"CLAWK_UID={uid}", f"CLAWK_GID={uid}")
+    identity = docker_exec(container_name, "id", "-u")
+    assert identity.returncode == 0 and identity.stdout.strip() == str(uid)
+
+    probe = docker_exec(container_name, "/opt/clawksis/.venv/bin/python", "-c", """
+import os
+from pathlib import Path
+from clawk_cli.config import detect_install_method
+assert os.geteuid() != 0
+code = Path('/opt/clawksis/.install_method')
+home = Path('/opt/data/.install_method')
+assert code.read_text().strip() == 'docker'
+assert detect_install_method(Path('/opt/clawksis')) == 'docker'
+assert not home.exists() or home.read_text().strip() != 'docker'
+try:
+    with code.open('a'):
+        pass
+except PermissionError:
+    pass
+else:
+    raise AssertionError('runtime user can alter installation method')
+assert code.read_text().strip() == 'docker'
+for relative in ('pm-runtime/pm-runtime.json', 'tools/facts.json', 'manifest.json'):
+    path = Path('/opt/clawksis') / relative
+    assert path.stat().st_uid == 0, path
+    assert path.read_bytes(), path
+    assert not os.access(path, os.W_OK), path
+    assert path.stat().st_mode & 0o022 == 0, path
+for relative in ('.venv/.lock', 'pm-runtime/.lock'):
+    path = Path('/opt/clawksis') / relative
+    assert not path.exists() or not os.access(path, os.W_OK), path
+""")
+    assert probe.returncode == 0, probe.stdout + probe.stderr
 
     r = docker_exec_sh(
         container_name,
@@ -55,62 +89,12 @@ def test_install_tree_not_writable_by_clawk(
     )
 
 
-def test_clawk_disable_lazy_installs_and_dont_write_bytecode(
-    built_image: str,
-    container_name: str,
-) -> None:
-    """The container must set PYTHONDONTWRITEBYTECODE and
-    CLAWK_DISABLE_LAZY_INSTALLS=1 so no .pyc files are written to the
-    immutable install tree and no lazy installs attempt to modify it."""
-    start_container(built_image, container_name)
-
-    r = docker_exec_sh(
-        container_name,
-        'test "$PYTHONDONTWRITEBYTECODE" = "1" && '
-        'test "$CLAWK_DISABLE_LAZY_INSTALLS" = "1" && '
-        "echo ENV_OK || echo ENV_MISSING",
-        timeout=10,
-    )
-    assert "ENV_OK" in r.stdout, (
-        f"expected PYTHONDONTWRITEBYTECODE=1 and "
-        f"CLAWK_DISABLE_LAZY_INSTALLS=1, got: {r.stdout} stderr={r.stderr}"
-    )
 
 
-def test_install_method_stamp_is_code_scoped(
-    built_image: str,
-    container_name: str,
-) -> None:
-    """The 'docker' install-method stamp must be baked at
-    /opt/clawksis/.install_method (code-scoped), NOT in $CLAWK_HOME."""
-    start_container(built_image, container_name)
-
-    # Code-scoped stamp must exist and say "docker"
-    r = docker_exec_sh(
-        container_name,
-        "cat /opt/clawksis/.install_method",
-        timeout=10,
-    )
-    assert r.returncode == 0, f"/opt/clawksis/.install_method not found: {r.stderr}"
-    assert r.stdout.strip() == "docker", (
-        f"expected 'docker' stamp, got: {r.stdout.strip()!r}"
-    )
-
-    # $CLAWK_HOME must NOT have a 'docker' stamp
-    r = docker_exec_sh(
-        container_name,
-        "cat /opt/data/.install_method 2>/dev/null || echo NONE",
-        timeout=10,
-    )
-    assert r.stdout.strip() != "docker", (
-        "$CLAWK_HOME/.install_method is stamped 'docker' - stage2 must "
-        "not stamp the data volume (shared with host installs)"
-    )
 
 
 def test_stale_docker_stamp_in_home_is_healed_on_boot(
-    built_image: str,
-    container_name: str,
+    built_image: str, container_name: str,
 ) -> None:
     """A stale 'docker' stamp left in $CLAWK_HOME by an older image
     must be removed on boot so shared homes self-heal."""
@@ -119,12 +103,9 @@ def test_stale_docker_stamp_in_home_is_healed_on_boot(
 
     # Write a stale 'docker' stamp as root
     docker_exec(
-        container_name,
-        "sh",
-        "-c",
+        container_name, "sh", "-c",
         "printf 'docker\\n' > /opt/data/.install_method",
-        user="root",
-        timeout=5,
+        user="root", timeout=5,
     )
     # Verify it exists
     r = docker_exec_sh(container_name, "cat /opt/data/.install_method", timeout=5)
@@ -141,5 +122,6 @@ def test_stale_docker_stamp_in_home_is_healed_on_boot(
         timeout=10,
     )
     assert "HEALED" in r.stdout or r.stdout.strip() != "docker", (
-        f"stale 'docker' stamp in $CLAWK_HOME was not healed on boot: {r.stdout}"
+        f"stale 'docker' stamp in $CLAWK_HOME was not healed on boot: "
+        f"{r.stdout}"
     )

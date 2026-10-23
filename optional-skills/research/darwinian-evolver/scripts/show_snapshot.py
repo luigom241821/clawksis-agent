@@ -8,7 +8,6 @@ The script is intentionally Organism-agnostic: it walks `org.__dict__` and print
 all str fields. By default it shows `prompt_template` if present; pass --field to
 target a different attribute (e.g. `regex_pattern`, `sql_query`, `code_block`).
 """
-
 from __future__ import annotations
 
 import argparse
@@ -57,10 +56,10 @@ def main() -> int:
     # The outer pickle wraps a dict; the inner pickle contains the actual organism
     # objects, which must be importable under their original dotted path. If you
     # ran a custom driver, make sure its module is on sys.path before calling this.
-    outer = pickle.loads(args.snapshot.read_bytes())  # noqa: S301 — gated by --i-trust-this-file
+    outer = pickle.loads(args.snapshot.read_bytes())
     if not isinstance(outer, dict) or "population_snapshot" not in outer:
         sys.exit("not a darwinian-evolver snapshot (no population_snapshot key)")
-    inner = pickle.loads(outer["population_snapshot"])  # noqa: S301 — gated by --i-trust-this-file
+    inner = pickle.loads(outer["population_snapshot"])
     pairs = inner["organisms"]  # list of (Organism, EvaluationResult)
 
     print(f"# organisms: {len(pairs)}\n")
@@ -75,14 +74,7 @@ def main() -> int:
         field = args.field
         if field is None:
             for k, v in vars(org).items():
-                if (
-                    isinstance(v, str)
-                    and not k.startswith("_")
-                    and k
-                    not in {
-                        "id",
-                    }
-                ):
+                if isinstance(v, str) and not k.startswith("_") and k not in {"id",}:
                     field = k
                     break
         val = getattr(org, field, None) if field else None

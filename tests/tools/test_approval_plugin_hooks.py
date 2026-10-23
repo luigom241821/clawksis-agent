@@ -6,18 +6,17 @@ ignored) and must fire on BOTH the CLI-interactive path and the async gateway
 path, so external tools like macOS notifiers can be alerted regardless of
 which surface the user is on.
 """
-
 from unittest.mock import patch
 
 import pytest
 
 import tools.approval as approval_module
-from tools.approval import (
-    check_all_command_guards,
-    check_execute_code_guard,
-    set_current_session_key,
-    clear_session,
-)
+from tools import approval_context
+from tools import approval_smart
+from tools.approval import check_all_command_guards, check_execute_code_guard, clear_session
+from tools.approval_context import set_current_session_key
+from tools.approval_prompt import request_elicitation_consent
+from tools.file_tools_write_guards import _request_protected_instruction_approval
 
 
 @pytest.fixture
@@ -25,6 +24,7 @@ def isolated_session(monkeypatch, tmp_path):
     """Give each test a fresh session_key, clean approval-state, and isolated
     CLAWK_HOME so the real user's command_allowlist doesn't leak in."""
     import tools.approval as _am
+    from tools import approval_context
 
     session_key = "test:session:approval_hooks"
     token = set_current_session_key(session_key)
@@ -42,7 +42,7 @@ def isolated_session(monkeypatch, tmp_path):
         _am._permanent_approved.update(_saved_permanent)
         _am._session_approved.update(_saved_session)
         try:
-            _am._approval_session_key.reset(token)
+            approval_context._approval_session_key.reset(token)
         except Exception:
             pass
         clear_session(session_key)
@@ -59,7 +59,7 @@ class TestCliPathFiresHooks:
         monkeypatch.delenv("CLAWK_GATEWAY_SESSION", raising=False)
         monkeypatch.delenv("CLAWK_EXEC_ASK", raising=False)
         # approvals.mode=manual so we actually reach the prompt site
-        monkeypatch.setattr(approval_module, "_get_approval_mode", lambda: "manual")
+        monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "manual")
 
         captured = []
 
@@ -73,9 +73,7 @@ class TestCliPathFiresHooks:
 
         with patch("clawk_cli.plugins.invoke_hook", side_effect=fake_invoke_hook):
             result = check_all_command_guards(
-                "rm -rf /tmp/test-hook",
-                "local",
-                approval_callback=cb,
+                "rm -rf /tmp/test-hook", "local", approval_callback=cb,
             )
 
         assert result["approved"] is True
@@ -92,9 +90,7 @@ class TestCliPathFiresHooks:
         assert pre_kwargs["pattern_key"]  # non-empty primary pattern
         assert pre_kwargs["description"]
 
-        post_kwargs = next(
-            kw for name, kw in captured if name == "post_approval_response"
-        )
+        post_kwargs = next(kw for name, kw in captured if name == "post_approval_response")
         assert post_kwargs["choice"] == "once"
         assert post_kwargs["surface"] == "cli"
         assert post_kwargs["command"] == "rm -rf /tmp/test-hook"
@@ -103,7 +99,7 @@ class TestCliPathFiresHooks:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         monkeypatch.delenv("CLAWK_GATEWAY_SESSION", raising=False)
         monkeypatch.delenv("CLAWK_EXEC_ASK", raising=False)
-        monkeypatch.setattr(approval_module, "_get_approval_mode", lambda: "manual")
+        monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "manual")
 
         captured = []
 
@@ -116,15 +112,11 @@ class TestCliPathFiresHooks:
 
         with patch("clawk_cli.plugins.invoke_hook", side_effect=fake_invoke_hook):
             result = check_all_command_guards(
-                "rm -rf /tmp/test-deny",
-                "local",
-                approval_callback=cb,
+                "rm -rf /tmp/test-deny", "local", approval_callback=cb,
             )
 
         assert result["approved"] is False
-        post_kwargs = next(
-            kw for name, kw in captured if name == "post_approval_response"
-        )
+        post_kwargs = next(kw for name, kw in captured if name == "post_approval_response")
         assert post_kwargs["choice"] == "deny"
 
     def test_plugin_hook_crash_does_not_break_approval(
@@ -136,7 +128,7 @@ class TestCliPathFiresHooks:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         monkeypatch.delenv("CLAWK_GATEWAY_SESSION", raising=False)
         monkeypatch.delenv("CLAWK_EXEC_ASK", raising=False)
-        monkeypatch.setattr(approval_module, "_get_approval_mode", lambda: "manual")
+        monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "manual")
 
         def boom(hook_name, **kwargs):
             raise RuntimeError("plugin crashed")
@@ -146,20 +138,11 @@ class TestCliPathFiresHooks:
 
         with patch("clawk_cli.plugins.invoke_hook", side_effect=boom):
             result = check_all_command_guards(
-                "rm -rf /tmp/test-crash",
-                "local",
-                approval_callback=cb,
+                "rm -rf /tmp/test-crash", "local", approval_callback=cb,
             )
 
         # User's approval was still honored despite the plugin crashing
         assert result["approved"] is True
-
-
-class TestGatewayPathFiresHooks:
-    """Async gateway approval path: CLAWK_GATEWAY_SESSION is set and a
-    gateway notify callback is registered. The agent thread blocks on the
-    approval event until resolve_gateway_approval() is called from another
-    thread."""
 
 
 class TestSmartModeFiresHooks:
@@ -169,64 +152,24 @@ class TestSmartModeFiresHooks:
         monkeypatch.delenv("CLAWK_GATEWAY_SESSION", raising=False)
         monkeypatch.delenv("CLAWK_CRON_SESSION", raising=False)
         monkeypatch.setattr(approval_module, "_YOLO_MODE_FROZEN", False)
-        monkeypatch.setattr(approval_module, "_get_approval_mode", lambda: "smart")
-        monkeypatch.setattr(approval_module, "_smart_approve", lambda *_: verdict)
-        monkeypatch.setattr(
-            "tools.tirith_security.check_command_security",
-            lambda _: {"action": "allow", "findings": [], "summary": ""},
-        )
+        monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "smart")
+        monkeypatch.setattr(approval_smart, "_smart_approve", lambda *_: verdict)
 
     @pytest.mark.parametrize(
         ("guard", "value", "verdict", "approved", "choice", "pattern_key"),
         [
-            (
-                check_all_command_guards,
-                "rm -rf /tmp/smart-hook",
-                "approve",
-                True,
-                "smart_approve",
-                None,
-            ),
-            (
-                check_all_command_guards,
-                "rm -rf /tmp/smart-hook",
-                "deny",
-                False,
-                "smart_deny",
-                None,
-            ),
-            (
-                check_execute_code_guard,
-                "print('smart hook')",
-                "approve",
-                True,
-                "smart_approve",
-                "execute_code",
-            ),
-            (
-                check_execute_code_guard,
-                "print('smart hook')",
-                "deny",
-                False,
-                "smart_deny",
-                "execute_code",
-            ),
+            (check_all_command_guards, "rm -rf /tmp/smart-hook", "approve", True, "smart_approve", None),
+            (check_all_command_guards, "rm -rf /tmp/smart-hook", "deny", False, "smart_deny", None),
+            (check_execute_code_guard, "print('smart hook')", "approve", True, "smart_approve", "execute_code"),
+            (check_execute_code_guard, "print('smart hook')", "deny", False, "smart_deny", "execute_code"),
         ],
     )
     def test_smart_verdict_fires_redacted_pre_and_post_hooks(
-        self,
-        isolated_session,
-        monkeypatch,
-        guard,
-        value,
-        verdict,
-        approved,
-        choice,
-        pattern_key,
+        self, isolated_session, monkeypatch, guard, value, verdict, approved, choice, pattern_key
     ):
         self._configure(monkeypatch, verdict)
         secret = "sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
-        value = f"{value} # Authorization: Bearer {secret}"
+        value = f'{value} # Authorization: Bearer {secret}'
         captured = []
 
         with patch(
@@ -254,13 +197,10 @@ class TestSmartModeFiresHooks:
             assert pre["pattern_key"] == pattern_key
             assert pre["pattern_keys"] == [pattern_key]
 
-    @pytest.mark.parametrize(
-        "guard,value",
-        [
-            (check_all_command_guards, "rm -rf /tmp/smart-order"),
-            (check_execute_code_guard, "print('smart order')"),
-        ],
-    )
+    @pytest.mark.parametrize("guard,value", [
+        (check_all_command_guards, "rm -rf /tmp/smart-order"),
+        (check_execute_code_guard, "print('smart order')"),
+    ])
     def test_pre_hook_fires_before_aux_llm_decision(
         self, isolated_session, monkeypatch, guard, value
     ):
@@ -271,7 +211,7 @@ class TestSmartModeFiresHooks:
             events.append("smart_approve")
             return "approve"
 
-        monkeypatch.setattr(approval_module, "_smart_approve", decide)
+        monkeypatch.setattr(approval_smart, "_smart_approve", decide)
         with patch(
             "clawk_cli.plugins.invoke_hook",
             side_effect=lambda name, **kwargs: events.append(name),
@@ -285,13 +225,10 @@ class TestSmartModeFiresHooks:
             "post_approval_response",
         ]
 
-    @pytest.mark.parametrize(
-        "guard,value",
-        [
-            (check_all_command_guards, "rm -rf /tmp/smart-force-redaction"),
-            (check_execute_code_guard, "print('smart force redaction')"),
-        ],
-    )
+    @pytest.mark.parametrize("guard,value", [
+        (check_all_command_guards, "rm -rf /tmp/smart-force-redaction"),
+        (check_execute_code_guard, "print('smart force redaction')"),
+    ])
     def test_smart_observer_redaction_is_forced_when_config_disables_redaction(
         self, isolated_session, monkeypatch, guard, value
     ):
@@ -311,13 +248,10 @@ class TestSmartModeFiresHooks:
         assert result["approved"] is True
         assert force_values == [True, True]
 
-    @pytest.mark.parametrize(
-        "guard,value",
-        [
-            (check_all_command_guards, "rm -rf /tmp/smart-hook-crash"),
-            (check_execute_code_guard, "print('smart hook crash')"),
-        ],
-    )
+    @pytest.mark.parametrize("guard,value", [
+        (check_all_command_guards, "rm -rf /tmp/smart-hook-crash"),
+        (check_execute_code_guard, "print('smart hook crash')"),
+    ])
     @pytest.mark.parametrize("verdict,approved", [("approve", True), ("deny", False)])
     def test_observer_exception_never_changes_smart_verdict(
         self, isolated_session, monkeypatch, guard, value, verdict, approved
@@ -330,13 +264,10 @@ class TestSmartModeFiresHooks:
             result = guard(value, "local")
         assert result["approved"] is approved
 
-    @pytest.mark.parametrize(
-        "guard,value",
-        [
-            (check_all_command_guards, "rm -rf /tmp/smart-redactor-crash"),
-            (check_execute_code_guard, "print('smart redactor crash')"),
-        ],
-    )
+    @pytest.mark.parametrize("guard,value", [
+        (check_all_command_guards, "rm -rf /tmp/smart-redactor-crash"),
+        (check_execute_code_guard, "print('smart redactor crash')"),
+    ])
     @pytest.mark.parametrize("verdict,approved", [("approve", True), ("deny", False)])
     def test_redactor_exception_never_changes_smart_verdict_or_leaks_payload(
         self, isolated_session, monkeypatch, guard, value, verdict, approved
@@ -350,10 +281,7 @@ class TestSmartModeFiresHooks:
             return text
 
         with (
-            patch(
-                "agent.redact.redact_sensitive_text",
-                side_effect=fail_observer_redaction,
-            ),
+            patch("agent.redact.redact_sensitive_text", side_effect=fail_observer_redaction),
             patch(
                 "clawk_cli.plugins.invoke_hook",
                 side_effect=lambda name, **kwargs: captured.append((name, kwargs)),
@@ -363,21 +291,18 @@ class TestSmartModeFiresHooks:
         assert result["approved"] is approved
         assert captured == []
 
-    @pytest.mark.parametrize(
-        "guard,first_value,second_value",
-        [
-            (
-                check_all_command_guards,
-                "rm -rf /tmp/first-smart-command",
-                "rm -rf /tmp/second-smart-command",
-            ),
-            (
-                check_execute_code_guard,
-                "print('first smart script')",
-                "print('second smart script')",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize("guard,first_value,second_value", [
+        (
+            check_all_command_guards,
+            "rm -rf /tmp/first-smart-command",
+            "rm -rf /tmp/second-smart-command",
+        ),
+        (
+            check_execute_code_guard,
+            "print('first smart script')",
+            "print('second smart script')",
+        ),
+    ])
     def test_smart_approval_is_per_command(
         self, isolated_session, monkeypatch, guard, first_value, second_value
     ):
@@ -386,14 +311,8 @@ class TestSmartModeFiresHooks:
         monkeypatch.setenv("CLAWK_EXEC_ASK", "1")
         monkeypatch.delenv("CLAWK_GATEWAY_SESSION", raising=False)
         monkeypatch.setattr(approval_module, "_YOLO_MODE_FROZEN", False)
-        monkeypatch.setattr(approval_module, "_get_approval_mode", lambda: "smart")
-        monkeypatch.setattr(
-            approval_module, "_smart_approve", lambda *_: next(verdicts)
-        )
-        monkeypatch.setattr(
-            "tools.tirith_security.check_command_security",
-            lambda _: {"action": "allow", "findings": [], "summary": ""},
-        )
+        monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "smart")
+        monkeypatch.setattr(approval_smart, "_smart_approve", lambda *_: next(verdicts))
         captured = []
         with patch(
             "clawk_cli.plugins.invoke_hook",
@@ -404,11 +323,73 @@ class TestSmartModeFiresHooks:
 
         assert first["approved"] is True
         assert second["approved"] is False
-        assert [
-            kwargs["choice"]
-            for name, kwargs in captured
-            if name == "post_approval_response"
-        ] == [
+        assert [kwargs["choice"] for name, kwargs in captured if name == "post_approval_response"] == [
             "smart_approve",
             "smart_deny",
         ]
+
+
+def _capture_hooks(run):
+    """Run ``run()`` with the approval hook dispatch captured; drop the per-turn ids
+    every surface adds, so only the prompt payload is compared."""
+    captured = []
+    with patch("clawk_cli.plugins.invoke_hook",
+               side_effect=lambda name, **kw: captured.append((name, kw)) or []):
+        result = run()
+    # on_human_input_* fire around the same prompts with their own payload contract
+    # (tests/tools/test_human_input_hooks.py); this helper compares the approval pair.
+    captured = [(name, kw) for name, kw in captured if not name.startswith("on_human_input_")]
+    for _, kw in captured:
+        for key in ("turn_id", "tool_call_id", "session_id"):
+            kw.pop(key, None)
+    return result, captured
+
+
+_PROTECTED_WRITE = (lambda: _request_protected_instruction_approval(["AGENTS.md"]), None, "cli")
+_ELICITATION = (lambda: request_elicitation_consent("Allow server access?", "an MCP server asks",
+                                                    surface="mcp-trust/test-server"),
+                "accept", "mcp-trust/test-server")
+
+
+class TestClassicCliPromptsFireGatewayTwinHooks:
+    """The protected agent-instruction write prompt and MCP/vault consent prompt fire the
+    same pre/post observer hooks in the classic CLI as their gateway twins (#131876)."""
+
+    @pytest.mark.parametrize("run, approved, cli_surface", [_PROTECTED_WRITE, _ELICITATION],
+                             ids=["protected_write", "elicitation"])
+    def test_cli_branch_fires_the_gateway_payload(self, isolated_session, monkeypatch,
+                                                  run, approved, cli_surface):
+        from tools.terminal_tool import set_approval_callback
+
+        monkeypatch.setattr(approval_context, "_get_approval_config",
+                            lambda: {"mode": "manual", "timeout": 60})
+        # Gateway twin: the notifier answers "once" as soon as the card is sent.
+        monkeypatch.setenv("CLAWK_GATEWAY_SESSION", "1")
+        approval_module.register_gateway_notify(
+            isolated_session, lambda _data: approval_module.resolve_gateway_approval(isolated_session, "once"))
+        try:
+            result, gateway_hooks = _capture_hooks(run)
+        finally:
+            approval_module.unregister_gateway_notify(isolated_session)
+        assert result == approved
+
+        # Classic CLI: the prompt_toolkit panel callback registered on the agent thread answers "once".
+        monkeypatch.delenv("CLAWK_GATEWAY_SESSION")
+        set_approval_callback(lambda *_a, **_kw: "once")
+        try:
+            result, cli_hooks = _capture_hooks(run)
+        finally:
+            set_approval_callback(None)
+
+        assert result == approved
+        assert [name for name, _ in cli_hooks] == ["pre_approval_request", "post_approval_response"]
+        expected = [(name, {**kw, "surface": cli_surface}) for name, kw in gateway_hooks]
+        assert cli_hooks == expected
+
+    def test_protected_write_without_a_human_channel_fires_no_hooks(self, isolated_session, monkeypatch):
+        """Fail-closed with no panel callback: nobody is waiting, so observers hear nothing."""
+        monkeypatch.delenv("CLAWK_GATEWAY_SESSION", raising=False)
+        monkeypatch.setattr("tools.terminal_tool._get_approval_callback", lambda: None)
+        result, captured = _capture_hooks(lambda: _request_protected_instruction_approval(["AGENTS.md"]))
+        assert result is not None and "has NOT consented" in result
+        assert captured == []

@@ -7,22 +7,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from agent.turn_failure_copy import FAILED_TURN_NOTICE
 import gateway.run as gateway_run
 from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import (
-    BasePlatformAdapter,
-    MessageEvent,
-    ProcessingOutcome,
-    SendResult,
-)
+from gateway.platforms.base import BasePlatformAdapter, SendResult
+from gateway.platforms.event import MessageEvent, ProcessingOutcome
 from gateway.session import SessionEntry, SessionSource, build_session_key
 
 
 class CaptureSlackAdapter(BasePlatformAdapter):
     def __init__(self):
-        super().__init__(
-            PlatformConfig(enabled=True, token="fake-token"), Platform.SLACK
-        )
+        super().__init__(PlatformConfig(enabled=True, token="fake-token"), Platform.SLACK)
         self.sent = []
         self.processing_hooks = []
 
@@ -33,12 +28,14 @@ class CaptureSlackAdapter(BasePlatformAdapter):
         return None
 
     async def send(self, chat_id, content, reply_to=None, metadata=None) -> SendResult:
-        self.sent.append({
-            "chat_id": chat_id,
-            "content": content,
-            "reply_to": reply_to,
-            "metadata": metadata,
-        })
+        self.sent.append(
+            {
+                "chat_id": chat_id,
+                "content": content,
+                "reply_to": reply_to,
+                "metadata": metadata,
+            }
+        )
         return SendResult(success=True, message_id="slack-1")
 
     async def send_typing(self, chat_id: str, metadata=None) -> None:
@@ -50,9 +47,7 @@ class CaptureSlackAdapter(BasePlatformAdapter):
     async def on_processing_start(self, event: MessageEvent) -> None:
         self.processing_hooks.append(("start", event.message_id))
 
-    async def on_processing_complete(
-        self, event: MessageEvent, outcome: ProcessingOutcome
-    ) -> None:
+    async def on_processing_complete(self, event: MessageEvent, outcome: ProcessingOutcome) -> None:
         self.processing_hooks.append(("complete", event.message_id, outcome))
 
 
@@ -104,6 +99,7 @@ def _make_runner(adapter: CaptureSlackAdapter) -> gateway_run.GatewayRunner:
     # (#47237). A bare MagicMock returns a truthy mock, which would wrongly
     # mark the user turn as a duplicate and skip persisting it.
     runner.session_store.has_platform_message_id = MagicMock(return_value=False)
+    runner.session_store.transcript_tail_role = MagicMock(return_value="user")
     runner._running_agents = {}
     runner._pending_messages = {}
     runner._pending_approvals = {}
@@ -128,54 +124,13 @@ def _make_event() -> MessageEvent:
     )
 
 
-def test_incomplete_codex_warning_is_not_surfaced_as_chat_text():
-    agent_result = _make_incomplete_result()
-
-    # Mirror the gateway pipeline: the hidden-turn detector blanks the
-    # sentinel final_response BEFORE empty-response normalization runs.
-    response = agent_result.get("final_response") or ""
-    assert gateway_run._is_gateway_hidden_reasoning_incomplete_turn(agent_result)
-    response = ""
-
-    response = gateway_run._normalize_empty_agent_response(
-        agent_result,
-        response,
-        history_len=4,
-    )
-
-    assert response == ""
-
-
-def test_real_answer_alongside_incomplete_error_is_never_suppressed():
-    """A turn whose final_response is genuine model text (not the sentinel
-    echo) must be delivered even when the error field carries the
-    retry-exhaustion sentinel — suppression is only for hidden turns."""
-    agent_result = _make_incomplete_result()
-    agent_result["final_response"] = "Here is the actual answer."
-
-    assert not gateway_run._is_gateway_hidden_reasoning_incomplete_turn(agent_result)
-
-
-def test_interrupted_or_failed_turns_are_not_classified_hidden():
-    for key in ("interrupted", "failed"):
-        agent_result = _make_incomplete_result()
-        agent_result[key] = True
-        assert not gateway_run._is_gateway_hidden_reasoning_incomplete_turn(
-            agent_result
-        )
-
-
 @pytest.mark.asyncio
-async def test_incomplete_codex_turn_stays_out_of_slack_transcript(
-    monkeypatch, tmp_path
-):
+async def test_incomplete_codex_turn_closes_transcript_without_slack_delivery(monkeypatch, tmp_path):
     adapter = CaptureSlackAdapter()
     runner = _make_runner(adapter)
 
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(
-        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"}
-    )
+    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"})
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100,
@@ -195,11 +150,10 @@ async def test_incomplete_codex_turn_stays_out_of_slack_transcript(
         call.args[1]["role"]
         for call in runner.session_store.append_to_transcript.call_args_list
     ]
-    assert transcript_roles == ["session_meta", "user"]
-    assert (
-        runner.session_store.append_to_transcript.call_args_list[1].args[1]["content"]
-        == "hello"
-    )
+    assert transcript_roles == ["session_meta", "user", "assistant"]
+    assert runner.session_store.append_to_transcript.call_args_list[1].args[1]["content"] == "hello"
+    boundary = runner.session_store.append_to_transcript.call_args_list[2].args[1]["content"]
+    assert boundary == FAILED_TURN_NOTICE
     assert adapter.processing_hooks == [
         ("start", "m-1"),
         ("complete", "m-1", ProcessingOutcome.SUCCESS),

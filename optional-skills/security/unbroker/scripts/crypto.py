@@ -13,7 +13,6 @@ defaults to living beside the data at `$PDD_DATA_DIR/age-identity.txt` (0600); s
 protect against an attacker who can already read your whole CLAWK_HOME (they get
 key + data together).
 """
-
 from __future__ import annotations
 
 import json
@@ -34,9 +33,7 @@ def encryption_setting() -> str:
     if not cfg.exists():
         return "none"
     try:
-        return (json.loads(cfg.read_text(encoding="utf-8")) or {}).get(
-            "encryption", "none"
-        )
+        return (json.loads(cfg.read_text(encoding="utf-8")) or {}).get("encryption", "none")
     except (ValueError, OSError):
         return "none"
 
@@ -56,7 +53,16 @@ def ensure_identity() -> Path:
             p.parent.chmod(0o700)
         except OSError:
             pass
-        subprocess.run(["age-keygen", "-o", str(p)], check=True, capture_output=True)
+        # Generate beside the target and move it into place, so a timed-out or failed run
+        # leaves no partial identity that the exists() check above would accept next time.
+        partial = p.with_name(f"{p.name}.partial")
+        partial.unlink(missing_ok=True)
+        try:
+            subprocess.run(["age-keygen", "-o", str(partial)], check=True, capture_output=True,
+                           stdin=subprocess.DEVNULL, timeout=30)
+            partial.replace(p)
+        finally:
+            partial.unlink(missing_ok=True)
         try:
             p.chmod(0o600)
         except OSError:
@@ -78,23 +84,14 @@ def recipient() -> str:
 
 def is_engaged() -> bool:
     """True only when encryption is actually active (configured + available + key present)."""
-    return (
-        encryption_setting() == "age" and age_available() and identity_path().exists()
-    )
+    return encryption_setting() == "age" and age_available() and identity_path().exists()
 
 
 def encrypt(data: bytes) -> bytes:
-    out = subprocess.run(
-        ["age", "-r", recipient()], input=data, capture_output=True, check=True
-    )
+    out = subprocess.run(["age", "-r", recipient()], input=data, capture_output=True, check=True)
     return out.stdout
 
 
 def decrypt(data: bytes) -> bytes:
-    out = subprocess.run(
-        ["age", "-d", "-i", str(identity_path())],
-        input=data,
-        capture_output=True,
-        check=True,
-    )
+    out = subprocess.run(["age", "-d", "-i", str(identity_path())], input=data, capture_output=True, check=True)
     return out.stdout

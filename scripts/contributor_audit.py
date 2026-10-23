@@ -24,14 +24,13 @@ from collections import defaultdict
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Import AUTHOR_MAP and resolve_author from the sibling release.py module
+# Import resolve_author from the release tooling's author map
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(SCRIPT_DIR))
-
-from release import resolve_author  # noqa: E402
-
 REPO_ROOT = SCRIPT_DIR.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.releases.authors import resolve_author
 
 # ---------------------------------------------------------------------------
 # AI assistants, bots, and machine accounts to exclude from contributor lists
@@ -51,6 +50,16 @@ IGNORED_PATTERNS = [
     re.compile(r"^Clawksis\s+(Agent|Audit)$", re.IGNORECASE),
     re.compile(r"^nousbot(-eng)?$", re.IGNORECASE),
     re.compile(r"^Ubuntu$", re.IGNORECASE),
+    # v0.20.0 audit additions:
+    re.compile(r"^Blut-?Agent$", re.IGNORECASE),          # self-described AI agent account
+    re.compile(r".*\[bot\]$", re.IGNORECASE),             # any GitHub [bot] suffix (clawk-seaeye[bot] etc.)
+    re.compile(r"^TRON$", re.IGNORECASE),                 # AgentMail agent
+    re.compile(r"^Happy$", re.IGNORECASE),                # happy.engineering AI agent
+    re.compile(r"^Orca$", re.IGNORECASE),                 # Stably AI agent
+    # v0.21.0 audit additions:
+    re.compile(r"^Junie$", re.IGNORECASE),                # JetBrains Junie AI agent
+    re.compile(r"^GPT-[\d.]+\s*Codex$", re.IGNORECASE),   # OpenAI Codex model trailer
+    re.compile(r"^cursoragent$", re.IGNORECASE),          # Cursor AI GitHub account
 ]
 
 IGNORED_EMAILS = {
@@ -65,6 +74,13 @@ IGNORED_EMAILS = {
     "omx@oh-my-codex.dev",
     "codex@openai.com",
     "noreply@commandcode.ai",
+    # v0.20.0 audit additions — AI-agent co-author trailers:
+    "tron-agent@agentmail.to",      # TRON (AgentMail agent)
+    "yesreply@happy.engineering",   # Happy (AI coding agent)
+    "help@stably.ai",               # Orca (Stably AI agent)
+    # v0.21.0 audit additions — AI-agent co-author trailers:
+    "junie@jetbrains.com",          # JetBrains Junie
+    "noreply@openai.com",           # GPT-x Codex model trailer
 }
 
 
@@ -82,20 +98,17 @@ def is_ignored(handle: str, email: str = "") -> bool:
 # Helpers
 # ---------------------------------------------------------------------------
 
-
 def git(*args, cwd=None):
     """Run a git command and return stdout."""
     result = subprocess.run(
         ["git"] + list(args),
         capture_output=True,
-        text=True,
+        text=True, encoding='utf-8', errors='replace',
         cwd=cwd or str(REPO_ROOT),
+        check=False,
     )
     if result.returncode != 0:
-        print(
-            f"  [warn] git {' '.join(args)} failed: {result.stderr.strip()}",
-            file=sys.stderr,
-        )
+        print(f"  [warn] git {' '.join(args)} failed: {result.stderr.strip()}", file=sys.stderr)
         return ""
     return result.stdout.strip()
 
@@ -109,44 +122,29 @@ def gh_pr_list():
     try:
         result = subprocess.run(
             [
-                "gh",
-                "pr",
-                "list",
-                "--repo",
-                "samuelgradientai-sys/clawksis-agent",
-                "--state",
-                "merged",
-                "--json",
-                "number,title,body,author,mergedAt",
-                "--limit",
-                "300",
+                "gh", "pr", "list",
+                "--repo", "samuelgradientai-sys/clawksis-agent",
+                "--state", "merged",
+                "--json", "number,title,body,author,mergedAt",
+                "--limit", "300",
             ],
             capture_output=True,
-            text=True,
+            text=True, encoding='utf-8', errors='replace',
             timeout=60,
+            check=False,
         )
         if result.returncode != 0:
-            print(
-                f"  [warn] gh pr list failed: {result.stderr.strip()}", file=sys.stderr
-            )
+            print(f"  [warn] gh pr list failed: {result.stderr.strip()}", file=sys.stderr)
             return []
         return json.loads(result.stdout)
     except FileNotFoundError:
-        print(
-            "  [warn] 'gh' CLI not found — skipping salvaged PR scan.", file=sys.stderr
-        )
+        print("  [warn] 'gh' CLI not found — skipping salvaged PR scan.", file=sys.stderr)
         return []
     except subprocess.TimeoutExpired:
-        print(
-            "  [warn] gh pr list timed out — skipping salvaged PR scan.",
-            file=sys.stderr,
-        )
+        print("  [warn] gh pr list timed out — skipping salvaged PR scan.", file=sys.stderr)
         return []
     except json.JSONDecodeError:
-        print(
-            "  [warn] gh pr list returned invalid JSON — skipping salvaged PR scan.",
-            file=sys.stderr,
-        )
+        print("  [warn] gh pr list returned invalid JSON — skipping salvaged PR scan.", file=sys.stderr)
         return []
 
 
@@ -185,8 +183,7 @@ def collect_commit_authors(since_tag, until="HEAD"):
     """
     range_spec = f"{since_tag}..{until}"
     log = git(
-        "log",
-        range_spec,
+        "log", range_spec,
         "--format=%H|%an|%ae|%s",
         "--no-merges",
     )
@@ -227,8 +224,7 @@ def collect_co_authors(since_tag, until="HEAD"):
     range_spec = f"{since_tag}..{until}"
     # Get full commit messages to scan for trailers
     log = git(
-        "log",
-        range_spec,
+        "log", range_spec,
         "--format=__COMMIT__%H%n%b",
         "--no-merges",
     )
@@ -295,10 +291,6 @@ def collect_salvaged_contributors(since_tag, until="HEAD"):
         pr_number = pr.get("number", "?")
 
         # Also credit the PR author
-        pr_author = pr.get("author", {})
-        pr_author_login = (
-            pr_author.get("login", "") if isinstance(pr_author, dict) else ""
-        )
 
         for pattern in SALVAGE_PATTERNS:
             for match in pattern.finditer(body):
@@ -317,7 +309,6 @@ def collect_salvaged_contributors(since_tag, until="HEAD"):
 # Release file comparison
 # ---------------------------------------------------------------------------
 
-
 def check_release_file(release_file, all_contributors):
     """Check which contributors are mentioned in the release file.
 
@@ -326,7 +317,7 @@ def check_release_file(release_file, all_contributors):
         missing: set of handles NOT found in the file
     """
     try:
-        content = Path(release_file).read_text(encoding="utf-8")
+        content = Path(release_file).read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         print(f"  [error] Release file not found: {release_file}", file=sys.stderr)
         return set(), set(all_contributors)
@@ -348,7 +339,6 @@ def check_release_file(release_file, all_contributors):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -386,25 +376,17 @@ def main():
 
     # ---- 1. Git commit authors ----
     print("[1/3] Scanning git commit authors...")
-    commit_contribs, commit_unknowns = collect_commit_authors(
-        args.since_tag, args.until
-    )
+    commit_contribs, commit_unknowns = collect_commit_authors(args.since_tag, args.until)
     print(f"      Found {len(commit_contribs)} contributor(s) from commits.")
 
     # ---- 2. Co-authored-by trailers ----
     print("[2/3] Scanning Co-authored-by trailers...")
-    coauthor_contribs, coauthor_unknowns = collect_co_authors(
-        args.since_tag, args.until
-    )
-    print(
-        f"      Found {len(coauthor_contribs)} contributor(s) from co-author trailers."
-    )
+    coauthor_contribs, coauthor_unknowns = collect_co_authors(args.since_tag, args.until)
+    print(f"      Found {len(coauthor_contribs)} contributor(s) from co-author trailers.")
 
     # ---- 3. Salvaged PRs ----
     print("[3/3] Scanning salvaged/cherry-picked PR descriptions...")
-    salvage_contribs, salvage_pr_refs = collect_salvaged_contributors(
-        args.since_tag, args.until
-    )
+    salvage_contribs, salvage_pr_refs = collect_salvaged_contributors(args.since_tag, args.until)
     print(f"      Found {len(salvage_contribs)} contributor(s) from salvaged PRs.")
 
     # ---- Merge all contributors ----
@@ -450,9 +432,7 @@ def main():
         print("These emails have no mapping and should be added via:")
         print()
         for email, name in sorted(all_unknowns.items()):
-            print(
-                f"  python3 scripts/add_contributor.py {email} <github-username>  # {name}"
-            )
+            print(f"  python3 scripts/add_contributor.py {email} <github-username>  # {name}")
 
     # ---- Strict mode: fail CI if new unmapped emails are introduced ----
     if args.strict and all_unknowns:
@@ -464,14 +444,10 @@ def main():
         if args.diff_base:
             # Only flag emails from commits after diff_base
             new_commits_output = git(
-                "log",
-                f"{args.diff_base}..HEAD",
-                "--format=%ae",
-                "--no-merges",
+                "log", f"{args.diff_base}..HEAD",
+                "--format=%ae", "--no-merges",
             )
-            new_emails = (
-                set(new_commits_output.splitlines()) if new_commits_output else set()
-            )
+            new_emails = set(new_commits_output.splitlines()) if new_commits_output else set()
             for email, name in all_unknowns.items():
                 if email in new_emails:
                     new_unknowns[email] = name
@@ -480,15 +456,11 @@ def main():
 
         if new_unknowns:
             print()
-            print(
-                f"=== STRICT MODE FAILURE: {len(new_unknowns)} new unmapped email(s) ==="
-            )
+            print(f"=== STRICT MODE FAILURE: {len(new_unknowns)} new unmapped email(s) ===")
             print("Add mapping files before merging (do NOT edit AUTHOR_MAP):")
             print()
             for email, name in sorted(new_unknowns.items()):
-                print(
-                    f"    python3 scripts/add_contributor.py {email} <github-username>  # {name}"
-                )
+                print(f"    python3 scripts/add_contributor.py {email} <github-username>  # {name}")
             print()
             print("To find the GitHub username:")
             print("  gh api 'search/users?q=EMAIL+in:email' --jq '.items[0].login'")
@@ -503,9 +475,7 @@ def main():
         print()
         print(f"=== Release File Check: {args.release_file} ===")
         print()
-        mentioned, missing = check_release_file(
-            args.release_file, all_contributors.keys()
-        )
+        mentioned, missing = check_release_file(args.release_file, all_contributors.keys())
         print(f"  Mentioned in release notes: {len(mentioned)}")
         print(f"  Missing from release notes: {len(missing)}")
         if missing:

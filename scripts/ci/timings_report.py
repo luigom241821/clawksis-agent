@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Collect CI job/step timings from the GitHub API and generate an HTML diff report.
+"""Collect CI timings and cache transfers from GitHub and generate an HTML diff report.
 
 In CI, the script reads GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, and
 GITHUB_SHA from the environment to collect timings via the REST API.
 
 If a baseline JSON file (ci-timings-baseline.json by default) exists, the
-report includes a diff with per-job and per-step deltas, plus a gantt chart
-overlaying current vs baseline bars.
+report includes per-job/step timing deltas, per-cache archive-byte comparisons,
+and a gantt chart overlaying current vs baseline bars.
 
 Usage:
     # Collect from API (CI mode):
@@ -28,6 +28,12 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 from html import escape
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.ci.cache_report import cache_review_status, parse_cache_log, render_cache_html, render_cache_summary
 
 API_BASE = "https://api.github.com"
 
@@ -58,7 +64,7 @@ def _retry_wait_s(headers, attempt: int) -> float:
     remaining = (headers.get("X-RateLimit-Remaining") or "").strip() if headers else ""
     if remaining == "0" and reset.isdigit():
         return min(max(float(reset) - time.time(), 1.0), _MAX_RETRY_WAIT_S)
-    return min(2.0**attempt * 2.0, _MAX_RETRY_WAIT_S)  # 4s, 8s, 16s, 32s
+    return min(2.0 ** attempt * 2.0, _MAX_RETRY_WAIT_S)  # 4s, 8s, 16s, 32s
 
 
 def _urlopen_with_retry(req: urllib.request.Request):
@@ -78,22 +84,18 @@ def _urlopen_with_retry(req: urllib.request.Request):
             if e.code not in _RETRY_STATUSES or attempt == _MAX_ATTEMPTS:
                 break
             wait = _retry_wait_s(e.headers, attempt)
-            print(
-                f"GitHub API {e.code} on {req.full_url} — "
-                f"retry {attempt}/{_MAX_ATTEMPTS - 1} in {wait:.0f}s",
-                file=sys.stderr,
-            )
+            print(f"GitHub API {e.code} on {req.full_url} — "
+                  f"retry {attempt}/{_MAX_ATTEMPTS - 1} in {wait:.0f}s",
+                  file=sys.stderr)
             time.sleep(wait)
         except urllib.error.URLError as e:
             last_err = e
             if attempt == _MAX_ATTEMPTS:
                 break
             wait = _retry_wait_s(None, attempt)
-            print(
-                f"GitHub API connection error on {req.full_url} ({e.reason}) — "
-                f"retry {attempt}/{_MAX_ATTEMPTS - 1} in {wait:.0f}s",
-                file=sys.stderr,
-            )
+            print(f"GitHub API connection error on {req.full_url} ({e.reason}) — "
+                  f"retry {attempt}/{_MAX_ATTEMPTS - 1} in {wait:.0f}s",
+                  file=sys.stderr)
             time.sleep(wait)
     raise TimingsUnavailable(
         f"GitHub API unavailable after {_MAX_ATTEMPTS} attempts: {last_err}"
@@ -104,10 +106,8 @@ def _urlopen_with_retry(req: urllib.request.Request):
 # GitHub API helpers
 # ---------------------------------------------------------------------------
 
-
-def api_get(
-    path: str, token: str, params: dict | None = None, list_key: str | None = None
-) -> list | dict:
+def api_get(path: str, token: str, params: dict | None = None,
+            list_key: str | None = None) -> list | dict:
     """Authenticated GitHub API GET with automatic pagination.
 
     For list endpoints, pass list_key to extract items from the paginated
@@ -123,15 +123,12 @@ def api_get(
 
     results: list = []
     while url:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": "ci-timings-report",
-            },
-        )
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "ci-timings-report",
+        })
         data, link_header = _urlopen_with_retry(req)
 
         if list_key:
@@ -145,17 +142,51 @@ def api_get(
         for part in link_header.split(","):
             part = part.strip()
             if 'rel="next"' in part:
-                next_url = part[part.find("<") + 1 : part.find(">")]
+                next_url = part[part.find("<") + 1:part.find(">")]
                 break
         url = next_url
 
     return results
 
 
+def _job_log(job_id: int, repo: str, token: str) -> str:
+    request = urllib.request.Request(f"{API_BASE}/repos/{repo}/actions/jobs/{job_id}/logs", headers={
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "ci-timings-report",
+    })
+    request.add_unredirected_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read().decode("utf-8-sig", errors="replace")
+    except urllib.error.HTTPError as error:
+        # Do not retain signed blob URLs in the public report.
+        raise OSError(f"job log HTTP {error.code}") from error
+
+
+def _collect_cache_data(jobs: list[dict], repo: str, token: str) -> dict:
+    entries, unavailable = [], []
+    seen: set[int] = set()
+    for job in jobs:
+        job_id = job.get("job_id")
+        if is_skipped(job) or not job_id or job_id in seen:
+            continue
+        seen.add(job_id)
+        name = " / ".join(part for part in (job["workflow_name"], job["name"]) if part)
+        try:
+            parsed = parse_cache_log(_job_log(job_id, repo, token), job["steps"])
+        except OSError as error:
+            print(f"Cache data unavailable for {name}: {error}", file=sys.stderr)
+            unavailable.append(name)
+            continue
+        entries.extend(dict(entry, job=name, job_id=job_id, job_url=job["html_url"]) for entry in parsed)
+    return {"entries": entries, "unavailable_jobs": unavailable}
+
+
 def parse_ts(ts: str | None) -> datetime | None:
     if not ts:
         return None
-    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return datetime.fromisoformat(ts)
 
 
 def dur_s(started: str | None, completed: str | None) -> float | None:
@@ -181,10 +212,9 @@ def is_skipped(job: dict) -> bool:
 # Timings collection
 # ---------------------------------------------------------------------------
 
-
 def _normalize_job(raw: dict) -> dict:
     steps = []
-    for step in raw.get("steps") or []:
+    for step in (raw.get("steps") or []):
         steps.append({
             "name": step.get("name", ""),
             "number": step.get("number", 0),
@@ -237,16 +267,15 @@ def _annotate_wait_times(jobs: list[dict]) -> None:
                 continue
             if latest_dep_end is None or other_end > latest_dep_end:
                 latest_dep_end = other_end
-        j["wait_s"] = (
-            (started - latest_dep_end).total_seconds() if latest_dep_end else 0.0
-        )
+        j["wait_s"] = (started - latest_dep_end).total_seconds() if latest_dep_end else 0.0
 
 
 def collect_timings(token: str, repo: str, run_id: str, head_sha: str) -> dict:
     """Collect job/step timings from the GitHub API.
 
     1. Get orchestrator run's direct jobs (detect, all-checks-pass, etc.).
-       Skip workflow-call placeholder jobs (step name starts with "Run ./.github/").
+       Skip workflow-call placeholder jobs (step name starts with
+       "Run ./.github/workflows/").
     2. Find sub-workflow runs via head_sha + event=workflow_call.
     3. Get each sub-workflow run's jobs with full step timing.
     """
@@ -257,41 +286,32 @@ def collect_timings(token: str, repo: str, run_id: str, head_sha: str) -> dict:
     created_at = run_info.get("created_at", "")
 
     # Orchestrator direct jobs
-    orch_jobs = api_get(
-        f"/repos/{owner}/{repo_name}/actions/runs/{run_id}/jobs", token, list_key="jobs"
-    )
+    orch_jobs = api_get(f"/repos/{owner}/{repo_name}/actions/runs/{run_id}/jobs",
+                        token, list_key="jobs")
 
     direct = []
     for job in orch_jobs:
         steps = job.get("steps") or []
-        if any(s.get("name", "").startswith("Run ./.github/") for s in steps):
+        if any(s.get("name", "").startswith("Run ./.github/workflows/") for s in steps):
             continue  # workflow-call placeholder
         if job.get("status") in ("in_progress", "queued"):
             continue  # skip self / unfinished
         direct.append(job)
 
     # Sub-workflow runs
-    sub_runs = api_get(
-        f"/repos/{owner}/{repo_name}/actions/runs",
-        token,
-        params={
-            "head_sha": head_sha,
-            "event": "workflow_call",
-            "per_page": 100,
-        },
-        list_key="workflow_runs",
-    )
+    sub_runs = api_get(f"/repos/{owner}/{repo_name}/actions/runs", token, params={
+        "head_sha": head_sha,
+        "event": "workflow_call",
+        "per_page": 100,
+    }, list_key="workflow_runs")
     sub_runs = [r for r in sub_runs if r.get("created_at", "") >= created_at]
 
     sub_jobs_raw = []
     for sr in sub_runs:
         sr_id = sr["id"]
         sr_name = sr.get("name", "")
-        sr_jobs = api_get(
-            f"/repos/{owner}/{repo_name}/actions/runs/{sr_id}/jobs",
-            token,
-            list_key="jobs",
-        )
+        sr_jobs = api_get(f"/repos/{owner}/{repo_name}/actions/runs/{sr_id}/jobs",
+                          token, list_key="jobs")
         for j in sr_jobs:
             j["_workflow_name"] = sr_name
             j["_workflow_run_id"] = sr_id
@@ -307,14 +327,17 @@ def collect_timings(token: str, repo: str, run_id: str, head_sha: str) -> dict:
         "run_id": run_id,
         "head_sha": head_sha,
         "created_at": created_at,
+        "is_main": (run_info.get("head_branch") == "main"
+                    and bool(run_info.get("event"))
+                    and run_info["event"] not in ("pull_request", "pull_request_target")),
         "jobs": all_jobs,
+        "cache_data": _collect_cache_data(all_jobs, repo, token),
     }
 
 
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
-
 
 def fmt_dur(seconds: float | None) -> str:
     if seconds is None:
@@ -374,7 +397,6 @@ def fmt_tick(seconds: int) -> str:
 # Stats computation
 # ---------------------------------------------------------------------------
 
-
 def compute_stats(timings: dict, baseline: dict | None = None) -> dict:
     jobs_all = timings.get("jobs", [])
     jobs = [j for j in jobs_all if not is_skipped(j)]
@@ -392,14 +414,8 @@ def compute_stats(timings: dict, baseline: dict | None = None) -> dict:
     bl_wall = None
     bl_compute = None
     if baseline:
-        bl_starts = [
-            s for s in (parse_ts(j.get("started_at")) for j in bl_jobs) if s is not None
-        ]
-        bl_ends = [
-            e
-            for e in (parse_ts(j.get("completed_at")) for j in bl_jobs)
-            if e is not None
-        ]
+        bl_starts = [s for s in (parse_ts(j.get("started_at")) for j in bl_jobs) if s is not None]
+        bl_ends = [e for e in (parse_ts(j.get("completed_at")) for j in bl_jobs) if e is not None]
         if bl_starts and bl_ends:
             bl_wall = (max(bl_ends) - min(bl_starts)).total_seconds()
         bl_compute = sum(j.get("duration_s") or 0 for j in bl_jobs)
@@ -538,20 +554,13 @@ def _gantt_bars(timings: dict, baseline: dict | None) -> str:
     (relative to each run's earliest job start). The axis scale spans
     0..max_end across both runs so bars are directly comparable.
     """
-    jobs = [
-        j
-        for j in timings.get("jobs", [])
-        if j.get("started_at") and j.get("completed_at") and not is_skipped(j)
-    ]
+    jobs = [j for j in timings.get("jobs", [])
+            if j.get("started_at") and j.get("completed_at") and not is_skipped(j)]
     bl_map = {j["name"]: j for j in (baseline or {}).get("jobs", [])}
 
     # Current run: relative offsets from earliest start
-    cur_starts = [
-        s for s in (parse_ts(j.get("started_at")) for j in jobs) if s is not None
-    ]
-    cur_ends = [
-        e for e in (parse_ts(j.get("completed_at")) for j in jobs) if e is not None
-    ]
+    cur_starts = [s for s in (parse_ts(j.get("started_at")) for j in jobs) if s is not None]
+    cur_ends = [e for e in (parse_ts(j.get("completed_at")) for j in jobs) if e is not None]
     if not cur_starts or not cur_ends:
         return '<p style="color:#8b949e">No timing data available.</p>'
     cur_t0 = min(cur_starts)
@@ -579,9 +588,7 @@ def _gantt_bars(timings: dict, baseline: dict | None) -> str:
         if s is None or e is None:
             continue
         left = (s - cur_t0).total_seconds() / total_s * 100
-        width = max(
-            (e - s).total_seconds() / total_s * 100, 0.5
-        )  # min 0.5% for visibility
+        width = max((e - s).total_seconds() / total_s * 100, 0.5)  # min 0.5% for visibility
         dur = j.get("duration_s") or 0
 
         bl = bl_map.get(j["name"])
@@ -604,12 +611,12 @@ def _gantt_bars(timings: dict, baseline: dict | None) -> str:
 
         name_display = escape(j["name"])
         if j.get("workflow_name"):
-            name_display = f"{escape(j['workflow_name'])} / {escape(j['name'])}"
+            name_display = f'{escape(j["workflow_name"])} / {escape(j["name"])}'
 
         delta_info = ""
         if bl and not is_skipped(bl) and bl.get("duration_s") is not None:
-            d_text, d_cls = fmt_delta(dur, bl.get("duration_s"))
-            delta_info = f" — {d_text}"
+            d_text, _d_cls = fmt_delta(dur, bl.get("duration_s"))
+            delta_info = f' — {d_text}'
 
         # Wait bar: shows idle time before the job started running
         wait_bar = ""
@@ -628,12 +635,12 @@ def _gantt_bars(timings: dict, baseline: dict | None) -> str:
             f'<div class="gantt-row">'
             f'<div class="gantt-label" title="{escape(j["name"])}">{name_display}</div>'
             f'<div class="gantt-track">'
-            f"{bl_bar}"
-            f"{wait_bar}"
+            f'{bl_bar}'
+            f'{wait_bar}'
             f'<div class="gantt-bar current" '
             f'style="left:{left:.2f}%;width:{width:.2f}%" '
             f'title="{escape(j["name"])}: {fmt_dur(dur)}{delta_info}"></div>'
-            f"</div></div>"
+            f'</div></div>'
         )
 
     # Axis
@@ -651,7 +658,7 @@ def _gantt_bars(timings: dict, baseline: dict | None) -> str:
     )
     if baseline:
         legend += '<span><span class="legend-swatch" style="border:1px dashed #8b949e"></span>Baseline (main)</span>'
-    legend += "</div>"
+    legend += '</div>'
 
     return f'<div class="gantt-wrap"><div class="gantt">{"".join(rows)}{axis}</div></div>{legend}'
 
@@ -694,19 +701,15 @@ def _job_table(timings: dict, baseline: dict | None) -> str:
     for j in timings.get("jobs", []):
         name = escape(j["name"])
         if j.get("workflow_name"):
-            name = f"{escape(j['workflow_name'])} / {escape(j['name'])}"
+            name = f'{escape(j["workflow_name"])} / {escape(j["name"])}'
 
         concl = j.get("conclusion", "")
         concl_icon = {"success": "✓", "failure": "✗", "skipped": "⊘"}.get(concl, "?")
-        concl_cls = {
-            "success": "faster",
-            "failure": "slower",
-            "skipped": "neutral",
-        }.get(concl, "neutral")
+        concl_cls = {"success": "faster", "failure": "slower", "skipped": "neutral"}.get(concl, "neutral")
 
         if is_skipped(j):
             rows.append(
-                f"<tr>"
+                f'<tr>'
                 f'<td class="job-name">{name}</td>'
                 f'<td class="num neutral">skipped</td>'
                 f'<td class="num neutral">—</td>'
@@ -714,7 +717,7 @@ def _job_table(timings: dict, baseline: dict | None) -> str:
                 f'<td class="num neutral">—</td>'
                 f'<td class="num neutral">—</td>'
                 f'<td class="{concl_cls}" style="text-align:center">{concl_icon}</td>'
-                f"</tr>"
+                f'</tr>'
             )
             continue
 
@@ -727,7 +730,7 @@ def _job_table(timings: dict, baseline: dict | None) -> str:
         wait_delta_text, wait_delta_cls = fmt_delta(wait, bl_wait)
 
         rows.append(
-            f"<tr>"
+            f'<tr>'
             f'<td class="job-name">{name}</td>'
             f'<td class="num">{fmt_dur(dur)}</td>'
             f'<td class="num">{fmt_dur(wait)}</td>'
@@ -735,15 +738,15 @@ def _job_table(timings: dict, baseline: dict | None) -> str:
             f'<td class="num {delta_cls}">{delta_text}</td>'
             f'<td class="num {wait_delta_cls}">{wait_delta_text}</td>'
             f'<td class="{concl_cls}" style="text-align:center">{concl_icon}</td>'
-            f"</tr>"
+            f'</tr>'
         )
 
     return (
-        "<table><thead><tr>"
+        '<table><thead><tr>'
         '<th>Job</th><th class="num">Run</th><th class="num">Wait</th>'
         '<th class="num">Baseline</th><th class="num">Δ Run</th>'
         '<th class="num">Δ Wait</th><th>Status</th>'
-        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        '</tr></thead><tbody>' + "".join(rows) + '</tbody></table>'
     )
 
 
@@ -763,7 +766,7 @@ def _step_details(timings: dict, baseline: dict | None) -> str:
         bl_dur = bl.get("duration_s") if bl and not is_skipped(bl) else None
         delta_text, delta_cls = fmt_delta(dur, bl_dur)
 
-        summary_text = f"{escape(j['name'])} — {fmt_dur(dur)}"
+        summary_text = f'{escape(j["name"])} — {fmt_dur(dur)}'
         if wait is not None and wait >= 1.0:
             summary_text += f' <span class="neutral">(wait {fmt_dur(wait)})</span>'
         if bl_dur is not None:
@@ -777,28 +780,24 @@ def _step_details(timings: dict, baseline: dict | None) -> str:
             s_delta, s_cls = fmt_delta(s_dur, bl_s_dur)
 
             step_rows.append(
-                f"<tr>"
-                f"<td>{escape(s['name'])}</td>"
+                f'<tr>'
+                f'<td>{escape(s["name"])}</td>'
                 f'<td class="num">{fmt_dur(s_dur)}</td>'
                 f'<td class="num">{fmt_dur(bl_s_dur)}</td>'
                 f'<td class="num {s_cls}">{s_delta}</td>'
-                f"</tr>"
+                f'</tr>'
             )
 
         blocks.append(
-            f"<details><summary>{summary_text}</summary>"
-            f"<table><thead><tr>"
+            f'<details><summary>{summary_text}</summary>'
+            f'<table><thead><tr>'
             '<th>Step</th><th class="num">Current</th><th class="num">Baseline</th>'
             '<th class="num">Delta</th>'
-            f"</tr></thead><tbody>{''.join(step_rows)}</tbody></table>"
-            f"</details>"
+            f'</tr></thead><tbody>{"".join(step_rows)}</tbody></table>'
+            f'</details>'
         )
 
-    return (
-        "".join(blocks)
-        if blocks
-        else '<p style="color:#8b949e">No step data available.</p>'
-    )
+    return "".join(blocks) if blocks else '<p style="color:#8b949e">No step data available.</p>'
 
 
 def _regressions(timings: dict, baseline: dict | None) -> str:
@@ -833,25 +832,24 @@ def _regressions(timings: dict, baseline: dict | None) -> str:
 
     rows = []
     for _, diff, job, step, cur, bl_d in top:
-        cls = "slower" if diff > 0 else "faster"
         tag = f'<span class="tag {"slow" if diff > 0 else "fast"}">{"+" if diff > 0 else ""}{diff:.1f}s</span>'
         rows.append(
-            f"<tr>"
+            f'<tr>'
             f'<td class="job-name">{escape(job)}</td>'
-            f"<td>{escape(step)}</td>"
+            f'<td>{escape(step)}</td>'
             f'<td class="num">{fmt_dur(cur)}</td>'
             f'<td class="num">{fmt_dur(bl_d)}</td>'
-            f"<td>{tag}</td>"
-            f"</tr>"
+            f'<td>{tag}</td>'
+            f'</tr>'
         )
 
     return (
         '<div class="regressions">'
-        "<table><thead><tr>"
+        '<table><thead><tr>'
         '<th>Job</th><th>Step</th><th class="num">Current</th><th class="num">Baseline</th>'
-        "<th>Delta</th>"
-        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
-        "</div>"
+        '<th>Delta</th>'
+        '</tr></thead><tbody>' + "".join(rows) + '</tbody></table>'
+        '</div>'
     )
 
 
@@ -865,37 +863,38 @@ def generate_html(timings: dict, baseline: dict | None = None) -> str:
     bl_info = ""
     if baseline:
         bl_sha = (baseline.get("head_sha") or "")[:7]
-        bl_info = f" | Baseline: <code>{bl_sha}</code> (main)"
+        bl_info = f' | Baseline: <code>{bl_sha}</code> (main)'
 
     html = (
         f'<!DOCTYPE html>\n<html lang="en">\n<head>\n'
         f'<meta charset="utf-8">\n'
         f'<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        f"<title>CI Timing Report — {sha_short}</title>\n"
-        f"<style>{CSS}</style>\n"
-        f"</head>\n<body>\n"
-        f"<h1>CI Timing Report</h1>\n"
+        f'<title>CI Timing Report — {sha_short}</title>\n'
+        f'<style>{CSS}</style>\n'
+        f'</head>\n<body>\n'
+        f'<h1>CI Timing Report</h1>\n'
         f'<div class="meta">Run <code>{escape(run_id)}</code> | SHA <code>{sha_short}</code>'
-        f" | Generated {escape(created)}{bl_info}</div>\n"
+        f' | Generated {escape(created)}{bl_info}</div>\n'
     )
 
-    html += "<h2>Global Stats</h2>\n"
+    html += '<h2>Global Stats</h2>\n'
     html += _stats_cards(stats)
 
     if baseline:
-        html += "<h2>Top Regressions & Improvements</h2>\n"
+        html += '<h2>Top Regressions & Improvements</h2>\n'
         html += _regressions(timings, baseline)
 
-    html += "<h2>Gantt Chart</h2>\n"
+    html += '<h2>Gantt Chart</h2>\n'
     html += _gantt_bars(timings, baseline)
 
-    html += "<h2>Per-Job Comparison</h2>\n"
+    html += '<h2>Per-Job Comparison</h2>\n'
     html += _job_table(timings, baseline)
 
-    html += "<h2>Step Details</h2>\n"
+    html += '<h2>Step Details</h2>\n'
     html += _step_details(timings, baseline)
 
-    html += "</body>\n</html>\n"
+    html += render_cache_html(timings, baseline)
+    html += '</body>\n</html>\n'
     return html
 
 
@@ -903,10 +902,8 @@ def generate_html(timings: dict, baseline: dict | None = None) -> str:
 # Markdown summary for $GITHUB_STEP_SUMMARY
 # ---------------------------------------------------------------------------
 
-
 def generate_summary(timings: dict, baseline: dict | None = None) -> str:
     stats = compute_stats(timings, baseline)
-    bl_map = {j["name"]: j for j in (baseline or {}).get("jobs", [])}
 
     lines = ["## CI Timing Summary\n"]
 
@@ -918,25 +915,19 @@ def generate_summary(timings: dict, baseline: dict | None = None) -> str:
     if stats["bl_wall"] is not None:
         d, _ = fmt_delta(stats["wall"], stats["bl_wall"])
         wall_d = d
-    lines.append(
-        f"| Wall time | {fmt_dur(stats['wall'])} | {fmt_dur(stats['bl_wall'])} | {wall_d} |"
-    )
+    lines.append(f"| Wall time | {fmt_dur(stats['wall'])} | {fmt_dur(stats['bl_wall'])} | {wall_d} |")
 
     compute_d = ""
     if stats["bl_compute"] is not None:
         d, _ = fmt_delta(stats["compute"], stats["bl_compute"])
         compute_d = d
-    lines.append(
-        f"| Total compute | {fmt_dur(stats['compute'])} | {fmt_dur(stats['bl_compute'])} | {compute_d} |"
-    )
+    lines.append(f"| Total compute | {fmt_dur(stats['compute'])} | {fmt_dur(stats['bl_compute'])} | {compute_d} |")
 
     wait_d = ""
     if stats["bl_total_wait"] is not None:
         d, _ = fmt_delta(stats["total_wait"], stats["bl_total_wait"])
         wait_d = d
-    lines.append(
-        f"| Total wait | {fmt_dur(stats['total_wait'])} | {fmt_dur(stats['bl_total_wait'])} | {wait_d} |"
-    )
+    lines.append(f"| Total wait | {fmt_dur(stats['total_wait'])} | {fmt_dur(stats['bl_total_wait'])} | {wait_d} |")
 
     lines.append(f"| Jobs faster | {stats['faster']} | — | — |")
     lines.append(f"| Jobs slower | {stats['slower']} | — | — |")
@@ -945,13 +936,92 @@ def generate_summary(timings: dict, baseline: dict | None = None) -> str:
     lines.append(f"| Jobs without baseline | {stats['no_baseline']} | — | — |")
     lines.append("")
 
-    return "\n".join(lines)
+    return "\n".join(lines) + render_cache_summary(timings, baseline)
+
+
+# ---------------------------------------------------------------------------
+# Review status JSON for the unified PR comment
+# ---------------------------------------------------------------------------
+
+# Wall-time regressions above this fraction of baseline are "warning" severity.
+_TIMINGS_WARN_PCT = 0.25
+
+
+def generate_review_status(
+    timings: dict, baseline: dict | None, report_url: str | None = None
+) -> list[dict]:
+    """Produce a review_status JSON array for the CI timings review section.
+
+    Returns a list with one ``{source, results: [...]}`` entry. The
+    result kind is ``"debug"`` or ``"warning"`` (timings is never error —
+    it's an observability job). *summary* is a single short line suitable
+    for the PR comment. *detail* has the per-job deltas as a markdown
+    fragment.
+    """
+    stats = compute_stats(timings, baseline)
+
+    if baseline is None:
+        severity = "debug"
+        summary = f"Wall time {fmt_dur(stats['wall'])} (no baseline yet)."
+    else:
+        wall = stats["wall"]
+        bl_wall = stats["bl_wall"] or 0
+        if bl_wall > 0:
+            pct = (wall - bl_wall) / bl_wall * 100
+            wall_str = f"Wall time {fmt_dur(wall)} vs {fmt_dur(bl_wall)} ({pct:+.1f}%)."
+            if pct > _TIMINGS_WARN_PCT * 100:
+                severity = "warning"
+            else:
+                severity = "debug"
+        else:
+            wall_str = f"Wall time {fmt_dur(wall)}."
+            severity = "debug"
+
+        if stats["slower"]:
+            wall_str += f" {stats['slower']} job(s) slower,"
+        if stats["faster"]:
+            wall_str += f" {stats['faster']} faster,"
+        if stats["unchanged"]:
+            wall_str += f" {stats['unchanged']} unchanged."
+        summary = wall_str
+
+    # Per-job delta detail (top 5 by absolute change)
+    detail_lines: list[str] = []
+    if baseline:
+        bl_map = {j["name"]: j for j in baseline.get("jobs", [])}
+        deltas: list[tuple[float, str, str]] = []
+        for j in timings.get("jobs", []):
+            if is_skipped(j):
+                continue
+            bl = bl_map.get(j["name"])
+            if not bl or is_skipped(bl):
+                continue
+            cur = j.get("duration_s") or 0
+            bl_d = bl.get("duration_s") or 0
+            diff = cur - bl_d
+            if abs(diff) < 1.0:
+                continue
+            deltas.append((abs(diff), j["name"], f"{diff:+.1f}s"))
+        deltas.sort(reverse=True)
+        for _, name, delta_str in deltas[:5]:
+            detail_lines.append(f"- {name}: {delta_str}")
+
+    result: dict = {
+        "kind": severity,
+        "title": "CI timings",
+        "summary": summary,
+        "detail": "\n".join(detail_lines),
+    }
+    if report_url:
+        result["link"] = report_url
+        result["link_label"] = "View report"
+
+    return [{"source": "ci timing", "results": [result]}] + cache_review_status(timings, baseline, report_url)
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-
 
 def expect_env(var: str) -> str:
     val = os.environ.get(var)
@@ -959,37 +1029,26 @@ def expect_env(var: str) -> str:
         raise ValueError(f"missing environment variable {var}")
     return val
 
-
 def main():
-    parser = argparse.ArgumentParser(
-        description="Collect CI timings and generate HTML report"
-    )
+    parser = argparse.ArgumentParser(description="Collect CI timings and generate HTML report")
     parser.add_argument("--from-json", help="Read timings from JSON instead of API")
-    parser.add_argument(
-        "--baseline",
-        default="ci-timings-baseline.json",
-        help="Baseline JSON path (default: ci-timings-baseline.json)",
-    )
-    parser.add_argument(
-        "--output",
-        default="ci-timings-report.html",
-        help="HTML output path (default: ci-timings-report.html)",
-    )
-    parser.add_argument(
-        "--json-out",
-        default="ci-timings.json",
-        help="JSON output path (default: ci-timings.json)",
-    )
-    parser.add_argument(
-        "--summary-out",
-        default="ci-timings-summary.md",
-        help="Markdown summary output path (default: ci-timings-summary.md)",
-    )
+    parser.add_argument("--baseline", default="ci-timings-baseline.json",
+                        help="Baseline JSON path (default: ci-timings-baseline.json)")
+    parser.add_argument("--output", default="ci-timings-report.html",
+                        help="HTML output path (default: ci-timings-report.html)")
+    parser.add_argument("--json-out", default="ci-timings.json",
+                        help="JSON output path (default: ci-timings.json)")
+    parser.add_argument("--summary-out", default="ci-timings-summary.md",
+                        help="Markdown summary output path (default: ci-timings-summary.md)")
+    parser.add_argument("--review-status-out", default="",
+                        help="If set, write a review-status JSON for the unified PR comment.")
+    parser.add_argument("--review-status-only", action="store_true",
+                        help="Write review status from existing timings without regenerating the report.")
     args = parser.parse_args()
 
     # Collect or load timings
     if args.from_json:
-        with open(args.from_json, encoding="utf-8") as f:
+        with open(args.from_json, encoding="utf-8-sig") as f:
             timings = json.load(f)
     else:
         repo = expect_env("GITHUB_REPOSITORY")
@@ -1025,11 +1084,21 @@ def main():
     # Load baseline
     baseline = None
     if os.path.exists(args.baseline):
-        with open(args.baseline, encoding="utf-8") as f:
+        with open(args.baseline, encoding="utf-8-sig") as f:
             baseline = json.load(f)
         print(f"Loaded baseline from {args.baseline}")
     else:
         print(f"No baseline file at {args.baseline} — generating current-only report")
+
+    if args.review_status_only:
+        if not args.review_status_out:
+            parser.error("--review-status-only requires --review-status-out")
+        report_url = os.environ.get("CI_TIMINGS_REPORT_URL", "")
+        statuses = generate_review_status(timings, baseline, report_url)
+        with open(args.review_status_out, "w", encoding="utf-8") as f:
+            f.write(f"review_status={json.dumps(statuses)}\n")
+        print(f"Wrote review status to {args.review_status_out}")
+        return
 
     # Generate HTML
     html = generate_html(timings, baseline)
@@ -1042,6 +1111,17 @@ def main():
     with open(args.summary_out, "a", encoding="utf-8") as f:
         f.write(summary)
         print(f"Wrote summary to {args.summary_out}")
+
+    # Write review status for the unified PR comment.
+    # The output goes to GITHUB_OUTPUT (or a file with the same key=value
+    # format) so the ci-timings job can expose it as a workflow_call output.
+    if args.review_status_out:
+        report_url = os.environ.get("CI_TIMINGS_REPORT_URL", "")
+        statuses = generate_review_status(timings, baseline, report_url)
+        json_str = json.dumps(statuses)
+        with open(args.review_status_out, "a", encoding="utf-8") as f:
+            f.write(f"review_status={json_str}\n")
+        print(f"Wrote review status to {args.review_status_out}")
 
 
 if __name__ == "__main__":

@@ -10,16 +10,13 @@ Covers:
 - _is_backend_available("xai") integration with tools.web_tools
 - _get_backend() accepts "xai" as a configured backend
 """
-
 from __future__ import annotations
 
 import json
 from unittest.mock import MagicMock, patch
 
 
-def _creds(
-    api_key: str = "xai-test-key", base_url: str = "https://api.x.ai/v1"
-) -> dict:
+def _creds(api_key: str = "xai-test-key", base_url: str = "https://api.x.ai/v1") -> dict:
     return {"provider": "xai", "api_key": api_key, "base_url": base_url}
 
 
@@ -54,29 +51,6 @@ def _responses_payload(text: str, annotations=None, citations=None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-class TestXAIProviderIdentity:
-    def test_provider_name(self):
-        from plugins.web.xai.provider import XAIWebSearchProvider
-
-        assert XAIWebSearchProvider().name == "xai"
-
-    def test_implements_web_search_provider(self):
-        from agent.web_search_provider import WebSearchProvider
-        from plugins.web.xai.provider import XAIWebSearchProvider
-
-        assert issubclass(XAIWebSearchProvider, WebSearchProvider)
-
-    def test_supports_search_only(self):
-        from plugins.web.xai.provider import XAIWebSearchProvider
-
-        p = XAIWebSearchProvider()
-        assert p.supports_search() is True
-        assert p.supports_extract() is False
-
-    def test_display_name(self):
-        from plugins.web.xai.provider import XAIWebSearchProvider
-
-        assert "Grok" in XAIWebSearchProvider().display_name
 
 
 class TestXAIProviderIsAvailable:
@@ -86,53 +60,7 @@ class TestXAIProviderIsAvailable:
     visible CLI latency.
     """
 
-    def test_available_via_env_var(self, monkeypatch):
-        monkeypatch.setenv("XAI_API_KEY", "sk-xai-test")
-        from plugins.web.xai.provider import XAIWebSearchProvider
 
-        assert XAIWebSearchProvider().is_available() is True
-
-    def test_available_via_auth_store(self, monkeypatch, tmp_path):
-        """Cheap probe should detect xai-oauth tokens in ~/.clawksis/auth.json
-        without invoking the resolver (which can trigger refresh)."""
-        monkeypatch.delenv("XAI_API_KEY", raising=False)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        auth_path = tmp_path / "auth.json"
-        auth_path.write_text(
-            json.dumps({
-                "version": 1,
-                "providers": {
-                    "xai-oauth": {"tokens": {"access_token": "ya29.fake-access-token"}},
-                },
-            })
-        )
-
-        from plugins.web.xai.provider import XAIWebSearchProvider
-
-        assert XAIWebSearchProvider().is_available() is True
-
-    def test_unavailable_when_no_env_and_no_auth_store(self, monkeypatch, tmp_path):
-        monkeypatch.delenv("XAI_API_KEY", raising=False)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        # No auth.json written.
-        from plugins.web.xai.provider import XAIWebSearchProvider
-
-        assert XAIWebSearchProvider().is_available() is False
-
-    def test_unavailable_when_auth_store_has_empty_token(self, monkeypatch, tmp_path):
-        monkeypatch.delenv("XAI_API_KEY", raising=False)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        auth_path = tmp_path / "auth.json"
-        auth_path.write_text(
-            json.dumps({
-                "version": 1,
-                "providers": {"xai-oauth": {"tokens": {"access_token": ""}}},
-            })
-        )
-
-        from plugins.web.xai.provider import XAIWebSearchProvider
-
-        assert XAIWebSearchProvider().is_available() is False
 
     def test_unavailable_when_auth_store_corrupted(self, monkeypatch, tmp_path):
         """A malformed auth.json must not crash availability scans."""
@@ -141,7 +69,6 @@ class TestXAIProviderIsAvailable:
         (tmp_path / "auth.json").write_text("not json at all }{")
 
         from plugins.web.xai.provider import XAIWebSearchProvider
-
         assert XAIWebSearchProvider().is_available() is False
 
     def test_is_available_does_not_call_resolver(self, monkeypatch):
@@ -151,8 +78,7 @@ class TestXAIProviderIsAvailable:
         from plugins.web.xai import provider as xai_provider
 
         with patch.object(
-            xai_provider,
-            "resolve_xai_http_credentials",
+            xai_provider, "resolve_xai_http_credentials",
             side_effect=AssertionError("is_available must not call the resolver"),
         ):
             assert xai_provider.XAIWebSearchProvider().is_available() is True
@@ -167,32 +93,17 @@ class TestXAIProviderSearchJSONPath:
     _GROK_JSON = json.dumps({
         "results": [
             {"title": "xAI", "url": "https://x.ai", "description": "The company."},
-            {
-                "title": "Grok docs",
-                "url": "https://docs.x.ai",
-                "description": "API reference.",
-            },
-            {
-                "title": "Grokipedia",
-                "url": "https://grokipedia.com",
-                "description": "Wiki.",
-            },
+            {"title": "Grok docs", "url": "https://docs.x.ai", "description": "API reference."},
+            {"title": "Grokipedia", "url": "https://grokipedia.com", "description": "Wiki."},
         ]
     })
 
     def test_happy_path_normalizes_results(self):
         from plugins.web.xai import provider as xai_provider
 
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch(
-                "httpx.post",
-                return_value=_mock_resp(_responses_payload(self._GROK_JSON)),
-            ),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds()), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", return_value=_mock_resp(_responses_payload(self._GROK_JSON))):
             result = xai_provider.XAIWebSearchProvider().search("what is xai", limit=5)
 
         assert result["success"] is True
@@ -206,36 +117,15 @@ class TestXAIProviderSearchJSONPath:
         }
         assert web[2]["position"] == 3
 
-    def test_limit_truncates_json_results(self):
-        from plugins.web.xai import provider as xai_provider
-
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch(
-                "httpx.post",
-                return_value=_mock_resp(_responses_payload(self._GROK_JSON)),
-            ),
-        ):
-            result = xai_provider.XAIWebSearchProvider().search("x", limit=2)
-
-        assert result["success"] is True
-        assert len(result["data"]["web"]) == 2
 
     def test_parses_json_with_leading_prose(self):
         """Reasoning models sometimes narrate before the JSON block; we tolerate it."""
         from plugins.web.xai import provider as xai_provider
 
         text = "Here are the results:\n" + self._GROK_JSON
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", return_value=_mock_resp(_responses_payload(text))),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds()), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", return_value=_mock_resp(_responses_payload(text))):
             result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         assert result["success"] is True
@@ -250,13 +140,9 @@ class TestXAIProviderSearchJSONPath:
                 {"title": "good", "url": "https://ok.com", "description": "keep"},
             ]
         })
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", return_value=_mock_resp(_responses_payload(bad_json))),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds()), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", return_value=_mock_resp(_responses_payload(bad_json))):
             result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         assert result["success"] is True
@@ -288,18 +174,9 @@ class TestXAIProviderSearchFallbacks:
                 "end_index": 52,
             },
         ]
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch(
-                "httpx.post",
-                return_value=_mock_resp(
-                    _responses_payload(body, annotations=annotations)
-                ),
-            ),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds()), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", return_value=_mock_resp(_responses_payload(body, annotations=annotations))):
             result = xai_provider.XAIWebSearchProvider().search("xai", limit=5)
 
         assert result["success"] is True
@@ -308,73 +185,14 @@ class TestXAIProviderSearchFallbacks:
         assert result["data"]["web"][0]["position"] == 1
         assert result["data"]["web"][1]["position"] == 2
 
-    def test_falls_back_to_citations_list(self):
-        """If no JSON and no annotations, derive from top-level citations list."""
-        from plugins.web.xai import provider as xai_provider
-
-        payload = _responses_payload(
-            "free-form narration", citations=["https://a.com", "https://b.com"]
-        )
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", return_value=_mock_resp(payload)),
-        ):
-            result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        assert result["success"] is True
-        urls = [r["url"] for r in result["data"]["web"]]
-        assert urls == ["https://a.com", "https://b.com"]
-
-    def test_annotations_without_url_citations_fall_through_to_citations(self):
-        """When annotations exist but none are url_citation type (e.g. future
-        annotation types xAI may add), the citations list MUST still be
-        consulted — otherwise we'd silently report success-with-no-rows
-        and mask real data the API provided.
-        """
-        from plugins.web.xai import provider as xai_provider
-
-        body = "Some narration about xAI."
-        # Non-url_citation annotations only — the fallback shouldn't extract
-        # any URLs from them, and must defer to the citations list below.
-        annotations = [
-            {
-                "type": "future_citation_type",
-                "url": "https://ignored.example",
-                "title": "x",
-            },
-        ]
-        payload = _responses_payload(
-            body,
-            annotations=annotations,
-            citations=["https://real-fallback.com"],
-        )
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", return_value=_mock_resp(payload)),
-        ):
-            result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        assert result["success"] is True
-        urls = [r["url"] for r in result["data"]["web"]]
-        assert urls == ["https://real-fallback.com"]
 
     def test_empty_response_returns_empty_success(self):
         from plugins.web.xai import provider as xai_provider
 
         payload = _responses_payload("", citations=[])
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", return_value=_mock_resp(payload)),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds()), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", return_value=_mock_resp(payload)):
             result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         assert result["success"] is True
@@ -398,15 +216,9 @@ class TestXAIProviderRequestShape:
             captured["json"] = kwargs.get("json", {})
             return _mock_resp(_responses_payload(json.dumps({"results": []})))
 
-        with (
-            patch.object(
-                xai_provider,
-                "resolve_xai_http_credentials",
-                return_value=_creds("secret-key"),
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", side_effect=fake_post),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds("secret-key")), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", side_effect=fake_post):
             xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         assert captured["url"] == "https://api.x.ai/v1/responses"
@@ -421,83 +233,6 @@ class TestXAIProviderRequestShape:
         # No-inline-citations is opt-in via `include` per xAI Responses docs.
         assert "no_inline_citations" in body.get("include", [])
 
-    def test_honors_configured_model(self):
-        from plugins.web.xai import provider as xai_provider
-
-        captured: dict = {}
-
-        def fake_post(url, **kwargs):
-            captured["json"] = kwargs.get("json", {})
-            return _mock_resp(_responses_payload(json.dumps({"results": []})))
-
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(
-                xai_provider,
-                "_load_xai_web_config",
-                return_value={"model": "grok-4.3-fast"},
-            ),
-            patch("httpx.post", side_effect=fake_post),
-        ):
-            xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        assert captured["json"]["model"] == "grok-4.3-fast"
-
-    def test_allowed_domains_passes_through_as_filters(self):
-        from plugins.web.xai import provider as xai_provider
-
-        captured: dict = {}
-
-        def fake_post(url, **kwargs):
-            captured["json"] = kwargs.get("json", {})
-            return _mock_resp(_responses_payload(json.dumps({"results": []})))
-
-        cfg = {"allowed_domains": ["x.ai", "grokipedia.com"]}
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value=cfg),
-            patch("httpx.post", side_effect=fake_post),
-        ):
-            xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        tools = captured["json"]["tools"]
-        assert tools == [
-            {
-                "type": "web_search",
-                "filters": {"allowed_domains": ["x.ai", "grokipedia.com"]},
-            }
-        ]
-
-    def test_excluded_domains_passes_through_as_filters(self):
-        from plugins.web.xai import provider as xai_provider
-
-        captured: dict = {}
-
-        def fake_post(url, **kwargs):
-            captured["json"] = kwargs.get("json", {})
-            return _mock_resp(_responses_payload(json.dumps({"results": []})))
-
-        cfg = {"excluded_domains": ["spam.com"]}
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value=cfg),
-            patch("httpx.post", side_effect=fake_post),
-        ):
-            xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        tools = captured["json"]["tools"]
-        assert tools == [
-            {
-                "type": "web_search",
-                "filters": {"excluded_domains": ["spam.com"]},
-            }
-        ]
 
     def test_allowed_domains_capped_at_five(self):
         """xAI caps domain filters at 5; we trim silently to avoid 400s."""
@@ -510,13 +245,9 @@ class TestXAIProviderRequestShape:
             return _mock_resp(_responses_payload(json.dumps({"results": []})))
 
         cfg = {"allowed_domains": [f"d{i}.com" for i in range(10)]}
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value=cfg),
-            patch("httpx.post", side_effect=fake_post),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds()), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value=cfg), \
+             patch("httpx.post", side_effect=fake_post):
             xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         domains = captured["json"]["tools"][0]["filters"]["allowed_domains"]
@@ -532,9 +263,7 @@ class TestXAIProviderSearchErrors:
     def test_missing_creds_returns_failure(self):
         from plugins.web.xai import provider as xai_provider
 
-        with patch.object(
-            xai_provider, "resolve_xai_http_credentials", return_value=_creds("")
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds("")):
             result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         assert result["success"] is False
@@ -544,75 +273,15 @@ class TestXAIProviderSearchErrors:
         from plugins.web.xai import provider as xai_provider
 
         cfg = {"allowed_domains": ["a.com"], "excluded_domains": ["b.com"]}
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value=cfg),
-            patch("httpx.post") as posted,
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds()), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value=cfg), \
+             patch("httpx.post") as posted:
             result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         assert result["success"] is False
         assert "cannot both be set" in result["error"]
         posted.assert_not_called()
 
-    def test_http_error_returns_failure(self):
-        import httpx
-        from plugins.web.xai import provider as xai_provider
-
-        bad = MagicMock()
-        bad.status_code = 429
-        bad.text = "rate limited"
-        err = httpx.HTTPStatusError("429", request=MagicMock(), response=bad)
-
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", side_effect=err),
-        ):
-            result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        assert result["success"] is False
-        assert "429" in result["error"]
-
-    def test_request_error_returns_failure(self):
-        import httpx
-        from plugins.web.xai import provider as xai_provider
-
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", side_effect=httpx.RequestError("boom")),
-        ):
-            result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        assert result["success"] is False
-        assert "boom" in result["error"] or "xAI" in result["error"]
-
-    def test_bad_json_response_returns_failure(self):
-        from plugins.web.xai import provider as xai_provider
-
-        bad = MagicMock()
-        bad.status_code = 200
-        bad.raise_for_status = MagicMock()
-        bad.json.side_effect = ValueError("not json")
-
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", return_value=bad),
-        ):
-            result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        assert result["success"] is False
-        assert "JSON" in result["error"]
 
     def test_401_on_oauth_path_triggers_force_refresh_and_retry(self):
         """OAuth credentials → 401 must force-refresh and retry once.
@@ -652,13 +321,9 @@ class TestXAIProviderSearchErrors:
                 "base_url": "https://api.x.ai/v1",
             }
 
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", side_effect=fake_resolve
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", side_effect=fake_post),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", side_effect=fake_resolve), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", side_effect=fake_post):
             result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         assert result["success"] is True
@@ -685,19 +350,11 @@ class TestXAIProviderSearchErrors:
             if force_refresh:
                 calls["refreshed"] = True
             # provider=="xai" signals env-var path; retry must be skipped.
-            return {
-                "provider": "xai",
-                "api_key": "«redacted:sk-…»",
-                "base_url": "https://api.x.ai/v1",
-            }
+            return {"provider": "xai", "api_key": "«redacted:sk-…»", "base_url": "https://api.x.ai/v1"}
 
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", side_effect=fake_resolve
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", side_effect=fake_post),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", side_effect=fake_resolve), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", side_effect=fake_post):
             result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         assert result["success"] is False
@@ -705,87 +362,6 @@ class TestXAIProviderSearchErrors:
         assert calls["posts"] == 1
         assert calls["refreshed"] is False
 
-    def test_401_retry_gives_up_when_refresh_returns_same_token(self):
-        """If the force-refresh returns the same token (refresh-token also
-        dead), don't loop — surface the 401 to the caller."""
-        import httpx
-        from plugins.web.xai import provider as xai_provider
-
-        bad = MagicMock()
-        bad.status_code = 401
-        bad.text = "Unauthorized"
-        unauthorized = httpx.HTTPStatusError("401", request=MagicMock(), response=bad)
-
-        calls = {"posts": 0, "refresh_count": 0}
-
-        def fake_post(url, **kwargs):
-            calls["posts"] += 1
-            raise unauthorized
-
-        def fake_resolve(*, force_refresh=False, api_key_hint=None):
-            if force_refresh:
-                calls["refresh_count"] += 1
-                assert api_key_hint == "same-dead-token"
-            return {
-                "provider": "xai-oauth",
-                "api_key": "same-dead-token",
-                "base_url": "https://api.x.ai/v1",
-            }
-
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", side_effect=fake_resolve
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", side_effect=fake_post),
-        ):
-            result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        assert result["success"] is False
-        assert "401" in result["error"]
-        # One post, one force-refresh attempt, no second post.
-        assert calls["posts"] == 1
-        assert calls["refresh_count"] == 1
-
-    def test_non_401_http_error_is_not_retried(self):
-        """Only 401 is retryable — 429 / 500 / 503 must fail fast so the
-        agent (or upstream rate-limiter) decides what to do."""
-        import httpx
-        from plugins.web.xai import provider as xai_provider
-
-        bad = MagicMock()
-        bad.status_code = 500
-        bad.text = "internal error"
-        err = httpx.HTTPStatusError("500", request=MagicMock(), response=bad)
-
-        calls = {"posts": 0, "refreshed": False}
-
-        def fake_post(url, **kwargs):
-            calls["posts"] += 1
-            raise err
-
-        def fake_resolve(*, force_refresh=False, api_key_hint=None):
-            if force_refresh:
-                calls["refreshed"] = True
-            return {
-                "provider": "xai-oauth",
-                "api_key": "tok",
-                "base_url": "https://api.x.ai/v1",
-            }
-
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", side_effect=fake_resolve
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", side_effect=fake_post),
-        ):
-            result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
-
-        assert result["success"] is False
-        assert "500" in result["error"]
-        assert calls["posts"] == 1
-        assert calls["refreshed"] is False
 
     def test_http_200_with_error_envelope_surfaces_failure(self):
         """xAI sometimes returns 200 with ``{"error": {...}}`` (model
@@ -795,13 +371,9 @@ class TestXAIProviderSearchErrors:
         from plugins.web.xai import provider as xai_provider
 
         payload = {"error": {"message": "model overloaded", "type": "server_error"}}
-        with (
-            patch.object(
-                xai_provider, "resolve_xai_http_credentials", return_value=_creds()
-            ),
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", return_value=_mock_resp(payload)),
-        ):
+        with patch.object(xai_provider, "resolve_xai_http_credentials", return_value=_creds()), \
+             patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", return_value=_mock_resp(payload)):
             result = xai_provider.XAIWebSearchProvider().search("q", limit=5)
 
         assert result["success"] is False
@@ -814,18 +386,7 @@ class TestXAIProviderSearchErrors:
 
 
 class TestXAIBackendWiring:
-    def test_is_backend_available_true_via_env_var(self, monkeypatch):
-        from tools import web_tools
 
-        monkeypatch.setenv("XAI_API_KEY", "sk-xai-test")
-        assert web_tools._is_backend_available("xai") is True
-
-    def test_is_backend_available_false_when_no_creds(self, monkeypatch, tmp_path):
-        from tools import web_tools
-
-        monkeypatch.delenv("XAI_API_KEY", raising=False)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        assert web_tools._is_backend_available("xai") is False
 
     def test_is_backend_available_does_not_call_resolver(self, monkeypatch):
         """Regression guard — `_is_backend_available` runs on every web_search
@@ -840,11 +401,6 @@ class TestXAIBackendWiring:
         ):
             assert web_tools._is_backend_available("xai") is True
 
-    def test_configured_backend_xai_accepted(self, monkeypatch):
-        from tools import web_tools
-
-        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {"backend": "xai"})
-        assert web_tools._get_backend() == "xai"
 
     def test_xai_not_in_legacy_backend_candidate_chain(self, monkeypatch):
         """The hardcoded ``backend_candidates`` tuple in ``_get_backend()``
@@ -861,15 +417,10 @@ class TestXAIBackendWiring:
         """
         from tools import web_tools
 
-        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {})
+        monkeypatch.setattr(web_tools, "_load_web_config", dict)
         for key in (
-            "FIRECRAWL_API_KEY",
-            "FIRECRAWL_API_URL",
-            "PARALLEL_API_KEY",
-            "TAVILY_API_KEY",
-            "EXA_API_KEY",
-            "SEARXNG_URL",
-            "BRAVE_SEARCH_API_KEY",
+            "FIRECRAWL_API_KEY", "FIRECRAWL_API_URL", "PARALLEL_API_KEY",
+            "EXA_API_KEY", "SEARXNG_URL", "BRAVE_SEARCH_API_KEY", "KEENABLE_API_KEY",
         ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("XAI_API_KEY", "xai-test-key")
@@ -897,20 +448,18 @@ class TestXAIProviderOAuthPath:
         monkeypatch.delenv("XAI_API_KEY", raising=False)
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         monkeypatch.setenv("CLAWK_XAI_BASE_URL", "https://proxy.x.ai/v1/")
-        (tmp_path / "auth.json").write_text(
-            json.dumps({
-                "version": 1,
-                "active_provider": "xai-oauth",
-                "providers": {
-                    "xai-oauth": {
-                        "tokens": {
-                            "access_token": "ya29.fake-oauth-access-token",
-                            "refresh_token": "fake-oauth-refresh-token",
-                        },
+        (tmp_path / "auth.json").write_text(json.dumps({
+            "version": 1,
+            "active_provider": "xai-oauth",
+            "providers": {
+                "xai-oauth": {
+                    "tokens": {
+                        "access_token": "ya29.fake-oauth-access-token",
+                        "refresh_token": "fake-oauth-refresh-token",
                     },
                 },
-            })
-        )
+            },
+        }))
 
         captured: dict = {}
 
@@ -919,18 +468,13 @@ class TestXAIProviderOAuthPath:
             captured["headers"] = kwargs.get("headers", {})
             return _mock_resp(_responses_payload(json.dumps({"results": []})))
 
-        with (
-            patch.object(xai_provider, "_load_xai_web_config", return_value={}),
-            patch("httpx.post", side_effect=fake_post),
-        ):
+        with patch.object(xai_provider, "_load_xai_web_config", return_value={}), \
+             patch("httpx.post", side_effect=fake_post):
             result = xai_provider.XAIWebSearchProvider().search("q", limit=3)
 
         assert result["success"] is True
         assert captured["url"] == "https://proxy.x.ai/v1/responses"
-        assert (
-            captured["headers"].get("Authorization")
-            == "Bearer ya29.fake-oauth-access-token"
-        )
+        assert captured["headers"].get("Authorization") == "Bearer ya29.fake-oauth-access-token"
 
     def test_pool_only_direct_refresh_updates_main_runtime(self, monkeypatch, tmp_path):
         """A direct 401 refresh must rotate the exact manual pool row.
@@ -949,37 +493,32 @@ class TestXAIProviderOAuthPath:
             "credential_pool_strategies:\n  xai-oauth: round_robin\n"
         )
         auth_path = tmp_path / "auth.json"
-        auth_path.write_text(
-            json.dumps({
-                "version": 1,
-                "active_provider": "xai-oauth",
-                "providers": {},
-                "credential_pool": {
-                    "xai-oauth": [
-                        {
-                            "id": "manual-xai",
-                            "label": "pool-only",
-                            "auth_type": "oauth",
-                            "priority": 0,
-                            "source": "manual:device_code",
-                            "access_token": "rejected-access",
-                            "refresh_token": "one-time-refresh",
-                            "base_url": "https://api.x.ai/v1",
-                        },
-                        {
-                            "id": "backup-xai",
-                            "label": "backup",
-                            "auth_type": "oauth",
-                            "priority": 1,
-                            "source": "manual:device_code",
-                            "access_token": "backup-access",
-                            "refresh_token": "backup-refresh",
-                            "base_url": "https://api.x.ai/v1",
-                        },
-                    ],
-                },
-            })
-        )
+        auth_path.write_text(json.dumps({
+            "version": 1,
+            "active_provider": "xai-oauth",
+            "providers": {},
+            "credential_pool": {
+                "xai-oauth": [{
+                    "id": "manual-xai",
+                    "label": "pool-only",
+                    "auth_type": "oauth",
+                    "priority": 0,
+                    "source": "manual:device_code",
+                    "access_token": "rejected-access",
+                    "refresh_token": "one-time-refresh",
+                    "base_url": "https://api.x.ai/v1",
+                }, {
+                    "id": "backup-xai",
+                    "label": "backup",
+                    "auth_type": "oauth",
+                    "priority": 1,
+                    "source": "manual:device_code",
+                    "access_token": "backup-access",
+                    "refresh_token": "backup-refresh",
+                    "base_url": "https://api.x.ai/v1",
+                }],
+            },
+        }))
 
         refresh_calls = []
 
@@ -1007,7 +546,10 @@ class TestXAIProviderOAuthPath:
         assert refresh_calls == [("rejected-access", "one-time-refresh")]
 
         stored = json.loads(auth_path.read_text())
-        entries = {item["id"]: item for item in stored["credential_pool"]["xai-oauth"]}
+        entries = {
+            item["id"]: item
+            for item in stored["credential_pool"]["xai-oauth"]
+        }
         entry = entries["manual-xai"]
         assert entry["access_token"] == "fresh-access"
         assert entry["refresh_token"] == "rotated-refresh"

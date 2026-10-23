@@ -1,82 +1,40 @@
 from types import SimpleNamespace
-
 from unittest.mock import patch
 
+import pytest
 
-from clawk_cli.config import (
-    format_managed_message,
-    get_managed_system,
-    recommended_update_command,
-)
-
+from clawk_cli.config import get_managed_system, is_managed, recommended_update_command
 from clawk_cli.main import cmd_update
-
-from tools.skills_hub import OptionalSkillSource
-
-
-def test_get_managed_system_homebrew(monkeypatch):
-
-    monkeypatch.setenv("CLAWK_MANAGED", "homebrew")
-
-    assert get_managed_system() == "Homebrew"
-
-    assert recommended_update_command() == "brew upgrade clawksis-agent"
-
-
-def test_format_managed_message_homebrew(monkeypatch):
-
-    monkeypatch.setenv("CLAWK_MANAGED", "homebrew")
-
-    message = format_managed_message("update Clawksis")
-
-    assert "managed by Homebrew" in message
-
-    assert "brew upgrade clawksis-agent" in message
+from tools.skills_hub_official import OptionalSkillSource
 
 
 def test_recommended_update_command_defaults_to_clawk_update(monkeypatch):
-
     monkeypatch.delenv("CLAWK_MANAGED", raising=False)
 
     # Also short-circuit the .managed marker path — CI runners may have an
-
     # ambient ~/.clawksis/.managed if a prior test left CLAWK_HOME pointing
-
     # somewhere with that marker, which would make get_managed_update_command()
-
     # return "Update your Nix flake input ..." instead of falling through to
-
     # detect_install_method().
-
-    with (
-        patch("clawk_cli.config.get_managed_update_command", return_value=None),
-        patch("clawk_cli.config.detect_install_method", return_value="git"),
-    ):
+    with patch("clawk_cli.config.get_managed_update_command", return_value=None), \
+         patch("clawk_cli.config.detect_install_method", return_value="git"):
         assert recommended_update_command() == "clawk update"
 
 
-def test_cmd_update_blocks_managed_homebrew(monkeypatch, capsys):
+@pytest.mark.parametrize("false_value", ["false", "0", "no", "off", "FALSE"])
+def test_get_managed_system_false_values(monkeypatch, false_value):
+    """An explicit opt-out is not a package manager named "false" (#12864)."""
+    monkeypatch.setenv("CLAWK_MANAGED", false_value)
 
-    monkeypatch.setenv("CLAWK_MANAGED", "homebrew")
-
-    with patch("clawk_cli.main.subprocess.run") as mock_run:
-        cmd_update(SimpleNamespace())
-
-    assert not mock_run.called
-
-    captured = capsys.readouterr()
-
-    assert "managed by Homebrew" in captured.err
-
-    assert "brew upgrade clawksis-agent" in captured.err
+    assert get_managed_system() is None
+    assert not is_managed()
+    with patch("clawk_cli.config.detect_install_method", return_value="git"):
+        assert recommended_update_command() == "clawk update"
 
 
 def test_optional_skill_source_honors_env_override(monkeypatch, tmp_path):
-
     optional_dir = tmp_path / "optional-skills"
-
     optional_dir.mkdir()
-
     monkeypatch.setenv("CLAWK_OPTIONAL_SKILLS", str(optional_dir))
 
     source = OptionalSkillSource()

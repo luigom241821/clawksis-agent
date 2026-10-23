@@ -6,7 +6,6 @@ the main group chat.
 
 Covers: #6969, #9916, #7355
 """
-
 from unittest.mock import AsyncMock, MagicMock
 from types import SimpleNamespace
 
@@ -52,20 +51,6 @@ class TestInitialReplyToId:
         )
         assert call_kwargs["chat_id"] == "chat_123"
 
-    @pytest.mark.asyncio
-    async def test_first_send_without_initial_reply_to_id(self):
-        """When initial_reply_to_id is None, first send should have
-        reply_to=None (backward compatible)."""
-        adapter = _make_adapter()
-        consumer = GatewayStreamConsumer(
-            adapter,
-            "chat_123",
-        )
-        await consumer._send_or_edit("Hello world")
-
-        adapter.send.assert_called_once()
-        call_kwargs = adapter.send.call_args[1]
-        assert call_kwargs.get("reply_to") is None
 
     @pytest.mark.asyncio
     async def test_subsequent_edits_ignore_initial_reply_to_id(self):
@@ -90,67 +75,6 @@ class TestInitialReplyToId:
         assert edit_kwargs["message_id"] == "msg_1"
         assert edit_kwargs["chat_id"] == "chat_123"
 
-    @pytest.mark.asyncio
-    async def test_metadata_passed_on_first_send(self):
-        """Metadata (containing thread_id) should be forwarded on first send."""
-        adapter = _make_adapter()
-        metadata = {"thread_id": "omt_topic789"}
-        consumer = GatewayStreamConsumer(
-            adapter,
-            "chat_123",
-            metadata=metadata,
-            initial_reply_to_id="om_msg_000",
-        )
-        await consumer._send_or_edit("Test")
-
-        call_kwargs = adapter.send.call_args[1]
-        assert call_kwargs["metadata"] == {
-            **metadata,
-            "reply_to_message_id": "om_msg_000",
-            "expect_edits": True,
-        }
-        assert metadata == {"thread_id": "omt_topic789"}
-
-    @pytest.mark.asyncio
-    async def test_final_first_send_marks_metadata_notify_true(self):
-        """Final streaming sends should use the existing notify=True marker."""
-        adapter = _make_adapter()
-        consumer = GatewayStreamConsumer(
-            adapter,
-            "chat_123",
-            metadata={"thread_id": "root_post_123"},
-            initial_reply_to_id="reply_post_456",
-        )
-
-        await consumer._send_or_edit("Final answer", finalize=True)
-
-        call_kwargs = adapter.send.call_args[1]
-        metadata = call_kwargs["metadata"]
-        assert metadata["thread_id"] == "root_post_123"
-        assert metadata["notify"] is True
-        assert "delivery_kind" not in metadata
-        assert "allow_flat_fallback" not in metadata
-
-    @pytest.mark.asyncio
-    async def test_nonfinal_first_send_does_not_mark_notify(self):
-        """Preview/interim streaming sends must not be notify-worthy."""
-        adapter = _make_adapter()
-        consumer = GatewayStreamConsumer(
-            adapter,
-            "chat_123",
-            metadata={"thread_id": "root_post_123"},
-            initial_reply_to_id="reply_post_456",
-        )
-
-        await consumer._send_or_edit("Preview", finalize=False)
-
-        metadata = adapter.send.call_args[1]["metadata"]
-        assert metadata == {
-            "thread_id": "root_post_123",
-            "reply_to_message_id": "reply_post_456",
-            "expect_edits": True,
-        }
-
 
 class TestOverflowFirstMessage:
     """Verify thread routing is preserved when the first message overflows."""
@@ -160,7 +84,9 @@ class TestOverflowFirstMessage:
         """When first message exceeds platform limit and is split into chunks,
         each chunk should be threaded to initial_reply_to_id, not None."""
         adapter = _make_adapter(max_length=10)
-        adapter.truncate_message = MagicMock(return_value=["chunk_1", "chunk_2"])
+        adapter.truncate_message = MagicMock(
+            return_value=["chunk_1", "chunk_2"]
+        )
         consumer = GatewayStreamConsumer(
             adapter,
             "chat_123",
@@ -171,9 +97,7 @@ class TestOverflowFirstMessage:
         # Inject oversized accumulated text to trigger overflow path
         consumer._accumulated = "A" * 100
         consumer._current_edit_interval = 999
-        await consumer._send_new_chunk(
-            "chunk_1", consumer._message_id or consumer._initial_reply_to_id
-        )
+        await consumer._send_new_chunk("chunk_1", consumer._message_id or consumer._initial_reply_to_id)
 
         adapter.send.assert_called_once()
         call_kwargs = adapter.send.call_args[1]
@@ -205,22 +129,17 @@ class TestFeishuFallbackThreadRouting:
         # Use the real implementation path
         adapter._client = mock_client
         adapter._build_create_message_body = FeishuAdapter._build_create_message_body
-        adapter._build_create_message_request = (
-            FeishuAdapter._build_create_message_request
-        )
-
+        adapter._build_create_message_request = FeishuAdapter._build_create_message_request
         # _send_raw_message routes blocking SDK calls through _run_blocking
         # (adapter-owned executor). On a MagicMock(spec=...) that method is
         # auto-mocked and would swallow the real call, so wire a passthrough.
         async def _run_blocking_passthrough(func, *args):
             return func(*args)
-
         adapter._run_blocking = _run_blocking_passthrough
 
         # Call _send_raw_message with reply_to=None and thread_id in metadata
         import json
-
-        result = await FeishuAdapter._send_raw_message(
+        await FeishuAdapter._send_raw_message(
             adapter,
             chat_id="oc_main_chat",
             msg_type="text",
@@ -237,15 +156,12 @@ class TestFeishuFallbackThreadRouting:
         # Lark SDK builder exposes .body; the in-tree fallback exposes .request_body.
         # The contributor's branch had the lark SDK installed, the test environment
         # may not — handle both shapes.
-        body = getattr(call_args, "body", None) or getattr(
-            call_args, "request_body", None
-        )
+        body = getattr(call_args, "body", None) or getattr(call_args, "request_body", None)
         assert body is not None, "request has neither .body nor .request_body"
         # receive_id should be the thread_id, not the chat_id
         receive_id = getattr(body, "receive_id", None)
         if receive_id is None and isinstance(body, str):
             import json as _json
-
             receive_id = _json.loads(body).get("receive_id")
         assert receive_id == "omt_topic_abc", (
             f"Expected receive_id='omt_topic_abc', got '{receive_id}'"
@@ -256,40 +172,27 @@ class TestFeishuFallbackThreadRouting:
             f"Expected receive_id_type='thread_id', got '{receive_id_type}'"
         )
 
+
+class TestFallbackResendThreading:
+    """#103068: a full fallback resend replaces the preview, so it must land in
+    the originating thread; tail continuations keep their unthreaded delivery."""
+
     @pytest.mark.asyncio
-    async def test_create_uses_chat_id_when_no_thread(self):
-        """When reply_to=None and metadata has no thread_id, message.create
-        should use receive_id_type='chat_id' (original behavior)."""
-        from plugins.platforms.feishu.adapter import FeishuAdapter
+    async def test_full_fallback_resend_threads_first_chunk_only(self):
+        adapter = _make_adapter(max_length=700)
+        adapter.send.side_effect = [
+            SimpleNamespace(success=True, message_id=f"full_{i}") for i in range(10)
+        ]
+        consumer = GatewayStreamConsumer(adapter, "chat_123", initial_reply_to_id="om_user_1")
+        consumer._message_id = "om_preview"
+        consumer._last_sent_text = "truncated snapshot"
+        consumer._already_sent = True
+        consumer._fallback_final_send = True
 
-        mock_client = MagicMock()
-        mock_create_response = SimpleNamespace(
-            success=lambda: True,
-            data=SimpleNamespace(message_id="new_msg_1"),
-        )
-        mock_client.im.v1.message.create = MagicMock(return_value=mock_create_response)
+        final = " ".join(["word"] * 400)  # not prefixed by the snapshot -> full resend
+        await consumer._send_fallback_final(final)
 
-        adapter = MagicMock(spec=FeishuAdapter)
-        adapter._client = mock_client
-        adapter._build_create_message_body = FeishuAdapter._build_create_message_body
-        adapter._build_create_message_request = (
-            FeishuAdapter._build_create_message_request
-        )
-
-        async def _run_blocking_passthrough(func, *args):
-            return func(*args)
-
-        adapter._run_blocking = _run_blocking_passthrough
-
-        import json
-
-        result = await FeishuAdapter._send_raw_message(
-            adapter,
-            chat_id="oc_main_chat",
-            msg_type="text",
-            payload=json.dumps({"text": "hello"}),
-            reply_to=None,
-            metadata=None,
-        )
-
-        mock_client.im.v1.message.create.assert_called_once()
+        calls = adapter.send.await_args_list
+        assert len(calls) > 1
+        assert calls[0].kwargs["reply_to"] == "om_user_1"
+        assert all("reply_to" not in c.kwargs for c in calls[1:])

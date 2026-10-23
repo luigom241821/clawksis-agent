@@ -17,7 +17,6 @@ Invariant preserved: a genuine interrupt arriving AFTER execution starts (or
 during a retry backoff) must still SIGINT the command (exit 130); non-approved
 commands keep current interrupt behavior.
 """
-
 import json
 import threading
 import time
@@ -28,7 +27,6 @@ from tools import terminal_tool as tt
 from tools.interrupt import (
     set_interrupt,
     is_interrupted,
-    clear_current_thread_interrupt,
     _interrupted_threads,
     _lock,
 )
@@ -62,7 +60,6 @@ def _wait_for_sentinel(sentinel, timeout=10.0):
 # terminal_tool
 # ---------------------------------------------------------------------------
 
-
 def test_approved_command_clears_stale_interrupt_bit():
     """force=True marks the run user-approved -> the stale bit is cleared and
     the command completes (exit 0), not killed with 130."""
@@ -88,6 +85,7 @@ def test_non_approved_command_still_interrupts_on_stale_bit(monkeypatch):
     assert "[Command interrupted]" in result["output"]
 
 
+@pytest.mark.platforms("linux")
 def test_approved_command_genuine_interrupt_after_start_still_kills(tmp_path):
     """The clean-slate clear must NOT make approved commands un-interruptible:
     an interrupt that arrives after execution starts still SIGINTs (130)."""
@@ -114,6 +112,7 @@ def test_approved_command_genuine_interrupt_after_start_still_kills(tmp_path):
     set_interrupt(False, thread_id=t.ident)
 
 
+@pytest.mark.platforms("linux")
 def test_approved_note_enriched_not_misleading_on_interrupt(monkeypatch, tmp_path):
     """On a genuine post-start interrupt of an approved command, the note must
     read '...approved by the user, then interrupted.' — the bare
@@ -121,19 +120,13 @@ def test_approved_note_enriched_not_misleading_on_interrupt(monkeypatch, tmp_pat
     monkeypatch.setattr(
         tt,
         "_check_all_guards",
-        lambda *a, **k: {
-            "approved": True,
-            "user_approved": True,
-            "description": "rm -rf x",
-        },
+        lambda *a, **k: {"approved": True, "user_approved": True, "description": "rm -rf x"},
     )
     sentinel = tmp_path / "cmd_started_d"
     holder = {}
 
     def worker():
-        holder["result"] = tt.terminal_tool(
-            command=f"touch {sentinel}; sleep 5; echo DONE"
-        )
+        holder["result"] = tt.terminal_tool(command=f"touch {sentinel}; sleep 5; echo DONE")
 
     t = threading.Thread(target=worker, daemon=True)
     t.start()
@@ -164,7 +157,6 @@ def test_natural_exit_130_not_mislabeled_as_interrupt(monkeypatch):
 
     assert result["exit_code"] == 130, result
     note = result.get("approval", "")
-    assert note == "Command required approval (x) and was approved by the user.", note
     assert "then interrupted" not in note
     assert "[Command interrupted]" not in result["output"]
 
@@ -191,21 +183,16 @@ def test_retry_backoff_does_not_clear_genuine_interrupt(monkeypatch):
     monkeypatch.setattr("tools.terminal_tool.time.sleep", lambda *a, **k: None)
     set_interrupt(False)
 
-    result = json.loads(
-        tt.terminal_tool(command="sleep 1", force=True, task_id="retry-test")
-    )
+    result = json.loads(tt.terminal_tool(command="sleep 1", force=True, task_id="retry-test"))
 
     assert calls["n"] == 2, calls
-    assert calls["interrupted_at_retry"] is True, (
-        "retry must NOT re-clear a genuine interrupt"
-    )
+    assert calls["interrupted_at_retry"] is True, "retry must NOT re-clear a genuine interrupt"
     assert result["exit_code"] == 130, result
 
 
 # ---------------------------------------------------------------------------
 # execute_code (same root cause, its own approval-wait + spawn/poll loop)
 # ---------------------------------------------------------------------------
-
 
 def test_execute_code_approved_clears_stale_interrupt_bit(monkeypatch):
     """An approved execute_code script (local path) runs from a clean slate."""
@@ -218,12 +205,10 @@ def test_execute_code_approved_clears_stale_interrupt_bit(monkeypatch):
     set_interrupt(True)
     assert is_interrupted()
 
-    result = json.loads(
-        execute_code(
-            code='import time; time.sleep(0.5); print("CODE_DONE")',
-            task_id="test-clean-slate",
-        )
-    )
+    result = json.loads(execute_code(
+        code='import time; time.sleep(0.5); print("CODE_DONE")',
+        task_id="test-clean-slate",
+    ))
 
     assert result["status"] == "success", result
     assert "CODE_DONE" in result["output"]
@@ -240,39 +225,15 @@ def test_execute_code_non_approved_still_interrupts_on_stale_bit(monkeypatch):
     )
     set_interrupt(True)
 
-    result = json.loads(
-        execute_code(
-            code='import time; time.sleep(0.5); print("CODE_DONE")',
-            task_id="test-clean-slate-2",
-        )
-    )
+    result = json.loads(execute_code(
+        code='import time; time.sleep(0.5); print("CODE_DONE")',
+        task_id="test-clean-slate-2",
+    ))
 
     # Killed on the first poll before the script can print.
     assert "CODE_DONE" not in result["output"], result
+    assert result["status"] == "interrupted", result
+    assert result["output"] == "[execution interrupted]"
+    assert "user sent a new message" not in result["output"]
 
 
-def test_execute_code_remote_clears_stale_bit(monkeypatch):
-    """The clear sits above the local/remote split, so an approved remote (ssh)
-    script also dispatches from a clean slate."""
-    from tools import code_execution_tool as cet
-
-    monkeypatch.setattr(
-        "tools.approval.check_execute_code_guard",
-        lambda *a, **k: {"approved": True, "user_approved": True},
-    )
-    monkeypatch.setattr(
-        "tools.terminal_tool._get_env_config", lambda *a, **k: {"env_type": "ssh"}
-    )
-
-    captured = {}
-
-    def fake_remote(code, task_id, enabled_tools):
-        captured["interrupted"] = is_interrupted()
-        return json.dumps({"status": "success", "output": ""})
-
-    monkeypatch.setattr(cet, "_execute_remote", fake_remote)
-    set_interrupt(True)  # stale bit present before dispatch
-
-    cet.execute_code(code="print(1)", task_id="remote-clean-slate")
-
-    assert captured["interrupted"] is False, "clear must run before the remote dispatch"

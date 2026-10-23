@@ -5,8 +5,8 @@ Usage:
     python generate_meme.py <template_id_or_name> <output_path> <text1> [text2] [text3] [text4]
 
 Example:
-    python generate_meme.py drake /tmp/meme.png "Writing tests" "Shipping to prod and hoping"
-    python generate_meme.py "Disaster Girl" /tmp/meme.png "Top text" "Bottom text"
+    python generate_meme.py drake ~/.clawksis/cache/scratch/meme.png "Writing tests" "Shipping to prod and hoping"
+    python generate_meme.py "Disaster Girl" ~/.clawksis/cache/scratch/meme.png "Top text" "Bottom text"
     python generate_meme.py --list                    # show curated templates
     python generate_meme.py --search "distracted"     # search all imgflip templates
 
@@ -43,7 +43,6 @@ def _fetch_url(url: str, timeout: int = 15) -> bytes:
         resp.raise_for_status()
         return resp.content
     import urllib.request
-
     return urllib.request.urlopen(url, timeout=timeout).read()
 
 
@@ -58,38 +57,18 @@ def _default_fields(box_count: int) -> list:
     if box_count <= 0:
         box_count = 2
     if box_count == 1:
-        return [
-            {
-                "name": "text",
-                "x_pct": 0.5,
-                "y_pct": 0.5,
-                "w_pct": 0.90,
-                "align": "center",
-            }
-        ]
+        return [{"name": "text", "x_pct": 0.5, "y_pct": 0.5, "w_pct": 0.90, "align": "center"}]
     if box_count == 2:
         return [
-            {
-                "name": "top",
-                "x_pct": 0.5,
-                "y_pct": 0.08,
-                "w_pct": 0.95,
-                "align": "center",
-            },
-            {
-                "name": "bottom",
-                "x_pct": 0.5,
-                "y_pct": 0.92,
-                "w_pct": 0.95,
-                "align": "center",
-            },
+            {"name": "top", "x_pct": 0.5, "y_pct": 0.08, "w_pct": 0.95, "align": "center"},
+            {"name": "bottom", "x_pct": 0.5, "y_pct": 0.92, "w_pct": 0.95, "align": "center"},
         ]
     # 3+: evenly space vertically
     fields = []
     for i in range(box_count):
         y = 0.08 + (0.84 * i / (box_count - 1)) if box_count > 1 else 0.5
         fields.append({
-            "name": f"text{i + 1}",
+            "name": f"text{i+1}",
             "x_pct": 0.5,
             "y_pct": round(y, 2),
             "w_pct": 0.90,
@@ -127,7 +106,7 @@ def fetch_imgflip_templates() -> list:
 
 def _slugify(name: str) -> str:
     """Convert a template name to a slug for matching."""
-    return name.lower().replace(" ", "-").replace("'", "").replace('"', "")
+    return name.lower().replace(" ", "-").replace("'", "").replace("\"", "")
 
 
 def resolve_template(identifier: str) -> dict:
@@ -206,12 +185,12 @@ def find_font(size: int) -> ImageFont.FreeTypeFont:
         if os.path.exists(path):
             try:
                 return ImageFont.truetype(path, size)
-            except (OSError, IOError):
+            except OSError:
                 continue
     # Last resort: Pillow default
     try:
         return ImageFont.truetype("DejaVuSans-Bold", size)
-    except (OSError, IOError):
+    except OSError:
         return ImageFont.load_default()
 
 
@@ -296,9 +275,7 @@ def _overlay_on_image(img: Image.Image, texts: list, fields: list) -> Image.Imag
         fx = int(field["x_pct"] * w)
         fy = int(field["y_pct"] * h)
         fw = int(field["w_pct"] * w)
-        draw_outlined_text(
-            draw, text, fx, fy, base_font_size, fw, field.get("align", "center")
-        )
+        draw_outlined_text(draw, text, fx, fy, base_font_size, fw, field.get("align", "center"))
     return img
 
 
@@ -370,17 +347,11 @@ def generate_meme(template_id: str, texts: list[str], output_path: str) -> str:
 
     if tmpl is None:
         print(f"Unknown template: {template_id}", file=sys.stderr)
-        print(
-            "Use --list to see curated templates or --search to find imgflip templates.",
-            file=sys.stderr,
-        )
+        print("Use --list to see curated templates or --search to find imgflip templates.", file=sys.stderr)
         sys.exit(1)
 
     fields = tmpl["fields"]
-    print(
-        f"Using template: {tmpl['name']} ({tmpl['source']}, {len(fields)} fields)",
-        file=sys.stderr,
-    )
+    print(f"Using template: {tmpl['name']} ({tmpl['source']}, {len(fields)} fields)", file=sys.stderr)
 
     img = get_template_image(tmpl["url"])
     img = _overlay_on_image(img, texts, fields)
@@ -397,10 +368,7 @@ def generate_from_image(
 ) -> str:
     """Generate a meme from a custom image (e.g. AI-generated). Returns the path."""
     img = Image.open(image_path).convert("RGBA")
-    print(
-        f"Custom image: {img.size[0]}x{img.size[1]}, {len(texts)} text(s), mode={'bars' if use_bars else 'overlay'}",
-        file=sys.stderr,
-    )
+    print(f"Custom image: {img.size[0]}x{img.size[1]}, {len(texts)} text(s), mode={'bars' if use_bars else 'overlay'}", file=sys.stderr)
 
     if use_bars:
         result = _add_bars(img, texts)
@@ -439,12 +407,7 @@ def search_templates(query: str):
         if query_lower in meme["name"].lower():
             slug = _slugify(meme["name"])
             has_custom = "curated" if slug in curated_slugs else "default"
-            matches.append((
-                meme["name"],
-                meme["id"],
-                meme.get("box_count", 2),
-                has_custom,
-            ))
+            matches.append((meme["name"], meme["id"], meme.get("box_count", 2), has_custom))
 
     if not matches:
         print(f"No templates found matching '{query}'")
@@ -454,23 +417,15 @@ def search_templates(query: str):
     print("-" * 75)
     for name, mid, boxes, positioning in matches:
         print(f"{name:<40} {mid:<12} {boxes:<8} {positioning}")
-    print(
-        f"\n{len(matches)} template(s) found. Use the name or ID as the first argument."
-    )
+    print(f"\n{len(matches)} template(s) found. Use the name or ID as the first argument.")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(
-            "Usage: generate_meme.py <template_id_or_name> <output_path> <text1> [text2] ..."
-        )
-        print(
-            "       generate_meme.py --image <path> [--bars] <output_path> <text1> [text2] ..."
-        )
+        print("Usage: generate_meme.py <template_id_or_name> <output_path> <text1> [text2] ...")
+        print("       generate_meme.py --image <path> [--bars] <output_path> <text1> [text2] ...")
         print("       generate_meme.py --list              # curated templates")
-        print(
-            "       generate_meme.py --search <query>    # search all imgflip templates"
-        )
+        print("       generate_meme.py --search <query>    # search all imgflip templates")
         sys.exit(1)
 
     if sys.argv[1] == "--list":
@@ -488,9 +443,7 @@ if __name__ == "__main__":
         # Custom image mode: --image <path> [--bars] <output> <text1> ...
         args = sys.argv[2:]
         if len(args) < 3:
-            print(
-                "Usage: generate_meme.py --image <image_path> [--bars] <output_path> <text1> ..."
-            )
+            print("Usage: generate_meme.py --image <image_path> [--bars] <output_path> <text1> ...")
             sys.exit(1)
         image_path = args.pop(0)
         use_bars = False

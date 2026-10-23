@@ -8,15 +8,16 @@ root context, logs/gateways/ is created root-owned; every profile
 registered later runs its log service as the dropped clawk user and
 s6-log crash-loops on mkdir: Permission denied.
 """
-
 from __future__ import annotations
 
-from tests.docker.conftest import docker_exec_sh, start_container
+from tests.docker.conftest import (
+    docker_exec_sh,
+    start_container,
+)
 
 
 def test_logs_gateways_seeded_and_clawk_owned(
-    built_image: str,
-    container_name: str,
+    built_image: str, container_name: str,
 ) -> None:
     """logs/ and logs/gateways/ must exist and be owned by clawk after boot."""
     start_container(built_image, container_name)
@@ -29,7 +30,9 @@ def test_logs_gateways_seeded_and_clawk_owned(
         "echo DIRS_OK || echo DIRS_MISSING",
         timeout=10,
     )
-    assert "DIRS_OK" in r.stdout, f"logs/ or logs/gateways/ not seeded: {r.stdout}"
+    assert "DIRS_OK" in r.stdout, (
+        f"logs/ or logs/gateways/ not seeded: {r.stdout}"
+    )
 
     # Both must be owned by clawk
     r = docker_exec_sh(
@@ -39,7 +42,11 @@ def test_logs_gateways_seeded_and_clawk_owned(
         'echo "logs=$logs_owner gateways=$gateways_owner"',
         timeout=10,
     )
-    assert "logs=clawk" in r.stdout, f"logs/ not owned by clawk: {r.stdout}"
+    assert "logs=clawk" in r.stdout, (
+        f"logs/ not owned by clawk: {r.stdout}"
+    )
     assert "gateways=clawk" in r.stdout, (
         f"logs/gateways/ not owned by clawk: {r.stdout}"
     )
+
+

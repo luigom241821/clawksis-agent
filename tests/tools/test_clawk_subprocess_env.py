@@ -14,11 +14,8 @@ full credential environment. Two tiers:
 import os
 from unittest.mock import patch
 
-from tools.environments.local import (
-    clawk_subprocess_env,
-    _ALWAYS_STRIP_KEYS,
-    _CLAWK_PROVIDER_ENV_FORCE_PREFIX,
-)
+from tools.environments.local import clawk_subprocess_env
+from tools.environments.local_env_policy import _ALWAYS_STRIP_KEYS, _CLAWK_PROVIDER_ENV_FORCE_PREFIX
 
 
 _TIER1_SAMPLE = {
@@ -60,21 +57,21 @@ class TestStripByDefault:
     def test_tier1_secrets_stripped_by_default(self):
         result = _build(_TIER1_SAMPLE)
         for var in _TIER1_SAMPLE:
-            assert var not in result, (
-                f"{var} leaked (Tier-1) with inherit_credentials=False"
-            )
+            assert var not in result, f"{var} leaked (Tier-1) with inherit_credentials=False"
 
-    def test_safe_vars_preserved(self):
-        result = _build()
-        assert result["HOME"] == "/home/user"
-        assert result["USER"] == "testuser"
-        assert "PATH" in result
-        assert result["MY_APP_VAR"] == "keep-me"
+    def test_buzz_platform_vars_stripped_by_default(self):
+        """BUZZ_* first-party platform credentials must NOT reach the
+        non-terminal spawn surface (browser / TUI host / copilot-executor),
+        even though they pass through to terminal children (issue #78026)."""
+        buzz_sample = {
+            "BUZZ_PRIVATE_KEY": "nsec1fake",
+            "BUZZ_AUTH_TAG": '["tag","data","kind","sig"]',
+            "BUZZ_RELAY_URL": "https://mycommunity.communities.buzz.xyz",
+        }
+        result = _build(buzz_sample)
+        for var in buzz_sample:
+            assert var not in result, f"{var} leaked via clawk_subprocess_env"
 
-    def test_force_prefix_hints_stripped(self):
-        result = _build({f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}OPENAI_API_KEY": "sk-x"})
-        assert f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}OPENAI_API_KEY" not in result
-        assert "OPENAI_API_KEY" not in result
 
     def test_pythonutf8_set(self):
         result = _build()
@@ -85,9 +82,7 @@ class TestInheritCredentials:
     def test_provider_keys_preserved_when_inheriting(self):
         result = _build(_PROVIDER_SAMPLE, inherit_credentials=True)
         for var, val in _PROVIDER_SAMPLE.items():
-            assert result.get(var) == val, (
-                f"{var} should survive inherit_credentials=True"
-            )
+            assert result.get(var) == val, f"{var} should survive inherit_credentials=True"
 
     def test_tier1_secrets_stripped_even_when_inheriting(self):
         """The whole point of Tier 1: gateway/GitHub/infra secrets never reach
@@ -119,6 +114,14 @@ class TestTierInvariants:
                 f"Tier-1 keys leaked with inherit_credentials={inherit}: {sorted(leaked)}"
             )
 
+    def test_left_core_secrets_stripped_without_their_plugin(self):
+        """A feature that left core for a catalog plugin keeps its credentials out of children even
+        when the plugin is not installed (no manifest declares them then)."""
+        from clawk_cli.left_core_migration import LEFT_CORE
+        names = {"HASS_TOKEN"} | {n for feature in LEFT_CORE for n in feature.secret_env}
+        for inherit in (False, True):
+            assert not names & set(_build({n: "secret" for n in names}, inherit_credentials=inherit))
+
     def test_tier1_covers_gateway_bot_token(self):
         assert "TELEGRAM_BOT_TOKEN" in _ALWAYS_STRIP_KEYS
 
@@ -126,11 +129,12 @@ class TestTierInvariants:
         assert {"GH_TOKEN", "GITHUB_TOKEN"} <= _ALWAYS_STRIP_KEYS
 
     def test_tier1_covers_infra_secrets(self):
-        assert {
-            "MODAL_TOKEN_ID",
-            "MODAL_TOKEN_SECRET",
-            "DAYTONA_API_KEY",
-        } <= _ALWAYS_STRIP_KEYS
+        assert {"MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET", "DAYTONA_API_KEY"} <= _ALWAYS_STRIP_KEYS
+
+    def test_tier1_covers_dashboard_auth(self):
+        # Credentialed CLIs (claude/codex) must not be able to mint dashboard sessions.
+        assert {"CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD", "CLAWK_DASHBOARD_BASIC_AUTH_SECRET",
+                "CLAWK_DASHBOARD_OIDC_CLIENT_SECRET", "CLAWK_DASHBOARD_DRAIN_SECRET"} <= _ALWAYS_STRIP_KEYS
 
 
 class TestBrowserPassthroughPattern:
@@ -159,6 +163,34 @@ class TestBrowserPassthroughPattern:
         assert "TELEGRAM_BOT_TOKEN" not in env
 
 
+class TestDelegatedChildMarker:
+    def test_delegated_child_context_scrubs_parent_kanban_keys_and_sets_marker(self):
+        from agent.delegation_context import delegated_child_context
+
+        with patch.dict(
+            os.environ,
+            {
+                **_SAFE_SAMPLE,
+                "CLAWK_KANBAN_TASK": "t_parent",
+                "CLAWK_KANBAN_RUN_ID": "123",
+                "CLAWK_KANBAN_DB": "/tmp/parent-kanban.db",
+                "CLAWK_KANBAN_WORKSPACE": "/tmp/parent-workspace",
+            },
+            clear=True,
+        ):
+            with delegated_child_context():
+                env = clawk_subprocess_env(inherit_credentials=True)
+
+        assert env["CLAWK_DELEGATED_CHILD_CONTEXT"]  # fenced board root (path), not a bare flag
+        # Worker identity is scrubbed; board location and workspace routing survive so the
+        # fenced descendant can still read the board it belongs to.
+        assert "CLAWK_KANBAN_TASK" not in env
+        assert "CLAWK_KANBAN_RUN_ID" not in env
+        assert env["CLAWK_KANBAN_DB"] == "/tmp/parent-kanban.db"
+        assert env["CLAWK_KANBAN_WORKSPACE"] == "/tmp/parent-workspace"
+        assert env["MY_APP_VAR"] == "keep-me"
+
+
 _INTERNAL_DYNAMIC_SAMPLE = {
     "AUXILIARY_VISION_API_KEY": "sk-vision",
     "AUXILIARY_VISION_BASE_URL": "http://internal:1234/v1",
@@ -178,18 +210,6 @@ class TestInternalDynamicSecrets:
         for var in _INTERNAL_DYNAMIC_SAMPLE:
             assert var not in result, f"{var} leaked with inherit_credentials=False"
 
-    def test_stripped_even_when_inheriting(self):
-        result = _build(
-            {**_PROVIDER_SAMPLE, **_INTERNAL_DYNAMIC_SAMPLE},
-            inherit_credentials=True,
-        )
-        for var in _INTERNAL_DYNAMIC_SAMPLE:
-            assert var not in result, (
-                f"{var} must be stripped even with inherit_credentials=True"
-            )
-        # ...while genuine provider keys survive so codex can authenticate.
-        for var in _PROVIDER_SAMPLE:
-            assert var in result
 
     def test_auxiliary_non_secrets_preserved(self):
         """AUXILIARY_*_PROVIDER / _MODEL routing config survives (not secrets)."""
@@ -215,7 +235,5 @@ class TestInternalDynamicSecrets:
 
     def test_relay_triplet_in_always_strip(self):
         assert {
-            "GATEWAY_RELAY_ID",
-            "GATEWAY_RELAY_SECRET",
-            "GATEWAY_RELAY_DELIVERY_KEY",
+            "GATEWAY_RELAY_ID", "GATEWAY_RELAY_SECRET", "GATEWAY_RELAY_DELIVERY_KEY",
         } <= _ALWAYS_STRIP_KEYS

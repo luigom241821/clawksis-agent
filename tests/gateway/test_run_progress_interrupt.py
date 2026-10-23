@@ -98,16 +98,10 @@ class InterruptedAgent:
         # Parallel tool batch — in production these come from one LLM
         # response with 5 tool_calls.  All are post-interrupt.
         self.tool_progress_callback("tool.started", "web_search", "cognee clawk", {})
-        self.tool_progress_callback(
-            "tool.started", "web_search", "McBee deer hunting", {}
-        )
+        self.tool_progress_callback("tool.started", "web_search", "McBee deer hunting", {})
         self.tool_progress_callback("tool.started", "web_search", "kuzu graph db", {})
-        self.tool_progress_callback(
-            "tool.started", "web_search", "moonshot kimi api", {}
-        )
-        self.tool_progress_callback(
-            "tool.started", "web_search", "platform.moonshot.cn", {}
-        )
+        self.tool_progress_callback("tool.started", "web_search", "moonshot kimi api", {})
+        self.tool_progress_callback("tool.started", "web_search", "platform.moonshot.cn", {})
         time.sleep(0.35)  # let the drain loop attempt to process the queue
         return {"final_response": "interrupted", "messages": [], "api_calls": 1}
 
@@ -199,14 +193,10 @@ async def _run_once(monkeypatch, tmp_path, agent_cls, session_id):
 @pytest.mark.asyncio
 async def test_baseline_non_interrupted_agent_renders_progress(monkeypatch, tmp_path):
     """Sanity check: when is_interrupted is False, tool-progress renders normally."""
-    adapter, result = await _run_once(
-        monkeypatch, tmp_path, PreInterruptAgent, "sess-baseline"
-    )
+    adapter, result = await _run_once(monkeypatch, tmp_path, PreInterruptAgent, "sess-baseline")
     assert result["final_response"] == "done"
-    rendered = (
-        " ".join(c["content"] for c in adapter.sent)
-        + " "
-        + " ".join(c["content"] for c in adapter.edits)
+    rendered = " ".join(c["content"] for c in adapter.sent) + " " + " ".join(
+        c["content"] for c in adapter.edits
     )
     assert "first search" in rendered, (
         "baseline agent should render its tool-progress event — "
@@ -221,7 +211,7 @@ async def test_partial_empty_agent_response_is_normalized(monkeypatch, tmp_path)
         monkeypatch, tmp_path, PartialTruncationAgent, "sess-partial-empty"
     )
 
-    assert result["final_response"].startswith("⚠️ Processing stopped:")
+    assert result["final_response"].startswith("⚠️ I had to stop before finishing")
     assert "Response truncated due to output length limit" in result["final_response"]
     assert result["final_response"] != "⚠️ Response truncated due to output length limit"
     assert result["partial"] is True
@@ -243,10 +233,8 @@ async def test_progress_suppressed_when_agent_is_interrupted(monkeypatch, tmp_pa
     )
     assert result["final_response"] == "interrupted"
 
-    rendered = (
-        " ".join(c["content"] for c in adapter.sent)
-        + " "
-        + " ".join(c["content"] for c in adapter.edits)
+    rendered = " ".join(c["content"] for c in adapter.sent) + " " + " ".join(
+        c["content"] for c in adapter.edits
     )
 
     # None of the post-interrupt queries should appear.
@@ -261,3 +249,25 @@ async def test_progress_suppressed_when_agent_is_interrupted(monkeypatch, tmp_pa
             f"event '{leaked_query}' leaked into the UI after interrupt — "
             f"progress_callback / drain loop is not checking is_interrupted"
         )
+
+
+def test_partial_site_code_result_is_delivered_verbatim_not_double_wrapped():
+    """A truncated-tool-call exit already carries the curated site copy; the gateway must not
+    prefix it with 'I had to stop before finishing:' and cut it at 200 chars."""
+    from agent.turn_failure_copy import site_copy
+    from gateway.run import _normalize_empty_agent_response
+    curated = site_copy("truncated")
+    result = {"final_response": None, "messages": [], "api_calls": 2, "completed": False, "partial": True,
+              "error": curated, "failure_reason": "truncated", "failure_retryable": True}
+    text = _normalize_empty_agent_response(result, "", history_len=0)
+    assert curated in text
+    assert "I had to stop before finishing" not in text
+    assert text.count("continue") == curated.count("continue")
+
+
+def test_partial_without_site_code_keeps_the_generic_wrapper():
+    from gateway.run import _normalize_empty_agent_response
+    result = {"final_response": None, "messages": [], "api_calls": 2, "completed": False, "partial": True,
+              "error": "Response truncated due to output length limit"}
+    text = _normalize_empty_agent_response(result, "", history_len=0)
+    assert text.startswith("⚠️ I had to stop before finishing")

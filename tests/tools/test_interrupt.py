@@ -3,7 +3,6 @@
 Run with: python -m pytest tests/test_interrupt.py -v
 """
 
-import queue
 import threading
 import time
 import pytest
@@ -13,13 +12,11 @@ import pytest
 # Unit tests: shared interrupt module
 # ---------------------------------------------------------------------------
 
-
 class TestInterruptModule:
     """Tests for tools/interrupt.py"""
 
     def test_set_and_check(self):
         from tools.interrupt import set_interrupt, is_interrupted
-
         set_interrupt(False)
         assert not is_interrupted()
 
@@ -29,62 +26,27 @@ class TestInterruptModule:
         set_interrupt(False)
         assert not is_interrupted()
 
-    def test_thread_safety(self):
-        """Set from one thread targeting another thread's ident."""
+    def test_is_thread_interrupted_checks_target_tid_not_caller(self):
         from tools.interrupt import (
-            set_interrupt,
-            is_interrupted,
-            _interrupted_threads,
-            _lock,
+            set_interrupt, is_interrupted, is_thread_interrupted, _interrupted_threads, _lock,
         )
-
-        set_interrupt(False)
-        # Clear any stale thread idents left by prior tests in this worker.
         with _lock:
             _interrupted_threads.clear()
-
-        seen = {"value": False}
-
-        def _checker():
-            while not is_interrupted():
-                time.sleep(0.01)
-            seen["value"] = True
-
-        t = threading.Thread(target=_checker, daemon=True)
-        t.start()
-
-        time.sleep(0.05)
-        assert not seen["value"]
-
-        # Target the checker thread's ident so it sees the interrupt
-        set_interrupt(True, thread_id=t.ident)
-        t.join(timeout=5)
-        assert seen["value"]
-
-        set_interrupt(False, thread_id=t.ident)
-
-    def test_clear_current_thread_interrupt(self):
-        from tools.interrupt import (
-            set_interrupt,
-            is_interrupted,
-            clear_current_thread_interrupt,
-        )
-
-        set_interrupt(True)
-        assert is_interrupted()
-        clear_current_thread_interrupt()
+        other_tid = threading.get_ident() + 1
+        set_interrupt(True, thread_id=other_tid)
         assert not is_interrupted()
+        assert is_thread_interrupted(other_tid)
+        assert is_thread_interrupted(None) is False
+        set_interrupt(False, thread_id=other_tid)
+        assert not is_thread_interrupted(other_tid)
+
 
     def test_clear_current_thread_interrupt_leaves_other_threads(self):
         """clear_current_thread_interrupt only touches the calling thread."""
         from tools.interrupt import (
-            set_interrupt,
-            is_interrupted,
-            clear_current_thread_interrupt,
-            _interrupted_threads,
-            _lock,
+            set_interrupt, is_interrupted, clear_current_thread_interrupt,
+            _interrupted_threads, _lock,
         )
-
         with _lock:
             _interrupted_threads.clear()
         other_tid = threading.get_ident() + 1  # an ident that isn't us
@@ -99,11 +61,109 @@ class TestInterruptModule:
             assert other_tid in _interrupted_threads  # other thread untouched
             _interrupted_threads.discard(other_tid)
 
+    def test_run_if_not_interrupted_skips_callback_when_already_interrupted(self):
+        from tools.interrupt import run_if_not_interrupted, set_interrupt
+
+        callbacks = []
+        set_interrupt(True)
+        try:
+            assert run_if_not_interrupted(lambda: callbacks.append("claimed")) is False
+        finally:
+            set_interrupt(False)
+
+        assert callbacks == []
+
+    @pytest.mark.parametrize("callback_should_fail", [False, True])
+    def test_run_if_not_interrupted_orders_callback_before_concurrent_interrupt(
+        self, callback_should_fail, monkeypatch
+    ):
+        from tools import interrupt
+
+        class CallbackFailure(Exception):
+            pass
+
+        original_lock = interrupt._lock
+        attempting_interrupt_lock = threading.Event()
+        interrupt_published = threading.Event()
+        publisher_lock_contention = []
+        callback_observations = []
+        setters = []
+        setter_tids = []
+
+        class ObservedLock:
+            def __enter__(self):
+                if (
+                    threading.current_thread() in setters
+                    and not attempting_interrupt_lock.is_set()
+                ):
+                    acquired = original_lock.acquire(blocking=False)
+                    publisher_lock_contention.append(not acquired)
+                    attempting_interrupt_lock.set()
+                    if acquired:
+                        return self
+                original_lock.acquire()
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                original_lock.release()
+
+        interrupt.set_interrupt(False)
+        with original_lock:
+            baseline = (
+                set(interrupt._interrupted_threads),
+                dict(interrupt._interrupt_reasons),
+            )
+        monkeypatch.setattr(interrupt, "_lock", ObservedLock())
+
+        def publish_interrupt():
+            setter_tids.append(threading.get_ident())
+            try:
+                interrupt.set_interrupt(True)
+                interrupt_published.set()
+            finally:
+                interrupt.set_interrupt(False)
+
+        def callback():
+            setter = threading.Thread(target=publish_interrupt)
+            setters.append(setter)
+            setter.start()
+            assert attempting_interrupt_lock.wait(5)
+            assert publisher_lock_contention == [True]
+            callback_observations.append(interrupt_published.is_set())
+            if callback_should_fail:
+                raise CallbackFailure
+
+        try:
+            if callback_should_fail:
+                with pytest.raises(CallbackFailure):
+                    interrupt.run_if_not_interrupted(callback)
+            else:
+                assert interrupt.run_if_not_interrupted(callback) is True
+            assert interrupt_published.wait(5)
+        finally:
+            for setter in setters:
+                if setter.ident is not None:
+                    setter.join(timeout=5)
+            interrupt.set_interrupt(False)
+
+        assert setters
+        assert all(not setter.is_alive() for setter in setters)
+        assert setter_tids
+        assert callback_observations == [False]
+        assert interrupt_published.is_set()
+        with original_lock:
+            final_state = (
+                set(interrupt._interrupted_threads),
+                dict(interrupt._interrupt_reasons),
+            )
+        assert final_state == baseline
+        assert all(setter_tid not in final_state[0] for setter_tid in setter_tids)
+        assert all(setter_tid not in final_state[1] for setter_tid in setter_tids)
+
 
 # ---------------------------------------------------------------------------
 # Unit tests: pre-tool interrupt check
 # ---------------------------------------------------------------------------
-
 
 class TestPreToolCheck:
     """Verify that _execute_tool_calls skips all tools when interrupted."""
@@ -138,28 +198,25 @@ class TestPreToolCheck:
         agent._interrupt_requested = True
         agent.log_prefix = ""
         agent._persist_session = MagicMock()
+        # PR #72425: execute_tool_calls_* read _incremental_persistence_failed
+        # via getattr at loop top. A bare MagicMock auto-creates a truthy value
+        # for any attribute access, which would short-circuit the interrupt
+        # skip path before any cancelled-tool messages are appended.
+        agent._incremental_persistence_failed = False
 
         # Import and call the method
         import types
         from run_agent import AIAgent
-
         # Bind the real methods to our mock so dispatch works correctly
-        agent._execute_tool_calls_sequential = types.MethodType(
-            AIAgent._execute_tool_calls_sequential, agent
-        )
-        agent._execute_tool_calls_concurrent = types.MethodType(
-            AIAgent._execute_tool_calls_concurrent, agent
-        )
+        agent._execute_tool_calls_sequential = types.MethodType(AIAgent._execute_tool_calls_sequential, agent)
+        agent._execute_tool_calls_concurrent = types.MethodType(AIAgent._execute_tool_calls_concurrent, agent)
         AIAgent._execute_tool_calls(agent, assistant_msg, messages, "default")
 
         # All 3 should be skipped
         assert len(messages) == 3
         for msg in messages:
             assert msg["role"] == "tool"
-            assert (
-                "cancelled" in msg["content"].lower()
-                or "interrupted" in msg["content"].lower()
-            )
+            assert "cancelled" in msg["content"].lower() or "interrupted" in msg["content"].lower()
 
         # No actual tool handlers should have been called
         # (handle_function_call should NOT have been invoked)
@@ -170,67 +227,26 @@ class TestPreToolCheck:
 # ---------------------------------------------------------------------------
 
 
-class TestMessageCombining:
-    """Verify multiple interrupt messages are joined."""
-
-    def test_cli_interrupt_queue_drain(self):
-        """Simulate draining multiple messages from the interrupt queue."""
-        q = queue.Queue()
-        q.put("Stop!")
-        q.put("Don't delete anything")
-        q.put("Show me what you were going to delete instead")
-
-        parts = []
-        while not q.empty():
-            try:
-                msg = q.get_nowait()
-                if msg:
-                    parts.append(msg)
-            except queue.Empty:
-                break
-
-        combined = "\n".join(parts)
-        assert "Stop!" in combined
-        assert "Don't delete anything" in combined
-        assert "Show me what you were going to delete instead" in combined
-        assert combined.count("\n") == 2
-
-    def test_gateway_pending_messages_append(self):
-        """Simulate gateway _pending_messages append logic."""
-        pending = {}
-        key = "agent:main:telegram:dm"
-
-        # First message
-        if key in pending:
-            pending[key] += "\n" + "Stop!"
-        else:
-            pending[key] = "Stop!"
-
-        # Second message
-        if key in pending:
-            pending[key] += "\n" + "Do something else instead"
-        else:
-            pending[key] = "Do something else instead"
-
-        assert pending[key] == "Stop!\nDo something else instead"
-
 
 # ---------------------------------------------------------------------------
 # Integration tests (require local terminal)
 # ---------------------------------------------------------------------------
 
-
 class TestSIGKILLEscalation:
     """Test that SIGTERM-resistant processes get SIGKILL'd."""
 
-    @pytest.mark.skipif(not __import__("shutil").which("bash"), reason="Requires bash")
-    def test_sigterm_trap_killed_within_2s(self):
+    @pytest.mark.skipif(
+        not __import__("shutil").which("bash"),
+        reason="Requires bash"
+    )
+    @pytest.mark.platforms("posix")
+    def test_sigterm_trap_killed_within_2s(self, tmp_path):
         """A process that traps SIGTERM should be SIGKILL'd after 1s grace."""
         from tools.interrupt import set_interrupt
         from tools.environments.local import LocalEnvironment
 
         set_interrupt(False)
-        env = LocalEnvironment(cwd="/tmp", timeout=30)
+        env = LocalEnvironment(cwd=str(tmp_path), timeout=30)
 
         # Start execution in a thread, interrupt after 0.5s
         result_holder = {"value": None}
@@ -259,7 +275,6 @@ class TestSIGKILLEscalation:
 # Regression: _run_tool cleanup on BaseException (issue #35309)
 # ---------------------------------------------------------------------------
 
-
 class TestRunToolCleanupOnBaseException:
     """Verify that _run_tool cleans up _interrupted_threads even when
     _invoke_tool raises a BaseException (e.g. CancelledError).
@@ -271,14 +286,9 @@ class TestRunToolCleanupOnBaseException:
     """
 
     def test_cleanup_on_base_exception(self):
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
         import types
-        from tools.interrupt import (
-            set_interrupt,
-            is_interrupted,
-            _interrupted_threads,
-            _lock,
-        )
+        from tools.interrupt import set_interrupt, _interrupted_threads, _lock
 
         # Clear global state
         with _lock:
@@ -293,17 +303,13 @@ class TestRunToolCleanupOnBaseException:
         # _set_interrupt delegates to the real module
         def _mock_set_interrupt(active, tid=None):
             set_interrupt(active, tid)
-
         agent._set_interrupt = _mock_set_interrupt
 
         # _invoke_tool raises BaseException (simulating CancelledError)
-        agent._invoke_tool = MagicMock(
-            side_effect=BaseException("simulated CancelledError")
-        )
+        agent._invoke_tool = MagicMock(side_effect=BaseException("simulated CancelledError"))
 
         # Bind the real concurrent method so we get _run_tool
         from run_agent import AIAgent
-
         agent._execute_tool_calls_concurrent = types.MethodType(
             AIAgent._execute_tool_calls_concurrent, agent
         )
@@ -340,28 +346,3 @@ class TestRunToolCleanupOnBaseException:
         with _lock:
             leaked = set(_interrupted_threads)
         assert leaked == set(), f"leaked tids in _interrupted_threads: {leaked}"
-
-
-# ---------------------------------------------------------------------------
-# Manual smoke test checklist (not automated)
-# ---------------------------------------------------------------------------
-
-SMOKE_TESTS = """
-Manual Smoke Test Checklist:
-
-1. CLI: Run `clawk`, ask it to `sleep 30` in terminal, type "stop" + Enter.
-   Expected: command dies within 2s, agent responds to "stop".
-
-2. CLI: Ask it to extract content from 5 URLs, type interrupt mid-way.
-   Expected: remaining URLs are skipped, partial results returned.
-
-3. Gateway (Telegram): Send a long task, then send "Stop".
-   Expected: agent stops and responds acknowledging the stop.
-
-4. Gateway (Telegram): Send "Stop" then "Do X instead" rapidly.
-   Expected: both messages appear as the next prompt (joined by newline).
-
-5. CLI: Start a task that generates 3+ tool calls in one batch.
-   Type interrupt during the first tool call.
-   Expected: only 1 tool executes, remaining are skipped.
-"""

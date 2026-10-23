@@ -45,10 +45,11 @@ def _fresh_home():
 HOME = _fresh_home()
 
 # Import AFTER CLAWK_HOME is set.
-import cron.scheduler as sched  # noqa: E402
-import gateway.mirror as mirror  # noqa: E402
-from gateway.config import GatewayConfig, Platform  # noqa: E402
-from gateway.session import SessionStore, SessionSource, build_session_key  # noqa: E402
+import cron.scheduler as sched
+from cron import scheduler_delivery as sched_delivery
+from gateway import mirror
+from gateway.config import GatewayConfig, Platform
+from gateway.session import SessionStore, SessionSource, build_session_key
 
 # Force mirror.py's module-level index path to our temp home (it may have bound
 # a different get_clawk_home() at import if something imported it earlier).
@@ -74,43 +75,31 @@ def _run_scenario(name, chat_id, is_dm, reply_chat_type):
     class _Adapter:
         _session_store = store
 
-    ok = sched._seed_cron_channel_session(
+    ok = sched_delivery._seed_cron_channel_session(
         {"id": "brief-job", "name": "PR review brief"},
-        _Adapter(),
-        "slack",
-        chat_id,
-        BRIEF,
-        is_dm=is_dm,
-        user_id="U_HUMAN",
-        chat_name="test",
+        _Adapter(), "slack", chat_id, BRIEF,
+        is_dm=is_dm, user_id="U_HUMAN", chat_name="test",
     )
     assert ok, f"{name}: seeder returned False — session not created/mirrored"
 
     # LEG 1: what session key did the seed create?
     seeded_source = SessionSource(
-        platform=Platform.SLACK,
-        chat_id=chat_id,
+        platform=Platform.SLACK, chat_id=chat_id,
         chat_type="dm" if is_dm else "group",
-        user_id="U_HUMAN",
-        thread_id=None,
+        user_id="U_HUMAN", thread_id=None,
     )
     seed_key = build_session_key(seeded_source)
 
     # LEG 2: what does a plain inbound reply (reply_in_thread:false → thread None)
     # from the same user resolve to?
     inbound = SessionSource(
-        platform=Platform.SLACK,
-        chat_id=chat_id,
-        chat_type=reply_chat_type,
-        user_id="U_HUMAN",
-        thread_id=None,
+        platform=Platform.SLACK, chat_id=chat_id, chat_type=reply_chat_type,
+        user_id="U_HUMAN", thread_id=None,
     )
     reply_key = build_session_key(inbound)
     print(f"  seed key : {seed_key}")
     print(f"  reply key: {reply_key}")
-    assert seed_key == reply_key, (
-        f"{name}: KEY MISMATCH — reply won't continue the seed"
-    )
+    assert seed_key == reply_key, f"{name}: KEY MISMATCH — reply won't continue the seed"
 
     # GROUND TRUTH: the brief must actually be in that session's transcript, and
     # discoverable via the same _find_session_id the inbound reply path uses.
@@ -119,16 +108,8 @@ def _run_scenario(name, chat_id, is_dm, reply_chat_type):
     # Read the session transcript back and confirm the brief text is present.
     idx = mirror._SESSIONS_INDEX
     import json
-
     data = json.loads(idx.read_text())
-    entry = next(
-        (
-            e
-            for e in data.values()
-            if isinstance(e, dict) and e.get("session_id") == sid
-        ),
-        None,
-    )
+    entry = next((e for e in data.values() if isinstance(e, dict) and e.get("session_id") == sid), None)
     assert entry, f"{name}: session {sid} not in index"
     # transcript lives in the JSONL / SQLite; verify via the store's own read.
     found = _brief_in_transcript(store, sid)
@@ -142,7 +123,6 @@ def _brief_in_transcript(store, sid):
     # Try the SQLite DB first (the mirror writes both JSONL + SQLite).
     try:
         from clawk_state import SessionDB
-
         db = SessionDB()
         msgs = db.get_messages(sid)
         for m in msgs:
@@ -164,9 +144,7 @@ def main():
     print(f"scheduler module: {sched.__file__}")
     print(f"CLAWK_HOME (throwaway): {HOME}")
     if "cron-inchannel" not in sched.__file__:
-        print(
-            "WARNING: not the worktree scheduler — set PYTHONPATH=$PWD", file=sys.stderr
-        )
+        print("WARNING: not the worktree scheduler — set PYTHONPATH=$PWD", file=sys.stderr)
 
     _run_scenario("CHANNEL", "C_TEST", is_dm=False, reply_chat_type="group")
     _run_scenario("1:1 DM", "D_TEST", is_dm=True, reply_chat_type="dm")
