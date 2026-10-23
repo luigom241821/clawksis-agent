@@ -668,12 +668,12 @@ class CLIChatTurnMixin:
                 from clawk_cli.skin_engine import get_active_skin
                 _skin = get_active_skin()
                 label = _skin.get_branding("response_label", "∇ Clawksis")
-                _resp_color = _maybe_remap_for_light_mode(_skin.get_color("response_border", "#CD7F32"))
-                _resp_text = _maybe_remap_for_light_mode(_skin.get_color("banner_text", "#FFF8DC"))
+                _resp_color = _maybe_remap_for_light_mode(_skin.get_color("response_border", "#4A3496"))
+                _resp_text = _maybe_remap_for_light_mode(_skin.get_color("banner_text", "#E8E0FF"))
             except Exception:
                 label = "∇ Clawksis"
-                _resp_color = _maybe_remap_for_light_mode("#CD7F32")
-                _resp_text = _maybe_remap_for_light_mode("#FFF8DC")
+                _resp_color = _maybe_remap_for_light_mode("#4A3496")
+                _resp_text = _maybe_remap_for_light_mode("#E8E0FF")
 
             is_error_response = turn.result and (turn.result.get("failed") or turn.result.get("partial"))
             # An interrupted reply that streamed before a tool-call boundary reset the segment
@@ -724,7 +724,7 @@ class CLIChatTurnMixin:
                     from agent.plan_limits import limit_next_steps_from_payload
                     ChatConsole().print(Panel(
                         limit_next_steps_from_payload(_limit, markup=True),
-                        title="[#CD7F32 bold]⚡ Limit reached[/]", title_align="left", border_style="#CD7F32",
+                        title="[#8D70F0 bold]⚡ Limit reached[/]", title_align="left", border_style="#4A3496",
                         box=rich_box.HORIZONTALS, padding=(1, 4), width=self._scrollback_box_width(),
                     ))
                 except Exception:
@@ -744,8 +744,8 @@ class CLIChatTurnMixin:
                 _cta_lines.append(t("cli.chat.billing_cta_switch"))
                 try:
                     ChatConsole().print(Panel(
-                        "\n".join(_cta_lines), title=f"[#CD7F32 bold]{t('cli.chat.out_of_credits_title')}[/]",
-                        title_align="left", border_style="#CD7F32", box=rich_box.HORIZONTALS,
+                        "\n".join(_cta_lines), title=f"[#8D70F0 bold]{t('cli.chat.out_of_credits_title')}[/]",
+                        title_align="left", border_style="#4A3496", box=rich_box.HORIZONTALS,
                         padding=(1, 4), width=self._scrollback_box_width(),
                     ))
                 except Exception:

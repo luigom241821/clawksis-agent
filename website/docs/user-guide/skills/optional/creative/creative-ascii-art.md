@@ -175,7 +175,7 @@ boxes -l                                       # List all 70+ designs
 python -m pyfiglet "CLAWKSIS" -f slant | boxes -d stone
 # Or without pyfiglet installed:
 
-curl -s "https://asciified.thelicato.io/api/v2/ascii?text=HERMES&font=Slant" | boxes -d stone
+curl -s "https://asciified.thelicato.io/api/v2/ascii?text=CLAWKSIS&font=Slant" | boxes -d stone
 ```
 
 ## Tool 5: TOIlet (Colored Text Art)

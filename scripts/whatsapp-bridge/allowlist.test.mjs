@@ -51,7 +51,7 @@ test('matchesAllowedUser accepts mapped lid sender when allowlist only contains 
 });
 
 test('matchesAllowedSender accepts the Baileys alt phone JID when a first-contact LID has no mapping yet (#63415, #72529)', () => {
-  const sessionDir = mkdtempSync(path.join(os.tmpdir(), 'hermes-wa-allowlist-'));
+  const sessionDir = mkdtempSync(path.join(os.tmpdir(), 'clawk-wa-allowlist-'));
 
   try {
     const allowedUsers = parseAllowedUsers('+19175395595');
@@ -85,7 +85,7 @@ test('matchesAllowedUser treats * as allow-all wildcard', () => {
 });
 
 test('group intake follows group policy and group-JID allowlist independently of DM users', () => {
-  const sessionDir = mkdtempSync(path.join(os.tmpdir(), 'hermes-wa-allowlist-'));
+  const sessionDir = mkdtempSync(path.join(os.tmpdir(), 'clawk-wa-allowlist-'));
 
   try {
     const groupAllowedUsers = parseAllowedUsers('120363001234567890@g.us');

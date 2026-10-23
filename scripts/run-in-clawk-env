@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Run a command in the Hermes dev environment, whatever shell or cwd it is
-# launched from: `scripts/run-in-hermes-env CMD [ARGS...]`.
+# Run a command in the Clawksis dev environment, whatever shell or cwd it is
+# launched from: `scripts/run-in-clawk-env CMD [ARGS...]`.
 #
 # The environment is the one `activate` would give a shell, applied to this
 # process only and then exec'd into CMD, so nothing leaks back and nothing has
@@ -9,7 +9,7 @@
 # (scripts/_activation.sh).
 #
 # Shebang for repo Python scripts, so `./scripts/foo.py` works from any cwd:
-#     #!/usr/bin/env -S bash -c 'exec "$BASH" "$(dirname "$0")/run-in-hermes-env" python3 "$0" "$@"'
+#     #!/usr/bin/env -S bash -c 'exec "$BASH" "$(dirname "$0")/run-in-clawk-env" python3 "$0" "$@"'
 # The kernel appends the invoking script, and `bash -c` binds it to `$0`, so
 # the shebang finds this file relative to the script and is independent of the
 # cwd. `$BASH` for the second hop keeps it free of both the exec bit and a
@@ -27,6 +27,6 @@ fi
 _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/_activation.sh
 . "$_here/_activation.sh"
-hermes_ensure_env "$(dirname "$_here")" || exit 1
+clawk_ensure_env "$(dirname "$_here")" || exit 1
 
 exec "$@"
