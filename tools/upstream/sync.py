@@ -232,7 +232,7 @@ REBRAND_EXTS = {
     ".dockerfile",
     ".mdx",
 }
-REBRAND_BASENAMES = {"Dockerfile", "dockerfile", "activate", "justfile"}
+REBRAND_BASENAMES = {"Dockerfile", "dockerfile", "activate", "justfile", "uv.lock"}
 
 
 def _rebrandable(name: str, content: bytes) -> bool:
