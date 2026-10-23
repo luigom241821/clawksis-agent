@@ -2942,7 +2942,7 @@ from .mcp_rpc_helpers import summarize_server as _mcp_summarize_server
 
 
 @method("media.list")
-def _(rid, params: dict) -> dict:
+def _media_list(rid, params: dict) -> dict:
     """List media with filters + pagination.
     Params (all optional):
       limit         int, default 60, max 200
@@ -3028,7 +3028,7 @@ def _(rid, params: dict) -> dict:
 
 
 @method("media.delete")
-def _(rid, params: dict) -> dict:
+def _media_delete(rid, params: dict) -> dict:
     """Delete a media entry: removes DB row + file from disk."""
     db = _get_db()
     if db is None:
@@ -3079,7 +3079,7 @@ def _(rid, params: dict) -> dict:
 
 
 @method("media.stats")
-def _(rid, params: dict) -> dict:
+def _media_stats(rid, params: dict) -> dict:
     """Aggregate stats for the gallery header."""
     db = _get_db()
     if db is None:
@@ -3214,7 +3214,7 @@ def _session_usage_with_db_fallback(session: dict, params: dict | None = None) -
 
 
 @method("usage.by_model")
-def _(rid, params: dict) -> dict:
+def _usage_by_model(rid, params: dict) -> dict:
     """Aggregate token usage across all sessions, grouped by model.
     The chat Modern header/popover combines this with ``session.usage`` but it
     was never registered as a JSON-RPC method (only exposed via the REST

@@ -109,8 +109,6 @@ _POLISHED_TOOLS = {
     "yb_search_sticker",
     "yb_send_dm",
     "yb_send_sticker",
-    # Fork-only: Clawksis still ships tools/mixture_of_agents_tool.py.
-    "mixture_of_agents",
 }
 
 _EMPTYISH = (None, "", [], {})
