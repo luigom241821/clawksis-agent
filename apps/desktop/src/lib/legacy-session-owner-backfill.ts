@@ -26,7 +26,7 @@
  * lifetime — retrying either every enumeration is a request storm the backend
  * will keep refusing.
  */
-import { getApiRequestConnection, clawkApi } from '@/api/client'
+import { clawkApi, getApiRequestConnection } from '@/api/client'
 import { isMissingRestEndpoint, isOfflineMaintenance } from '@/lib/gateway-rpc'
 import { resolveLegacyOwnerBackfillScope } from '@/lib/session-owner-stamp'
 import { $connectionsRegistry, hasRegistryTopology } from '@/store/connection-registry-state'

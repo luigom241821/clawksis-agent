@@ -58,10 +58,10 @@ describe('ugitGitBinaries (#61494)', () => {
 describe('managedGitBinaries', () => {
   test('finds the newest PM-managed Git under Clawksis tools', () => {
     const managed = path.join(LAD, 'clawk', 'tools', 'git-2.53.0+3-win32-x64', 'cmd', 'git.exe')
-    const fs = fakeFs(
-      { [path.join(LAD, 'clawk', 'tools')]: ['git-2.52.0+2-win32-x64', 'git-2.53.0+3-win32-x64'] },
-      [managed]
-    )
+
+    const fs = fakeFs({ [path.join(LAD, 'clawk', 'tools')]: ['git-2.52.0+2-win32-x64', 'git-2.53.0+3-win32-x64'] }, [
+      managed
+    ])
 
     assert.deepEqual(managedGitBinaries(LAD, fs), [managed])
   })
@@ -100,10 +100,8 @@ describe('windowsGitCandidates (#61494)', () => {
   test('selects PM-managed Git before the clawk-bundled portable git', () => {
     const managed = path.join(LAD, 'clawk', 'tools', 'git-2.53.0+3-win32-x64', 'cmd', 'git.exe')
     const portable = path.join(env.localAppData, 'clawk', 'git', 'cmd', 'git.exe')
-    const fs = fakeFs(
-      { [path.join(LAD, 'clawk', 'tools')]: ['git-2.53.0+3-win32-x64'] },
-      [managed, portable]
-    )
+
+    const fs = fakeFs({ [path.join(LAD, 'clawk', 'tools')]: ['git-2.53.0+3-win32-x64'] }, [managed, portable])
 
     const candidates = windowsGitCandidates(env, fs)
 

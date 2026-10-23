@@ -12,9 +12,9 @@
 import './kanban.css'
 
 import {
+  type ClawksisPlugin,
   cn,
   Codicon,
-  type ClawksisPlugin,
   host,
   type KeybindContribution,
   KEYBINDS_AREA,

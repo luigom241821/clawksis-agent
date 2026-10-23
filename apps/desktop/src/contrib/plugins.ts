@@ -14,7 +14,7 @@
  */
 
 import { trackGatewayEventDisposers } from './events'
-import { createPluginContext, type ClawksisPlugin } from './plugin'
+import { type ClawksisPlugin, createPluginContext } from './plugin'
 import { pluginActive, publishPlugin } from './plugins-store'
 import { watchRuntimePlugins } from './runtime-loader'
 

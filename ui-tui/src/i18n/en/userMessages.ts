@@ -12,7 +12,8 @@ export const userMessagesEn = {
     details: (text: string) => `Details: ${text}`,
 
     backend: {
-      restarting: 'Clawksis stopped unexpectedly — restarting and reopening your chat (the reply in progress was lost).',
+      restarting:
+        'Clawksis stopped unexpectedly — restarting and reopening your chat (the reply in progress was lost).',
       restartingActivity: 'Clawksis stopped unexpectedly · restarting…',
       connectionLost: 'Connection to Clawksis lost — reconnecting and reopening your chat…',
       connectionLostActivity: 'connection lost · reconnecting…',

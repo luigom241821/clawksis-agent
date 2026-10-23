@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useState } from 'react'
 
 import { readUseRealProfile } from '@/app/settings/browser-real-profile-panel'
+import { saveClawksisConfigRecord } from '@/clawk'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,7 +13,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import type { ClawksisConnection } from '@/global'
-import { saveClawksisConfigRecord } from '@/clawk'
 import { useI18n } from '@/i18n'
 import { Check, Globe } from '@/lib/icons'
 import { notify, notifyError } from '@/store/notifications'

@@ -2687,7 +2687,8 @@ export const jaOverrides = {
     done: '完了',
     applyingBody:
       'Clawksis アップデーターが独自のウィンドウで引き継ぎ、完了後に自動的に Clawksis を再度開きます。更新中はご自分で Clawksis を開き直さないでください。',
-    applyingBodyBackend: 'リモートバックエンドが更新を適用して再起動します。復帰すると Clawksis が自動的に再接続します。',
+    applyingBodyBackend:
+      'リモートバックエンドが更新を適用して再起動します。復帰すると Clawksis が自動的に再接続します。',
     applyingClose: 'このウィンドウは更新中に閉じ、その後 Clawksis が自動的に再度開きます。',
     errorTitle: '更新が完了しませんでした',
     errorBody: 'ご安心ください。何も失われていません。今すぐ再試行できます。',
@@ -2780,7 +2781,8 @@ export const jaOverrides = {
     connectExistingDesc:
       'セッショントークンまたはブラウザーサインインでリモートバックエンドを使用します。ローカルインストールは開始されません。',
     installLocalTitle: 'Clawksis をローカルにインストール',
-    installLocalDesc: 'Clawksis をダウンロードし、Python 環境を作成して、このコンピューターでバックエンドを実行します。',
+    installLocalDesc:
+      'Clawksis をダウンロードし、Python 環境を作成して、このコンピューターでバックエンドを実行します。',
     localStartUnavailable:
       'ローカルインストールを開始できません。Clawksis Desktop を再起動して、もう一度お試しください。',
     remoteSetupTitle: '既存の Clawksis に接続',
@@ -3333,7 +3335,8 @@ export const jaOverrides = {
         },
         invalid_response: {
           title: 'AI サービスが読み取れない応答を返しました',
-          body: provider => `${provider} は Clawksis が読み取れない内容を返しました。しばらくしてから再試行してください。`
+          body: provider =>
+            `${provider} は Clawksis が読み取れない内容を返しました。しばらくしてから再試行してください。`
         },
         empty_response: {
           title: 'AI サービスが空の応答を返しました',

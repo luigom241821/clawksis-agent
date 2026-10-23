@@ -190,7 +190,9 @@ describe('DesktopInstallOverlay first-run setup', () => {
       await Promise.resolve()
     })
 
-    expect(screen.queryByText('Local installation could not start. Restart Clawksis Desktop and try again.')).toBeTruthy()
+    expect(
+      screen.queryByText('Local installation could not start. Restart Clawksis Desktop and try again.')
+    ).toBeTruthy()
   })
 
   it('clears a stale local-start error when a repair presents a different root', async () => {
@@ -228,7 +230,12 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('opens the remote connection form from the first-run choice', async () => {
     installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.clawksis/clawksis-agent', local: 'none', bundled: false }
+        setupChoice: {
+          platform: 'linux',
+          activeRoot: '/home/me/.clawksis/clawksis-agent',
+          local: 'none',
+          bundled: false
+        }
       })
     )
 
@@ -244,7 +251,12 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('returns from the remote connection form to the first-run choice', async () => {
     installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.clawksis/clawksis-agent', local: 'none', bundled: false }
+        setupChoice: {
+          platform: 'linux',
+          activeRoot: '/home/me/.clawksis/clawksis-agent',
+          local: 'none',
+          bundled: false
+        }
       })
     )
 
@@ -262,7 +274,12 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('requires a successful token connection test before applying remote config', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.clawksis/clawksis-agent', local: 'none', bundled: false }
+        setupChoice: {
+          platform: 'linux',
+          activeRoot: '/home/me/.clawksis/clawksis-agent',
+          local: 'none',
+          bundled: false
+        }
       })
     )
 
@@ -332,7 +349,12 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('restores remote apply controls when applying the tested connection fails', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.clawksis/clawksis-agent', local: 'none', bundled: false }
+        setupChoice: {
+          platform: 'linux',
+          activeRoot: '/home/me/.clawksis/clawksis-agent',
+          local: 'none',
+          bundled: false
+        }
       })
     )
 
@@ -379,7 +401,12 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('signs in, tests, and applies a password-style remote gateway', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.clawksis/clawksis-agent', local: 'none', bundled: false }
+        setupChoice: {
+          platform: 'linux',
+          activeRoot: '/home/me/.clawksis/clawksis-agent',
+          local: 'none',
+          bundled: false
+        }
       })
     )
 

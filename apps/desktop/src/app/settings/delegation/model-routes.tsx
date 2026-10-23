@@ -1,8 +1,8 @@
 import { useState } from 'react'
 
+import type { DelegationModelMap, DelegationModelRoute, ProfileScope } from '@/clawk'
 import { ActionsMenu, renderActionItem } from '@/components/ui/actions-menu'
 import { Button } from '@/components/ui/button'
-import type { DelegationModelMap, DelegationModelRoute, ProfileScope } from '@/clawk'
 import { useI18n } from '@/i18n'
 import { Box, MoreHorizontal, Plus } from '@/lib/icons'
 import { confirm } from '@/store/confirm'

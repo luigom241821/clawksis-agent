@@ -436,7 +436,8 @@ export const esOverrides = {
       elevenLabsRejectedKey:
         'ElevenLabs no aceptó tu clave API. Actualízala en Configuración → Claves e inténtalo de nuevo.',
       diskFull: 'Disco lleno — libera espacio y vuelve a intentarlo.',
-      storageFailure: 'Clawksis no pudo guardar en su carpeta de datos. Abre Mantenimiento para comprobarla y repararla.',
+      storageFailure:
+        'Clawksis no pudo guardar en su carpeta de datos. Abre Mantenimiento para comprobarla y repararla.',
       gatewayAuthFailed:
         'Este Clawksis ya no acepta tu inicio de sesión guardado. Abre Gateways y vuelve a iniciar sesión (o pega un nuevo token de acceso) e inténtalo otra vez.',
       methodNotAllowed:
@@ -1420,7 +1421,8 @@ export const esOverrides = {
       options: {
         gui: {
           title: 'Desinstalar solo la interfaz de chat',
-          description: 'Quita esta app de escritorio. El agente de Clawksis, tu configuración y tus chats se conservan.',
+          description:
+            'Quita esta app de escritorio. El agente de Clawksis, tu configuración y tus chats se conservan.',
           consequence: 'la interfaz de chat de escritorio (esta app y sus datos)'
         },
         lite: {
@@ -4184,7 +4186,8 @@ export const esOverrides = {
     manualBody:
       'Instalaste Clawksis desde la línea de comandos, así que las actualizaciones también se ejecutan ahí. Pega esto en tu terminal:',
     manualPickedUp: 'Clawksis usará la nueva versión la próxima vez que lo abras.',
-    manualBodyBackend: 'El backend de Clawksis se gestiona fuera de esta app. Ejecuta esto en el servidor que lo aloja:',
+    manualBodyBackend:
+      'El backend de Clawksis se gestiona fuera de esta app. Ejecuta esto en el servidor que lo aloja:',
     manualPickedUpBackend: 'El backend cargará la nueva versión cuando termine la actualización.',
     guiSkewTitle: 'Actualiza la aplicación de escritorio',
     guiSkewBody:

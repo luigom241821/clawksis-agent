@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { Settings2, Wrench } from '@/lib/icons'
-import type { ConfigFieldSchema, ClawksisConfigRecord } from '@/types/clawk'
+import type { ClawksisConfigRecord, ConfigFieldSchema } from '@/types/clawk'
 
 import {
   buildConfigSearchEntries,

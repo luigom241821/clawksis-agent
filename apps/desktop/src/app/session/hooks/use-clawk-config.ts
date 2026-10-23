@@ -77,7 +77,10 @@ export function useClawksisConfig({ activeSessionIdRef }: ClawksisConfigOptions)
       const profile = $activeGatewayProfile.get()
 
       try {
-        const [config, defaults] = await Promise.all([getClawksisConfig(), getClawksisConfigDefaults().catch(() => ({}))])
+        const [config, defaults] = await Promise.all([
+          getClawksisConfig(),
+          getClawksisConfigDefaults().catch(() => ({}))
+        ])
 
         const canPublish = () => profileRefreshEpochRef.current === profileRefreshEpoch && shouldPublish()
 

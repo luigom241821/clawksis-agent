@@ -55,7 +55,6 @@ export function ugitGitBinaries(localAppData: string, fs: GitCandidateFs): strin
     .filter(fs.existsSync)
 }
 
-
 /**
  * Find Git installed by Clawksis PM under `%LOCALAPPDATA%\clawk\tools`.
  * PM versions the tool directory, so resolve the newest available executable

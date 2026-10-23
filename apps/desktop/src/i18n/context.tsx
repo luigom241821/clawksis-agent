@@ -2,7 +2,7 @@ import { applyDocumentLocale, isRecord } from '@clawk/shared/i18n'
 import { useStore } from '@nanostores/react'
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
-import { getClawksisConfigRecord, type ClawksisConfigRecord, retainConfigReadOrigin, saveClawksisConfig } from '@/clawk'
+import { type ClawksisConfigRecord, getClawksisConfigRecord, retainConfigReadOrigin, saveClawksisConfig } from '@/clawk'
 
 import { TRANSLATIONS } from './catalog'
 import {

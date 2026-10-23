@@ -1,5 +1,5 @@
-import type { ClawksisGitBranch, ClawksisGitWorktree } from '@/global'
 import type { ProjectInfo, SessionInfo } from '@/clawk'
+import type { ClawksisGitBranch, ClawksisGitWorktree } from '@/global'
 import { normalize } from '@/lib/text'
 
 import { rankSessions } from '../order'

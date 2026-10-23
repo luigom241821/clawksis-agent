@@ -1,3 +1,4 @@
+import { clawkApi } from '@/clawk'
 import type {
   ClawksisGitBaseBranch,
   ClawksisGitBranch,
@@ -7,7 +8,6 @@ import type {
   ClawksisReviewList,
   ClawksisReviewShipInfo
 } from '@/global'
-import { clawkApi } from '@/clawk'
 
 import { desktopFsProfile, isDesktopFsRemoteMode } from './desktop-fs'
 

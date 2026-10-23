@@ -79,7 +79,6 @@ describe('INLINE_RE emphasis', () => {
   })
 
   it('keeps intraword underscores literal', () => {
-
     const path = '/home/me/.clawksis/cache/screenshots/browser_screenshot_ecc1c3feab.png'
 
     expect(matches(path)).toEqual([])
@@ -184,7 +183,6 @@ describe('protocol sentinels', () => {
     expect('MEDIA:/tmp/a.png'.match(MEDIA_LINE_RE)?.[1]).toBe('/tmp/a.png')
 
     expect('  MEDIA: /home/me/.clawksis/cache/screenshots/browser_screenshot_ecc.png  '.match(MEDIA_LINE_RE)?.[1]).toBe(
-
       '/home/me/.clawksis/cache/screenshots/browser_screenshot_ecc.png'
     )
     expect('`MEDIA:/tmp/a.png`'.match(MEDIA_LINE_RE)?.[1]).toBe('/tmp/a.png')
