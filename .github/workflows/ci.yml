@@ -12,6 +12,12 @@ on:
 # no instala por defecto (`default-groups = []`). uv va fijado a la version con
 # la que upstream genera el lock.
 
+# En un PR, un push nuevo cancela la corrida anterior (las 8 tandas de tests
+# son caras y el resultado viejo ya no sirve).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     name: Lint (ruff)
