@@ -1628,13 +1628,37 @@ def _project_exists(conn, project_id: str, *, include_archived: bool = False) ->
     return row is not None
 
 
-def _attach_session_projects(sessions: List[Dict[str, Any]]) -> None:
+def _attach_session_projects(
+    sessions: List[Dict[str, Any]], db_path: Optional[Path] = None
+) -> None:
+    """Tag session rows with their chat project (``db_path``: the store they were listed from;
+    default the active home's state.db). READ-ONLY on purpose: it backs the GET /api/sessions
+    poll, which must never write (or checkpoint another writer's WAL), so a store without the
+    projects schema yet simply tags every row unassigned."""
     if not sessions:
         return
+    for session in sessions:
+        session.setdefault("project_id", None)
+        session.setdefault("project_name", None)
+        session.setdefault("project_archived", False)
 
-    conn = _chat_projects_connect()
+    import sqlite3
+
+    db_path = Path(db_path) if db_path is not None else _chat_projects_db_path()
+    if not db_path.exists():
+        return
+    conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
     try:
-        _ensure_chat_projects_schema(conn)
+        has_projects = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'chat_projects'"
+        ).fetchone()
+        session_cols = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        if not has_projects or "project_id" not in session_cols:
+            return
 
         ids = [str(s.get("id") or "") for s in sessions if s.get("id")]
         if not ids:

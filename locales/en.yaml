@@ -157,6 +157,7 @@ gateway:
     hygiene_timeout: "⚠️ Shortening the conversation history took too long, so I skipped it and kept everything as-is. Run /compress to try again or /new to start fresh."
     hygiene_timeout_doctor_hint: " If this keeps happening, run `clawk doctor` on the host."
     hygiene_failed: "⚠️ Shortening the conversation history failed, so I kept everything as-is. Run /compress to try again or /new to start fresh. If this keeps happening, run `clawk doctor` on the host."
+    hygiene_compacting: "🧹 Compacting a long conversation history ({count} messages) before replying — this can take a minute or two. Use /new if you'd rather start fresh."
     codex_nothing: "🗜️ Nothing to compact: this session runs on the Codex app-server runtime, whose context lives in a Codex-owned thread that only exists while the agent is active. Send a message first, then /compress — or /reset to start fresh."
     codex_compacted: "🗜️ Codex app-server thread compacted (thread/compact). The transcript mirror is unchanged by design — the app-server now carries the compacted context."
     codex_incomplete: "⚠️ Codex app-server compaction did not complete — the thread is unchanged. Check the app-server logs, retry /compress, or /reset for a clean session."

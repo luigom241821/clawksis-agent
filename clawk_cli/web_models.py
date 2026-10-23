@@ -334,6 +334,12 @@ class CronJobCreate(BaseModel):
     enabled_toolsets: Optional[list[str]] = None
     workdir: Optional[str] = None
     no_agent: bool = False
+    # Clawksis per-job toggles (cron.jobs.create_job defaults) + provider:model fallback chain.
+    silent_notice: bool = True
+    use_soul: bool = True
+    use_user_md: bool = True
+    use_memory: bool = False
+    fallback_models: Optional[list[Any] | str] = None
 
 class CronJobUpdate(BaseModel):
     updates: dict

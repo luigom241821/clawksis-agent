@@ -777,6 +777,18 @@ _LADDER: tuple[tuple[Callable[[_Request], bool], Callable[[_Request], Optional[d
 )
 
 
+def _never_reject_ollama(req: _Request, verdict: dict[str, Any]) -> dict[str, Any]:
+    """Fork: raw ``ollama`` is a first-class local provider whose models come from the live picker
+    row (``_lap_ollama_row``). A listing hiccup or a hidden/aliased tag must never REJECT a switch to
+    a model just listed: accept and persist (the rejecting branch's note says "not saved")."""
+    if verdict["accepted"] or str(req.provider or "").strip().lower() != "ollama":
+        return verdict
+    return _soft_accept(
+        f"Note: could not verify `{req.requested}` against this Ollama endpoint's model listing; "
+        "Clawksis saved it anyway."
+    )
+
+
 def validate_requested_model(
     model_name: str,
     provider: Optional[str],
@@ -807,5 +819,5 @@ def validate_requested_model(
         if gate(req):
             verdict = branch(req)
             if verdict is not None:
-                return verdict
+                return _never_reject_ollama(req, verdict)
     raise AssertionError("unreachable: _validate_catalog_fallback always decides")

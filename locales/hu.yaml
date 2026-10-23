@@ -157,6 +157,7 @@ gateway:
     hygiene_timeout: "⚠️ A beszélgetési előzmények rövidítése túl sokáig tartott, ezért kihagytam, és mindent változatlanul hagytam. Futtasd a /compress parancsot az újrapróbáláshoz, vagy a /new parancsot a tiszta kezdéshez."
     hygiene_timeout_doctor_hint: " Ha ez rendszeresen előfordul, futtasd a `clawk doctor` parancsot a gazdagépen."
     hygiene_failed: "⚠️ A beszélgetési előzmények rövidítése nem sikerült, ezért mindent változatlanul hagytam. Futtasd a /compress parancsot az újrapróbáláshoz, vagy a /new parancsot a tiszta kezdéshez. Ha ez rendszeresen előfordul, futtasd a `clawk doctor` parancsot a gazdagépen."
+    hygiene_compacting: "🧹 Egy hosszú beszélgetési előzmény ({count} üzenet) tömörítése a válasz előtt — ez egy-két percig is eltarthat. Használd a /new parancsot, ha inkább újrakezdenéd."
     codex_nothing: "🗜️ Nincs mit tömöríteni: ez a munkamenet a Codex app-server futtatókörnyezeten fut, amelynek kontextusa egy Codex által kezelt szálban él, és csak addig létezik, amíg az ügynök aktív. Küldj előbb egy üzenetet, majd /compress — vagy /reset a tiszta kezdéshez."
     codex_compacted: "🗜️ A Codex app-server szál tömörítve (thread/compact). Az átirat tükre szándékosan változatlan — a tömörített kontextust mostantól az app-server hordozza."
     codex_incomplete: "⚠️ A Codex app-server tömörítése nem fejeződött be — a szál változatlan. Nézd meg az app-server naplóit, próbáld újra a /compress parancsot, vagy /reset a tiszta munkamenethez."

@@ -1,6 +1,10 @@
 ---
 name: ai-agent-business-research
-description: Research and validate AI agent business opportunities—market sizing, competitive landscape, underserved niches, pricing models, and go-to-market for Clawksis-based products.
+description: "Validate AI agent business ideas: market, rivals, pricing."
+version: 1.0.0
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 tags:
   - business-research
   - market-analysis

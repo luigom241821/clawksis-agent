@@ -154,6 +154,7 @@ gateway:
     hygiene_timeout: "⚠️ 精简对话历史耗时过长，已跳过并保持原样。运行 /compress 重试，或用 /new 重新开始。"
     hygiene_timeout_doctor_hint: " 如果反复出现，请在主机上运行 `clawk doctor`。"
     hygiene_failed: "⚠️ 精简对话历史失败，已保持原样。运行 /compress 重试，或用 /new 重新开始。如果反复出现，请在主机上运行 `clawk doctor`。"
+    hygiene_compacting: "🧹 正在回复前压缩较长的对话历史（{count} 条消息）— 可能需要一两分钟。如果想重新开始，请使用 /new。"
     codex_nothing: "🗜️ 没有可压缩的内容：此会话运行在 Codex app-server 运行时上，其上下文保存在 Codex 管理的线程中，仅在代理活跃时存在。请先发送一条消息再 /compress——或用 /reset 重新开始。"
     codex_compacted: "🗜️ Codex app-server 线程已压缩（thread/compact）。转录副本按设计保持不变——压缩后的上下文现由 app-server 承载。"
     codex_incomplete: "⚠️ Codex app-server 压缩未完成——线程保持不变。请检查 app-server 日志、重试 /compress，或用 /reset 开始一个干净的会话。"

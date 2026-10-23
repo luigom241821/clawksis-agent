@@ -426,6 +426,8 @@ def _create_session(rid, params: dict, *, copy_parent_history: bool = False) -> 
             "create_reasoning_override": create_reasoning_override,
             "create_service_tier_override": create_service_tier_override,
             "parent_session_id": parent_session_id, "pending_title": _str_param(params, "title") or None,
+            # Chat project (Clawksis): persisted on the row, applied as an instruction overlay each turn.
+            "project_id": _str_param(params, "project_id") or None,
             "pending_hidden": _flag(params, "hidden"), "room_plumbing": _flag(params, "room_plumbing"),
             "follow_profile_config": _flag(params, "follow_profile_config"),
             "profile_home": str(profile_home) if profile_home is not None else None,
@@ -467,6 +469,8 @@ def _create_session(rid, params: dict, *, copy_parent_history: bool = False) -> 
         # the row itself (AIAgent INSERT-OR-IGNORE) with cwd=None, and the sidebar then drops it to Home. Local
         # project drafts stay lazy — their cwd reaches the row on the first prompt (no "Untitled" litter).
         _ensure_session_db_row(_sessions[sid])
+    # Rows persisted above carry the chat project now; a lazy draft gets it from _ensure_session_db_row.
+    _persist_session_project_id(_sessions[sid], key)
     # Return immediately so Ink can paint; the AIAgent builds right after the flush.
     _schedule_agent_build(sid)
     _schedule_session_cap_enforcement()  # trim detached idle sessions over the cap
@@ -980,9 +984,11 @@ def _resume_cold(ctx: _Resume) -> dict:
         return reused
     _schedule_agent_build(sid)
     _schedule_session_cap_enforcement()  # trim detached idle sessions over the cap
+    auto_continue = _maybe_schedule_auto_continue(sid, record, ctx.target)
+    if auto_continue is None:  # the durable journal only when crash auto-continue did not dispatch
+        _maybe_resume_pending_turn(sid, record, ctx.target)
     return _resume_response(ctx, sid, record, info=ctx.info(cwd, overrides), display=display_history,
-                            count_source=raw_history,
-                            auto_continue=_maybe_schedule_auto_continue(sid, record, ctx.target))
+                            count_source=raw_history, auto_continue=auto_continue)
 
 
 def _resume_eager(ctx: _Resume) -> dict:
@@ -1040,10 +1046,12 @@ def _resume_eager(ctx: _Resume) -> dict:
                     _sessions.pop(sid, None)
             return _err(ctx.rid, 5000, resume_failed_message(e))
         session = _sessions.get(sid) or {}
+    auto_continue = _maybe_schedule_auto_continue(sid, session, ctx.target) if session else None
+    if session and auto_continue is None:  # the durable journal only when auto-continue did not dispatch
+        _maybe_resume_pending_turn(sid, session, ctx.target)
     return _resume_response(
         ctx, sid, session, info=_session_info(agent, session), display=display_history, count_source=raw_history,
-        started_at=float(session.get("created_at") or time.time()),
-        auto_continue=_maybe_schedule_auto_continue(sid, session, ctx.target) if session else None)
+        started_at=float(session.get("created_at") or time.time()), auto_continue=auto_continue)
 
 
 @method("session.resume")
@@ -1180,8 +1188,13 @@ def _(rid, params: dict) -> dict:
     snapshot, err = _snapshot_sessions(rid)
     if err:
         return err
-    if any(s.get("session_key") == target for _sid, s in snapshot):
-        return _err(rid, 4023, "cannot delete an active session")
+    # A live but IDLE session must not block a deliberate delete (Clawksis): close it first. Only a
+    # running turn keeps the refusal — deleting under a working agent would corrupt the turn.
+    for live_sid in [sid for sid, s in snapshot if s.get("session_key") == target]:
+        if not _close_session_by_id(live_sid, end_reason="deleted_by_user",
+                                    predicate=lambda s: not s.get("running")) and live_sid in _sessions:
+            return _err(rid, 4023, "cannot delete an active session — a turn is still running "
+                                   "(/interrupt it first)")
     profile_home = _profile_home((params.get("profile") or "").strip() or None)
     with _profile_db(params, writer=True) as db:
         if db is None:
@@ -1445,15 +1458,20 @@ def _(rid, params: dict) -> dict:
 
 
 # ── usage ────────────────────────────────────────────────────────────
-@_session_method("session.usage")
-def _(rid, params: dict, session: dict) -> dict:
-    usage: dict = _session_usage_snapshot(session)
-    if session.get("agent") is None and not usage:
-        usage = {"calls": 0, "input": 0, "output": 0, "total": 0}
-    # Nous credits are agent-independent (portal fetch); fail-open when absent.
-    from agent.account_usage import nous_credits_usage_fields  # never raises (fail-open inside)
-    usage.update(nous_credits_usage_fields(session.get("agent")))
-    return _ok(rid, usage)
+@method("session.usage")
+def _(rid, params: dict) -> dict:
+    session = _sessions.get(params.get("session_id") or "")
+    if session is None:
+        # Not live-loaded (a cron/detached row the chat UI polls during token restore): durable usage
+        # from the sessions row instead of a 4001 per refresh. Unknown keys yield empty usage.
+        key = _str_param(params, "session_id") or _str_param(params, "session_key")
+        row = None
+        if key and (db := _get_db()) is not None:
+            with contextlib.suppress(Exception):
+                row = db.get_session(key) or None
+        return _ok(rid, _usage_from_session_row(row))
+    # Live counters reset with the process; the row is the durable source when they read zero.
+    return _ok(rid, _session_usage_with_db_fallback(session, params))
 
 
 @_session_method("session.context_breakdown")

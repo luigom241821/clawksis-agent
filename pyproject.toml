@@ -236,6 +236,10 @@ exa = ["exa-py==2.10.2"]
 firecrawl = ["firecrawl-py==4.17.0"]
 parallel-web = ["parallel-web==0.4.2"]
 ddgs = ["ddgs==9.16.0"]
+# ScrapeGraphAI: local LLM-driven structured scraping (`scrapegraph` tool + web-extract
+# backend). Heavy langchain + playwright stack, so it is opt-in (see [tool.clawk]) and
+# installs on first use via pm.ensure_import("scrapegraph"). No playwright on android.
+scrapegraph = ["scrapegraphai==2.3.1; sys_platform != 'android'"]
 # Image generation backends
 fal = ["fal-client==0.13.1"]
 # Edge TTS — default TTS provider but still optional (users can pick
@@ -568,8 +572,9 @@ clawk-acp = "acp_adapter.entry:main"
 # Extras that only an explicit selection installs (setup, sync_venv). Bundles
 # build with --all-extras and pass --no-extra for each of these, so their
 # closures never ship. KittenTTS pulls torch, transformers and spaCy through
-# misaki[en]: installed when the user picks it, not preinstalled.
-opt-in-extras = ["kittentts"]
+# misaki[en]: installed when the user picks it, not preinstalled. ScrapeGraphAI
+# pulls the langchain stack: installed on first use of the scrapegraph tool.
+opt-in-extras = ["kittentts", "scrapegraph"]
 
 # Per-extra platform gates (settled 2026-09-02): an extra listed here is
 # only installable on platforms matching the marker. pm consults this
@@ -600,6 +605,7 @@ kittentts = "(platform_machine != 'ARM64' or sys_platform != 'win32') and (platf
 piper = "(platform_machine != 'ARM64' or sys_platform != 'win32') and (platform_machine != 'x86_64' or sys_platform != 'darwin') and sys_platform != 'android'"
 # no playwright on android
 google-meet = "sys_platform != 'android'"
+scrapegraph = "sys_platform != 'android'"
 
 [tool.uv]
 # uv otherwise enables the dev group by default, including in payload builds.

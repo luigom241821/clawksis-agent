@@ -1,5 +1,5 @@
 """Memory provider plugin discovery: bundled ``plugins/memory/<name>/``, user
-``$CLAWK_HOME/plugins/<name>/``, project ``./.clawk/plugins/<name>/`` (opt-in via
+``$CLAWK_HOME/plugins/<name>/``, project ``./.clawksis/plugins/<name>/`` (opt-in via
 CLAWK_ENABLE_PROJECT_PLUGINS), then ``clawk_agent.memory_providers`` entry points.
 Precedence is deliberately the REVERSE of PluginManager's later-source-wins:
 bundled wins, then user, project, entry point — a provider is activated by name
@@ -50,14 +50,14 @@ _get_user_plugins_dir = _loader.user_plugins_dir
 
 
 def _get_project_plugins_dir() -> Optional[Path]:
-    """``./.clawk/plugins/`` or None. Gated on CLAWK_ENABLE_PROJECT_PLUGINS like the
+    """``./.clawksis/plugins/`` or None. Gated on CLAWK_ENABLE_PROJECT_PLUGINS like the
     PluginManager scan: a repo you merely ``cd`` into must not offer a memory backend."""
     try:
         from clawk_cli.plugins import _env_enabled
 
         if not _env_enabled("CLAWK_ENABLE_PROJECT_PLUGINS"):
             return None
-        d = Path.cwd() / ".clawk" / "plugins"
+        d = Path.cwd() / ".clawksis" / "plugins"
         return d if d.is_dir() else None
     except Exception:
         return None

@@ -13,7 +13,7 @@ from clawk_cli.auth import PROVIDER_REGISTRY
 
 @pytest.mark.parametrize("provider, expected, forbidden", [
     ("minimax-oauth", "clawk auth add minimax-oauth", "MINIMAX-OAUTH_API_KEY"),
-    ("alibaba", "Set the DASHSCOPE_API_KEY environment variable", "ALIBABA_API_KEY"),
+    ("alibaba", "Add DASHSCOPE_API_KEY to the .env file", "ALIBABA_API_KEY"),
 ])
 def test_aux_ladder_names_registry_remedy_for_explicit_provider(tmp_path, monkeypatch, provider, expected, forbidden):
     """Real call_llm → ladder with the compression provider pinned and no credentials anywhere."""
@@ -51,7 +51,7 @@ def test_main_init_shares_helper_and_no_registry_provider_gets_an_invented_env_v
         if invented in message:
             assert invented in pconfig.api_key_env_vars, (pid, message)
         if not pconfig.api_key_env_vars:
-            assert "_API_KEY environment variable" not in message, (pid, message)
+            assert "_API_KEY to the .env" not in message, (pid, message)
 
 
 def _write_exhausted_codex_pool(home, *, count: int, reset_at: float):

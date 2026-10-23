@@ -152,7 +152,9 @@ class TestFallbackChain:
 
     """
 
-    PRIMARY = "https://github.com/samuelgradientai-sys/clawksis-agent"
+    PRIMARY = (
+        "https://samuelgradientai-sys.github.io/clawksis-agent/api/model-catalog.json"
+    )
     FALLBACK = (
         "https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent"
         "/main/website/static/api/model-catalog.json"

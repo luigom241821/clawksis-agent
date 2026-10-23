@@ -1342,3 +1342,35 @@ def test_picker_payload_omits_ids_the_validator_rejects_for_whitespace():
     assert "claude-opus-4.6" in by_slug["anthropic"]
     assert "Go reasoning" in by_slug["omniroute"]
     assert "Meta Llama 3.1 8B" in by_slug["lmstudio"]
+
+
+class TestOllamaNeverRejected:
+    """Fork: a switch to a provider=ollama model (listed live by the Ollama picker row) is never
+    rejected, even when the endpoint's listing is unreachable; other custom endpoints still are."""
+
+    _UNREACHABLE = {
+        "models": None,
+        "probed_url": None,
+        "resolved_base_url": "https://ollama.com/v1",
+        "suggested_base_url": None,
+        "used_fallback": False,
+    }
+
+    def test_unreachable_listing_still_accepts_ollama(self):
+        with (
+            patch("clawk_cli.models.fetch_api_models", return_value=None),
+            patch("clawk_cli.models.probe_api_models", return_value=self._UNREACHABLE),
+        ):
+            ollama = validate_requested_model(
+                "ghost-model", "ollama", base_url="https://ollama.com/v1"
+            )
+            custom = validate_requested_model(
+                "ghost-model", "custom", base_url="https://ollama.com/v1"
+            )
+        assert (ollama["accepted"], ollama["persist"], ollama["recognized"]) == (
+            True,
+            True,
+            False,
+        )
+        assert "not saved" not in ollama["message"]
+        assert custom["accepted"] is False

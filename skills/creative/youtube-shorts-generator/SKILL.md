@@ -1,7 +1,14 @@
 ---
 name: youtube-shorts-generator
-description: Pipeline completo para generar Shorts de YouTube automáticamente con Clawksis. Script → Voz (edge-tts) → Stock footage (Pixabay) → Edición (ffmpeg + Pillow) → Export MP4. Preparado para YouTube OAuth y cronjobs.
+description: "Genera Shorts de YouTube: guion, voz, stock y edición."
+version: 1.0.0
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 category: creative
+metadata:
+  clawk:
+    tags: [youtube, shorts, video, tts, edge-tts, ffmpeg, pixabay, automation]
 ---
 
 # YouTube Shorts Generator Pipeline

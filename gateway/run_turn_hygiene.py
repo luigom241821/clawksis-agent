@@ -38,6 +38,13 @@ if TYPE_CHECKING:  # string annotations only; never imported at runtime (cycle)
 # Log-record parity with the origin module.
 logger = logging.getLogger("gateway.run")
 
+# Count-trigger refire guard (Clawksis): after a count-triggered pass leaves the transcript at/above
+# ``hard_msg_limit``, count-only retries wait until the session grows by this many messages.
+_HYG_COUNT_REFIRE_GROWTH = 25
+# Sessions this large get a visible "compacting" notice before the blocking summarization.
+_HYG_NOTICE_MIN_TOKENS = 40_000
+_HYG_NOTICE_MIN_MESSAGES = 150
+
 
 class GatewayTurnHygieneMixin:
     @dataclasses.dataclass
@@ -48,6 +55,8 @@ class GatewayTurnHygieneMixin:
         approx_tokens: int
         msg_count: int
         warn_token_threshold: int
+        # Message count reached ``hard_msg_limit`` (the token threshold may or may not also have).
+        count_triggered: bool = False
 
     @staticmethod
     def _hmwa_hygiene_read_config(hs, data):
@@ -188,7 +197,29 @@ class GatewayTurnHygieneMixin:
 
         # Hard safety valve: force compression at an extreme message count regardless of tokens,
         # breaking the disconnect → no token data → no compression spiral. 5000 clears 1M+ sessions.
-        _needs_compress = _approx_tokens >= _compress_token_threshold or _msg_count >= hs.hard_msg_limit
+        _token_triggered = _approx_tokens >= _compress_token_threshold
+        _count_triggered = _msg_count >= hs.hard_msg_limit
+        _needs_compress = _token_triggered or _count_triggered
+
+        # Count-trigger refire guard: the compactor's verbatim tail is token-budgeted, so on
+        # large-context models a pass can succeed yet leave the COUNT above the limit — without this
+        # the count trigger refires on EVERY message, blocking each turn for a minutes-long summary
+        # (a frozen bot). Suppress count-only retries until the session grows enough to give another
+        # pass new material. The token trigger is the real safety valve and is never suppressed.
+        _count_guard = self._hmwa_hygiene_count_guard()
+        if not _count_triggered:
+            # Back below the limit (manual /compress, reset...): drop any stale marker.
+            _count_guard.pop(session_entry.session_id, None)
+        elif not _token_triggered:
+            _guard_count = _count_guard.get(session_entry.session_id)
+            if _guard_count is not None and _msg_count <= _guard_count + _HYG_COUNT_REFIRE_GROWTH:
+                logger.info(
+                    "Session hygiene: skipping count-triggered compression for session %s — a "
+                    "previous pass left %s messages (limit %s) and the session has not grown by %s "
+                    "since; retrying would block the turn without shrinking the transcript",
+                    session_entry.session_id, _guard_count, hs.hard_msg_limit, _HYG_COUNT_REFIRE_GROWTH,
+                )
+                _needs_compress = False
 
         if _needs_compress:
             # DB-backed cooldown (shared with context_compressor.py): survives gateway restarts, so a
@@ -225,7 +256,9 @@ class GatewayTurnHygieneMixin:
                 _msg_count, f"{_approx_tokens:,}", _token_source,
                 int(hs.threshold_pct * 100), f"{_hyg_context_length:,}", f"{_compress_token_threshold:,}",
             )
-        return self._HygienePlan(_needs_compress, _approx_tokens, _msg_count, _warn_token_threshold)
+        return self._HygienePlan(
+            _needs_compress, _approx_tokens, _msg_count, _warn_token_threshold, _count_triggered,
+        )
 
     async def _hmwa_hygiene_wait_for_summary(self, attempt, hs, session_entry):
         """Progress-aware inline wait for the detached hygiene compressor. Returns the compressed
@@ -593,6 +626,19 @@ class GatewayTurnHygieneMixin:
             attempt, _compressed, history, plan, session_entry=session_entry, source=source,
             _quick_key=_quick_key, run_generation=run_generation,
         )
+        if plan.count_triggered:
+            # Keyed by the CURRENT session id (a rotation's id is what the next turn loads). An
+            # ineffective pass (count still at/above the limit) must not repeat on every message.
+            _count_guard = self._hmwa_hygiene_count_guard()
+            if _new_count >= hs.hard_msg_limit:
+                _count_guard[session_entry.session_id] = _new_count
+                logger.warning(
+                    "Session hygiene: compaction left %s messages (still ≥ hard limit %s) — "
+                    "suppressing count-triggered retries until the session grows by %s messages",
+                    _new_count, hs.hard_msg_limit, _HYG_COUNT_REFIRE_GROWTH,
+                )
+            else:
+                _count_guard.pop(session_entry.session_id, None)
         # Summary failure aborts the compressor (nothing dropped). Warn the user visibly — agent.log
         # is invisible on TG/Discord — so they know the chat is "frozen" and can /compress or /reset.
         _comp = getattr(attempt.agent, "context_compressor", None)
@@ -661,6 +707,37 @@ class GatewayTurnHygieneMixin:
             _hyg_codex_outcome, session_entry.session_id, _hyg_codex_auto, f"{plan.approx_tokens:,}",
         )
 
+    def _hmwa_hygiene_count_guard(self) -> dict[str, int]:
+        """session_id -> message count an ineffective count-triggered pass left (lazy: runners
+        built without ``__init__`` in tests have no attribute yet)."""
+        guard = getattr(self, "_hygiene_count_guard", None)
+        if guard is None:
+            guard = self._hygiene_count_guard = {}
+        return guard
+
+    @staticmethod
+    def _hmwa_hygiene_cap_tail_budget(agent, hs, plan):
+        """Count-triggered passes must shrink the message COUNT, not just tokens: the verbatim tail
+        (summary_target_ratio × context ⇒ ~200K tokens on a 1M model) can keep hundreds of messages,
+        so the fold never gets below the limit. Cap it to ~1/8 of the limit in messages at the
+        current average size. Only ever lowers the budget."""
+        _comp = getattr(agent, "context_compressor", None)
+        if _comp is None or not hasattr(_comp, "tail_token_budget"):
+            return
+        _avg_msg_tokens = max(1, int(plan.approx_tokens) // max(1, plan.msg_count))
+        _tail_msgs_target = max(24, hs.hard_msg_limit // 8)
+        _capped_budget = _avg_msg_tokens * _tail_msgs_target
+        try:
+            if _capped_budget < int(_comp.tail_token_budget):
+                _comp.tail_token_budget = _capped_budget
+                logger.info(
+                    "Session hygiene: count-triggered — capping verbatim tail budget to ~%s tokens "
+                    "(≈%s messages) so compaction reduces the message count",
+                    f"{_capped_budget:,}", _tail_msgs_target,
+                )
+        except (TypeError, ValueError):
+            pass
+
     async def _hmwa_hygiene_build_agent(self, _hyg_model, _hyg_runtime, session_entry):
         """Build the detached hygiene ``AIAgent`` with the live session's system prompt. Returns
         ``(agent, sync_session_db)``."""
@@ -716,6 +793,15 @@ class GatewayTurnHygieneMixin:
             # Never finalize on close() — that would end the live gateway session row.
             _hyg_agent._end_session_on_close = False
             _hyg_agent._print_fn = lambda *a, **kw: None
+            if plan.count_triggered:
+                self._hmwa_hygiene_cap_tail_budget(_hyg_agent, hs, plan)
+            # The summary BLOCKS this turn and can take minutes on a large transcript; silence reads
+            # as a frozen bot, so tell the user first. Small sessions compress in seconds, silently.
+            if plan.approx_tokens >= _HYG_NOTICE_MIN_TOKENS or plan.msg_count >= _HYG_NOTICE_MIN_MESSAGES:
+                await self._hmwa_hygiene_notify(
+                    source, attempt.meta, t("gateway.compress.hygiene_compacting", count=plan.msg_count),
+                    "hygiene compaction notice",
+                )
 
             loop = asyncio.get_running_loop()
             _hyg_commit_fence = CompressionCommitFence(total_ceiling_seconds=hs.total_ceiling_seconds)

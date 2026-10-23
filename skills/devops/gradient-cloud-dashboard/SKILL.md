@@ -1,6 +1,7 @@
 ---
 name: gradient-cloud-dashboard
-description: "Use when interacting with the Gradient Cloud SaaS dashboard — authenticating, navigating, and sending WhatsApp messages through the UI. Covers Supabase auth injection, session management, browser automation, and troubleshooting common pitfalls."
+description: "Use the Gradient Cloud dashboard to send WhatsApp messages."
+platforms: [linux, macos, windows]
 version: 3.0.0
 author: Clawksis
 license: MIT
@@ -299,7 +300,7 @@ SELECT * FROM messages WHERE conversation_id = '{conv_id}' ORDER BY created_at A
 1. **Cloudflared tunnel hangs with QUIC protocol**: Sometimes cloudflared's default QUIC connection gets stuck during the pre-check phase and never emits the `trycloudflare.com` URL. The process stays alive but never completes registration.
    - **Fix**: Kill the hanging instance and restart with `--protocol http2`: `cloudflared tunnel --url http://127.0.0.1:PORT --protocol http2`
    - **Diagnosis**: If the tunnel has been running for 30+ seconds but `trycloudflare.com` never appears in stdout, it's stuck. HTTP/2 mode consistently completes within 3-5 seconds.
-   - **Persistence**: After the tunnel is established, the trycloudflare.com URL stays in the log file. Save it to `/tmp/cloudflared.log` with `2>/tmp/cloudflared.log` for later retrieval.
+   - **Persistence**: After the tunnel is established, the trycloudflare.com URL stays in the log file. Save it to `${TMPDIR:-/tmp}/cloudflared.log` with `2>"${TMPDIR:-/tmp}/cloudflared.log"` for later retrieval.
 
 2. **API key truncation**: Pass in 10-char chunks to avoid the `...` display bug
 2. **Mixed content blocking**: Don't serve data from HTTP localhost — always use XHR/fetch to Supabase's HTTPS endpoint directly

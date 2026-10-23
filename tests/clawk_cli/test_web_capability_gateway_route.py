@@ -1,12 +1,9 @@
-"""Each web capability picks its own route: the user's own key or the Nous Tool Gateway.
+"""Each web capability picks its own backend from the user's own keys (Clawksis is BYOK).
 
-"Use for Extract" on the Nous Subscription row must send extract through the gateway while search
-keeps the user's own Firecrawl key, and the toolset-level Nous pick must take both back. Before the
-fix the managed pick wrote "firecrawl", which reads as the BYOK key, so the gateway was unreachable
-per capability (#100513).
+Upstream also offers a "Nous Subscription" row that routes a capability through the Nous Tool
+Gateway. Clawksis never offers it: the picker rejects that row, the config payload carries no
+``*_via_nous`` routing flags, and a per-capability pick writes the vendor's own backend name.
 """
-
-import types
 
 import pytest
 
@@ -24,28 +21,23 @@ def client(monkeypatch, _isolate_clawk_home):
     return test_client
 
 
-def test_web_capability_picks_choose_own_key_or_nous_gateway(client, monkeypatch):
-    import plugins.web.firecrawl.provider as fc
-    import tools.web_tools as wt
+def test_web_capability_picks_use_own_keys_and_never_the_nous_gateway(client, monkeypatch):
     from clawk_cli.config import load_config
 
     monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-own-key")
-    monkeypatch.setattr(fc._gateway, "resolve_managed_tool_gateway", lambda *a, **k: types.SimpleNamespace(
-        nous_user_token="nous-tok", gateway_origin="https://firecrawl-gateway.example"))
-    monkeypatch.setattr(fc, "Firecrawl", lambda **kw: types.SimpleNamespace(kwargs=kw), raising=False)
-    monkeypatch.setattr(wt, "_firecrawl_client", None, raising=False)
 
-    def put(**body):
-        assert client.put("/api/tools/toolsets/web/provider", json=body).status_code == 200
+    def put(expect=200, **body):
+        resp = client.put("/api/tools/toolsets/web/provider", json=body)
+        assert resp.status_code == expect, resp.text
         return client.get("/api/tools/toolsets/web/config").json()
 
-    put(provider="Firecrawl", capability="search")
-    data = put(provider="Nous Subscription", capability="extract")
-    assert (data["search_via_nous"], data["extract_via_nous"]) == (False, True)
-    assert fc._get_firecrawl_client("search").kwargs["api_key"] == "fc-own-key"
-    assert fc._get_firecrawl_client("extract").kwargs["api_key"] == "nous-tok"
+    data = put(provider="Firecrawl", capability="search")
+    assert load_config()["web"]["search_backend"] == "firecrawl"
+    assert "search_via_nous" not in data and "extract_via_nous" not in data
+    assert not [p for p in data["providers"] if p["name"] == "Nous Subscription"]
 
-    data = put(provider="Nous Subscription")
+    put(expect=400, provider="Nous Subscription", capability="extract")
+    put(expect=400, provider="Nous Subscription")
     web = load_config()["web"]
-    assert not web.get("search_backend") and not web.get("extract_backend")
-    assert (data["search_via_nous"], data["extract_via_nous"]) == (True, True)
+    assert web.get("search_backend") == "firecrawl"
+    assert "nous" not in {web.get("backend"), web.get("search_backend"), web.get("extract_backend")}

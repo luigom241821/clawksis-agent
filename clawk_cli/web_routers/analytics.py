@@ -301,6 +301,17 @@ def _attach_tool_calls(db, cutoff: float, raw_rows: list[dict[str, Any]]) -> Non
             target["tool_calls"] += calls
 
 
+def _hidden_models() -> set[str]:
+    """``dashboard.hidden_models`` (written by POST /api/analytics/models/hide); empty on any error."""
+    try:
+        from clawk_cli.config import cfg_get, load_config
+
+        raw = cfg_get(load_config(), "dashboard", "hidden_models", default=None)
+    except Exception:
+        return set()
+    return {str(h) for h in raw} if isinstance(raw, list) else set()
+
+
 def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
     """Per-model token/cost/session breakdown plus models.dev capability metadata."""
     db = _open_session_db_for_profile(profile, read_only=True)
@@ -375,6 +386,12 @@ def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
             key=lambda r: (r.get("input_tokens") or 0) + (r.get("output_tokens") or 0),
             reverse=True,
         )
+        # Models the user hid from the Models page (sessions untouched; Clawksis):
+        # ``dashboard.hidden_models`` entries are "provider|model" (or a bare model).
+        hidden = _hidden_models()
+        rows = [r for r in rows
+                if f"{r.get('billing_provider') or ''}|{r['model']}" not in hidden
+                and r["model"] not in hidden]
 
         models = [
             {

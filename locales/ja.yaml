@@ -154,6 +154,7 @@ gateway:
     hygiene_timeout: "⚠️ 会話履歴の短縮に時間がかかりすぎたためスキップし、すべてをそのまま保持しました。再試行するには /compress、新しく始めるには /new を実行してください。"
     hygiene_timeout_doctor_hint: " 繰り返し発生する場合は、ホストで `clawk doctor` を実行してください。"
     hygiene_failed: "⚠️ 会話履歴の短縮に失敗したため、すべてをそのまま保持しました。再試行するには /compress、新しく始めるには /new を実行してください。繰り返し発生する場合は、ホストで `clawk doctor` を実行してください。"
+    hygiene_compacting: "🧹 返信の前に長い会話履歴（{count} 件のメッセージ）を圧縮しています — 1〜2分かかる場合があります。最初からやり直したい場合は /new を使ってください。"
     codex_nothing: "🗜️ 圧縮するものがありません: このセッションは Codex app-server ランタイムで動作しており、そのコンテキストはエージェントの動作中にのみ存在する Codex 管理のスレッドにあります。先にメッセージを送ってから /compress を実行するか、/reset で新しく始めてください。"
     codex_compacted: "🗜️ Codex app-server のスレッドを圧縮しました (thread/compact)。トランスクリプトのミラーは設計上変更されません。圧縮後のコンテキストは app-server が保持します。"
     codex_incomplete: "⚠️ Codex app-server の圧縮が完了しなかったため、スレッドは変更されていません。app-server のログを確認し、/compress を再試行するか、/reset でクリーンなセッションを始めてください。"

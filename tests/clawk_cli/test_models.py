@@ -1549,3 +1549,43 @@ class TestAzureFoundryPickerCatalog:
         monkeypatch.setattr(_models_mod, "_get_model_config_dict",
                             lambda: {"provider": "azure-foundry", "base_url": "https://b.openai.azure.com/openai/v1"})
         assert _models_mod._credential_fingerprint("azure-foundry") != fp_a
+
+
+def test_running_ollama_daemon_surfaces_its_own_picker_row():
+    """Fork: a running local Ollama lists its pulled models as an "Ollama (local)" row."""
+    from clawk_cli.model_switch import list_authenticated_providers
+
+    with (
+        patch("clawk_cli.config.load_config", return_value={"providers": {}}),
+        patch("clawk_cli.cookbook.ollama_running", return_value=True),
+        patch(
+            "clawk_cli.cookbook.ollama_models",
+            return_value=["qwen3:1.7b", "llama3.2:3b"],
+        ),
+    ):
+        rows = list_authenticated_providers(
+            current_provider="ollama", user_providers={}, max_models=1
+        )
+        excluded = list_authenticated_providers(
+            user_providers={}, excluded_providers=["ollama"]
+        )
+
+    row = next(r for r in rows if r["slug"] == "ollama")
+    assert (row["name"], row["source"], row["is_current"]) == (
+        "Ollama (local)",
+        "local",
+        True,
+    )
+    assert (row["models"], row["total_models"]) == (["qwen3:1.7b"], 2)
+    assert not any(r["slug"] == "ollama" for r in excluded)
+
+
+def test_stopped_ollama_daemon_adds_no_picker_row():
+    from clawk_cli.model_switch import list_authenticated_providers
+
+    with (
+        patch("clawk_cli.config.load_config", return_value={"providers": {}}),
+        patch("clawk_cli.cookbook.ollama_running", return_value=False),
+    ):
+        rows = list_authenticated_providers(user_providers={})
+    assert not any(r["slug"] == "ollama" for r in rows)

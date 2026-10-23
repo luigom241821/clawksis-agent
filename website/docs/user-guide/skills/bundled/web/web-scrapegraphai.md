@@ -1,0 +1,321 @@
+---
+title: "Scrapegraphai — Extract structured JSON from web pages with ScrapeGraphAI"
+sidebar_label: "Scrapegraphai"
+description: "Extract structured JSON from web pages with ScrapeGraphAI"
+---
+
+{/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
+
+# Scrapegraphai
+
+Extract structured JSON from web pages with ScrapeGraphAI.
+
+## Skill metadata
+
+| | |
+|---|---|
+| Source | Bundled (installed by default) |
+| Path | `skills/web/scrapegraphai` |
+| Version | `1.9` |
+| Author | Clawksis |
+| License | MIT |
+| Platforms | linux, macos, windows |
+| Tags | `scraping`, `web`, `extraction`, `json`, `llm`, `scrapegraphai` |
+
+## Reference: full SKILL.md
+
+:::info
+The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
+:::
+
+# ScrapeGraphAI — structured web extraction
+
+Extract **structured data** (JSON) from web pages using the local `scrapegraphai` library driven by the agent's own LLM (text model configured in `auxiliary_client`). Zero paid scraping APIs — runs entirely on your infrastructure.
+
+Two surfaces use this module:
+
+| Surface | File | What it does |
+|---|---|---|
+| **`scrapegraph` tool** | `tools/scrapegraph_tool.py` | Direct agent tool: structured JSON via a natural-language prompt |
+| **`web_extract` backend** | `plugins/web/scrapegraphai/provider.py` | Auto-selected extract backend when library is installed (overrides Firecrawl/Browserbase) |
+
+## How it works
+
+1. The agent sends a plain-language prompt (e.g. "List every product with name, price and rating as JSON")
+2. ScrapeGraphAI renders the page (headless Chromium for dynamic JS, simple HTTP for static)
+3. The agent's own LLM (via `build_llm_config()`) extracts structured data matching the prompt
+4. Returns clean JSON — no need for CSS selectors or parsing code
+
+## When to Use
+
+You need structured JSON from a page (tables, prices, listings, contacts, specs) described in
+plain language, using the agent's own LLM and local infra instead of a paid scraping API
+(Firecrawl/Browserbase). Spanish requests too: extraer datos estructurados de una página web,
+convertir HTML a JSON, scraping con IA sin API paga.
+
+## When to use this vs `scrape` (Scrapling)
+
+| Tool | Best for | When to switch |
+|---|---|---|
+| **`scrapegraph`** | **Structured data** — "get me prices + specs as JSON", "extract the table of GPU models with TDP and price", contact info extraction from simple pages | Start here |
+| **`scrape` / Scrapling** | **Raw content** — "fetch this page as markdown", anti-bot bypass (Cloudflare), spiders/crawlers | ✅ Falls back when scrapegraph returns `"NA"` or `"Invalid json output"` |
+
+**⚠️ Common trap:** scrapegraph often fails on **long-form articles** (1000+ words), returning `"NA"` content. Don't burn tokens retrying — switch to `scrape` immediately. The LLM can't structurally parse dense text. Don't keep retrying — fall back to `scrape(url, mode="auto")` for raw markdown. See `references/scrapling-fallback.md` for the full decision tree and real examples.
+
+**v1.8 — the code now detects this for you:** when the extraction comes back as a failure sentinel (`"NA"`, `"N/A"`, `{"content": "NA"}`, empty dict), the `scrapegraph` tool returns `ok: false` with an actionable "use the `scrape` tool (Scrapling)" error instead of a fake-success `"NA"` blob — and the `web_extract` backend returns empty content + the same hint. Partial extractions (`{"title": "NA", "body": "real text"}`) are deliberately **kept**. So: if you see `ok: false` with that message, don't retry scrapegraph — go straight to `scrape`.
+
+**v1.9 — detection is now recursive and covers more LLM "nothing found" phrasings:** sentinels added (`"no content"`, `"no data"`, `"not found"`, `"nothing"`, `"empty"`, `"nil"`, `"undefined"`, ...) and nested shapes like `{"content": {"answer": "NA"}}` or `{"data": [{"content": "N/A"}]}` are caught too — anything whose values are *all* empty at *any* depth is empty; any real value anywhere keeps the result.
+
+**The library auto-installs on first use** (lazy deps via `tools.lazy_deps`). If lazy install is disabled, run manually:
+
+```bash
+pip install scrapegraphai
+python -m playwright install chromium  # only needed for JS-heavy pages
+```
+
+## Tool parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `url` | string | **required** | The page URL |
+| `urls` | array | optional | Multiple URLs (returns combined result) |
+| `prompt` | string | "Extract main content" | What to extract in plain language |
+| `output_schema` | object | optional | JSON Schema for forcing the output shape |
+| `render_js` | boolean | `true` | Render JavaScript with headless browser. ⚠️ On headless servers, NEVER set `false` — crashes (headed mode needs X server). Omit or set `true`. |
+| `timeout` | integer | `none` | Max seconds for the LLM extraction (min 10, max 300, clamped). Increase for large pages with many data points; set it to fail fast on slow models. Without it, extraction runs with no deadline. |
+
+## ❗ Critical: `render_js` and headless mode
+
+The code maps `render_js` to `headless` as follows (v1.6+ — non-bool values are
+treated as absent, they no longer go through `bool()` coercion):
+
+```python
+headless = _as_bool(render_js, default=True)  # only real bools pass through
+```
+
+| `render_js` | `headless` | Behaviour |
+|---|---|---|
+| not provided / `true` / any non-bool (`""`, `0`, `"false"`, ...) | `true` | ✅ Headless Chromium — works everywhere. Non-bools log a warning (`non-boolean render_js=...`) and fall back to headless so a sloppy model call can never flip into headed mode. |
+| `false` (real boolean) | `false` | ❌ **Headed mode** — requires X server (fails on headless servers) |
+
+**On a headless server (no screen / X server):** NEVER pass `render_js=false`. The error looks like:
+```
+BrowserType.launch: Target page, context or browser has been closed
+Missing X server or $DISPLAY
+```
+
+**Fix:** Omit `render_js` or set `render_js=true` (both use headless).
+
+If you genuinely need the page without JS execution, just let it use headless anyway — the difference is the browser window visibility, not JS execution.
+
+📎 See `references/headed-browser-error.md` for the exact error transcript and troubleshooting.
+
+## Known pitfalls
+
+### 1. `langchain-community` ChatOllama compat shim
+
+`scrapegraphai` imports `ChatOllama` from `langchain_community.chat_models`, but `langchain-community` v0.4+ removed it (moved to `langchain_ollama`). The fix lives in `tools/scrapegraph_common.py`:
+
+```python
+def _patch_langchain_community() -> None:
+    """Re-export ChatOllama into langchain_community.chat_models."""
+    try:
+        from langchain_ollama import ChatOllama as _ChatOllama_
+    except ImportError:
+        return
+    import langchain_community.chat_models as _lm
+
+    if not hasattr(_lm, "ChatOllama") or _lm.ChatOllama is not _ChatOllama_:
+        _lm.ChatOllama = _ChatOllama_
+```
+
+This runs automatically every time `ensure_installed()` is called (which is at the start of every extraction). If this fix breaks due to library updates, check whether `langchain_ollama` still exports `ChatOllama` and whether `langchain_community.chat_models` still exists as a module.
+
+### 2. Model routing via `build_llm_config()`
+
+The LLM config is built from the agent's **auxiliary text client** — the same model/key/base_url the agent is already configured with. This means:
+
+- ScrapeGraphAI does NOT need a separate API key
+- It uses whatever model you're already paying for (DeepSeek, Grok, Claude, GPT, local Ollama)
+- The config sends `"openai/<model>"` format + custom `base_url` via langchain's `ChatOpenAI`
+- Falls back to `OPENAI_API_KEY` or `OPENROUTER_API_KEY` env vars if auxiliary client isn't available
+- Falls back to `gpt-4o-mini` as model if nothing is configured
+
+### 3. LLM cost
+
+Each extraction costs LLM tokens — the model reads the page HTML and produces structured output. For large pages with many data points, this can be significant. For simple text extraction, prefer `web_extract` or `scrape`.
+
+### 4. Installation is lazy
+
+The library is **not** in the base install. It's a lazy dep registered as `"scrape.scrapegraph"` in `tools/lazy_deps.py`. First call triggers:
+
+```
+pip install scrapegraphai + chromium browser (if not cached)
+```
+
+This can take 30-60 seconds the first time. Subsequent calls are instant.
+
+### 5. Tests
+
+All tests mock the extraction layer (scrapegraphai itself is not installed in CI). Run them with:
+
+```bash
+cd /path/to/clawksis-agent
+uv run pytest tests/tools/test_scrapegraph_tool.py -v
+```
+
+Tests cover:
+- Tool registration + schema shape (including ``timeout`` parameter)
+- LLM config builder (auxiliary client, env fallback)
+- `_coerce_schema` helper — None, dict, valid/invalid JSON strings, non-string types
+- `_normalize_urls` — 9 tests: empty input, scheme default, https preserved,
+  dedup, order preservation, empty-string filtering, mixed scheme,
+  non-string junk skipped, **non-http(s) schemes skipped** (`ftp:`/`mailto:`/
+  `javascript:`/`data:`/`file:`, incl. `host:port` NOT treated as a scheme)
+- Timeout clamping — min 10s, max 300s, invalid → None, valid value passes through
+- Error classification — 8 branches: X server, auth/401, quota/billing, rate-limit/429,
+  HTTP status (403/404/5xx), invalid-JSON parsing, network/DNS/TLS, generic fallback
+- **Shared ``classify_scrapegraph_error()``** — 14 tests: all 8 branches + TimeoutError
+  + string-based network timeouts + graph-execution timeout + quota-over-429 precedence
+- Handler success/error/unavailable paths (single + multi-URL), including
+  TimeoutError handling introduced in v1.3
+- **Empty-result detection (v1.8/v1.9)** — ``looks_like_empty_result()`` sentinel
+  strings/dicts/lists, real content kept, partial extractions kept, **nested
+  dict/list recursion** (v1.9); handler + multi-source + web_extract backend
+  return the "use `scrape`" hint on `"NA"`
+- Lazy install runs in a worker thread (``asyncio.to_thread``) — the first-use
+  pip install (30-60s) never blocks the event loop (v1.7)
+- Web extract backend (per-URL error isolation, result shaping, **error classification**,
+  **timeout passthrough + clamping**)
+- Backend prioritisation (scrapegraph vs 3rd-party)
+
+### 6. Error classification (shared — tool + backend)
+
+Since commit `cb5a6c7f`, errors are **classified** by the shared function
+``tools.scrapegraph_common.classify_scrapegraph_error()`` into 9 categories
+and surfaced as clean, actionable messages instead of raw exception dumps.
+Both the native ``scrapegraph`` tool **and** the ``web_extract`` backend
+use this classifier (v1.4), so error messages are consistent regardless of
+which surface calls scrapegraphai:
+
+| Error pattern | What the agent sees |
+|---|---|
+| No display server / `render_js=false` | "No display server. Omit `render_js` or set it to `true`." |
+| HTTP 401 / Unauthorized | "Check auxiliary_text model credentials, or set OPENAI_API_KEY." |
+| Quota / billing exhausted (`insufficient_quota`, 402, `billing_not_active`, "Insufficient Credits") | "Model is out of credits / billing inactive. Check the provider balance or switch models — retrying won't help." (v1.9) |
+| HTTP 429 / RateLimitError | "Model is rate-limited. Retry later or switch models." |
+| TimeoutError (`asyncio.wait_for`) | "The LLM extraction timed out. Increase the `timeout` parameter or try a simpler prompt." |
+| HTTP status error (403/404/5xx, forbidden) | "The page returned an HTTP error — wrong URL, removed page, or the site blocking automated access. Use the `scrape` tool (Scrapling) to bypass." |
+| Network / DNS / TLS failure | "Network error reaching the page — DNS, connection, TLS, or network-level timeout. Verify the URL or use the `scrape` tool." |
+| Invalid JSON output / parse failure | "Try a more specific prompt or use the `scrape` tool." |
+| Any other error | Generic safe message — no paths or exception internals leaked. |
+
+The provider also now respects the ``timeout`` parameter from ``web_extract`` kwargs (v1.4).
+If ``web_extract`` passes a ``timeout``, it's clamped to [10, 300] and forwarded to
+``extract_structured()``.
+
+Since v1.7, the lazy install (``ensure_installed()``) inside
+``extract_structured()`` / ``extract_many()`` runs in a worker thread via
+``asyncio.to_thread`` — the first-use pip install (30-60s) no longer blocks the
+event loop. Classification order matters: auth/quota/rate-limit/timeout-type
+checks run before the broader HTTP-status and network keyword families, so a
+429 from exhausted credits is not misread as a plain rate limit (v1.9), a 429
+is never misread as a generic HTTP error, and a real ``TimeoutError`` from our
+own ``asyncio.wait_for`` is never misread as a network timeout.
+
+### 7. ✅ `except Exception:` narrowing — complete
+
+All broad `except Exception:` patterns in the scraping tools have been narrowed
+to their specific exception types (v1.2):
+
+| Context | File | Now catches |
+|---|---|---|
+| `_coerce_schema()` — JSON parsing | `scrapegraph_tool.py` | `(json.JSONDecodeError, TypeError)` ✅ |
+| JSON serialization in handler | `scrapegraph_tool.py` | `(TypeError, ValueError)` ✅ |
+| `build_llm_config()` — auxiliary client | `scrapegraph_common.py` | `(ImportError, AttributeError)` ✅ |
+| `ensure_installed()` — lazy_deps import | `scrapegraph_common.py` | `ImportError` ✅ |
+| `_stringify()` — JSON dump fallback | `provider.py` | `(TypeError, ValueError)` ✅ |
+| `is_available()` — import check | `provider.py` | `ImportError` ✅ |
+| `extract()` — interrupt module import | `provider.py` | `ImportError` ✅ |
+
+The only remaining broad catch in `extract()` (per-URL error isolation) is
+intentional — it prevents a single URL failure from aborting the whole batch.
+
+### 8. Empty-result ("NA") detection — the failure that doesn't raise
+
+scrapegraphai rarely raises when it fails to structurally parse a page — it
+**succeeds** with a sentinel (`"NA"`, `"N/A"`, `{"content": "NA"}`, empty dict).
+Before v1.8 that came back as `ok: true` with `extracted: '"NA"'` and the agent
+burned a turn reading garbage.
+
+Since v1.8, the shared helper
+``tools.scrapegraph_common.looks_like_empty_result()`` flags these results and:
+
+| Surface | Behaviour on sentinel result |
+|---|---|
+| `scrapegraph` tool | `ok: false` + "Use the `scrape` tool (Scrapling) for raw page content instead." |
+| `web_extract` backend | empty content + the same hint as a per-URL error |
+
+Detection is deliberately **conservative**: a dict/list only counts as empty
+when *every* contained value is empty, checked **recursively** (v1.9) so
+nested shapes like `{"content": {"answer": "NA"}}` or `{"data": [{"content": "N/A"}]}`
+are caught too. The sentinel list also covers common LLM "couldn't extract
+anything" phrasings: `"no content"`, `"no data"`, `"not found"`, `"nothing"`,
+`"empty"`, `"nil"`, `"undefined"`, ... `{"content": "NA"}` → empty, but
+`{"title": "NA", "body": "real text"}` and `{"price": 9.99}` → kept. If the
+tool now says `ok: false` with that message, don't retry scrapegraph — fall
+back to `scrape(url, mode="auto")` (see `references/scrapling-fallback.md`).
+
+### 9. Non-http(s) URLs are skipped, not mangled
+
+`_normalize_urls()` used to prepend `https://` to *any* bare string, so
+`ftp://x`, `mailto:a@b`, `javascript:void(0)` and `data:` URLs became
+`https://ftp://x`-style garbage that failed later with obscure errors (v1.8).
+Now URLs with a non-http(s) scheme are skipped with a debug log; bare hosts and
+`host:port` forms (`example.com:8080`) keep the `https://` treatment.
+
+## Verifying it works
+
+```python
+from tools.scrapegraph_common import ensure_installed, extract_structured
+import asyncio
+
+ensure_installed()  # Triggers the ChatOllama patch
+
+result = asyncio.run(
+    extract_structured(
+        "https://example.com",
+        "Extract the main heading and description",
+        headless=True,  # ← MUST be True on headless servers
+        timeout=120,  # ← optional, cancels after 120s
+    )
+)
+print(result)
+```
+
+Or via the tool itself:
+
+```json
+{
+  "url": "https://example.com",
+  "prompt": "Extract the main heading and description text",
+  "timeout": 120
+}
+```
+
+Expected output (with `render_js` omitted or `true`):
+```json
+{
+  "ok": true,
+  "extracted": "{\n  \"content\": \"Main heading: Example Domain. ...\"\n}"
+}
+```
+
+## Files in this module
+
+| File | Purpose |
+|---|---|
+| `tools/scrapegraph_common.py` | Shared helpers: install, patch, LLM config, graph runners, error classifier, empty-result ("NA") detection |
+| `tools/scrapegraph_tool.py` | Agent tool registration + handler (uses shared classifier + empty-result detection, filters non-http(s) URLs) |
+| `plugins/web/scrapegraphai/provider.py` | `web_extract` backend (shared classifier + timeout passthrough + empty-result hint) |
+| `tests/tools/test_scrapegraph_tool.py` | Tests (79 tests, all pass) |

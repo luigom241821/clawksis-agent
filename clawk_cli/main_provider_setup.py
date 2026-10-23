@@ -697,6 +697,32 @@ def _main_model_reasoning_efforts(model: str, provider: str) -> Optional[list[st
     return list(VALID_REASONING_EFFORTS)
 
 
+def _persist_env_only_key(key_env: str, value: str) -> None:
+    """Write a kept API key to ``.env`` when it only lives in the process env.
+
+    Setup accepts a key exported in the user's shell as "already configured ✓", but background
+    services (the gateway under systemd/launchd) never inherit shell exports — they read
+    ``CLAWK_HOME/.env``. Keeping an env-only key without persisting it leaves config.yaml pointing
+    at a provider whose credential vanishes outside this shell ("Provider X is set in config.yaml
+    but no API key was found" from Telegram/WhatsApp). Secret-source values (Bitwarden) stay off
+    disk by design, managed installs never write ``.env`` from here, and failures never block setup.
+    """
+    if not key_env or not value:
+        return
+    try:
+        from clawk_cli.config import get_env_path, is_managed, load_env, save_env_value
+        from clawk_cli.env_loader import get_secret_source
+
+        if is_managed() or get_secret_source(key_env):
+            return
+        if (load_env().get(key_env) or "").strip() == value:
+            return
+        save_env_value(key_env, value)
+        print(f"  Saved {key_env} to {get_env_path()} so background services (e.g. the gateway) can use it too.")
+    except Exception:
+        pass
+
+
 def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "", existing_source: str = "") -> tuple:
     """API-key entry for ``clawk setup`` / ``clawk model``: first-time entry, or [K]eep / [R]eplace /
     [C]lear when a key exists (a malformed paste is recoverable without editing ``.env``).
@@ -745,6 +771,8 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "", existing_
     if choice.startswith("r"):
         new_key = _prompt_new_key(allow_lmstudio_default=False)
         if not new_key:
+            if not pool_backed:
+                _persist_env_only_key(key_env, existing_key)
             _say("  No change.", "")
             return existing_key, False
         save_env_value(key_env, new_key)
@@ -754,7 +782,10 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "", existing_
         save_env_value(key_env, "")
         print(f"  API key cleared.  Re-run `clawk setup` to configure {pconfig.name} again.")
         return "", True
-    # Keep (default, or any other input)
+    # Keep (default, or any other input). An env-only key (shell export) is persisted so the
+    # gateway resolves the same credential later; a pool-backed key already lives in auth.json.
+    if not pool_backed:
+        _persist_env_only_key(key_env, existing_key)
     print()
     return existing_key, False
 

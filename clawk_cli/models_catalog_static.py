@@ -38,7 +38,7 @@ OPENROUTER_MODELS: list[tuple[str, str]] = [
     for mid in (
         "anthropic/claude-fable-5.1", "anthropic/claude-fable-5", "anthropic/claude-opus-5.5",
         "anthropic/claude-opus-5", "anthropic/claude-opus-5-fast", "anthropic/claude-opus-4.8", "anthropic/claude-opus-4.8-fast",
-        "anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5", "anthropic/claude-haiku-5.5", "anthropic/claude-haiku-4.5",
+        "anthropic/claude-opus-4.6", "anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5", "anthropic/claude-haiku-5.5", "anthropic/claude-haiku-4.5",
         "openai/gpt-6-astra", "openai/gpt-6-astra-fast", "openai/gpt-6-astra-flex", "openai/gpt-6-astra-pro",
         "openai/gpt-6-astra-pro-fast", "openai/gpt-6-astra-pro-flex",
         "openai/gpt-6.1-sol", "openai/gpt-6.1-sol-pro", "openai/gpt-6-sol", "openai/gpt-6-sol-pro",
@@ -328,7 +328,9 @@ class ProviderEntry(NamedTuple):
 
 
 CANONICAL_PROVIDERS: list[ProviderEntry] = [ProviderEntry(*row) for row in (
-    ("nous", "Nous Portal", "Nous Portal (Everything your agent needs, 300+ models with bundled tool use)"),
+    # Nous Portal removed: Clawksis is BYOK (bring your own key). The "nous" provider code remains
+    # (dormant runtime paths, ``nous:model`` typed syntax) but is no longer listed in the setup
+    # wizard / model picker / provider inventory.
     ("fireworks", "Fireworks AI", "Fireworks AI (OpenAI-compatible direct model API)"),
     ("openrouter", "OpenRouter", "OpenRouter (Pay-per-use API aggregator)"),
     ("moa", "Mixture of Agents", "Mixture of Agents (named presets; aggregator acts after reference models)"),
@@ -367,6 +369,12 @@ CANONICAL_PROVIDERS: list[ProviderEntry] = [ProviderEntry(*row) for row in (
     ("ai-gateway", "Vercel AI Gateway", "Vercel AI Gateway (Multi-model aggregator)"),
     ("qwen-oauth", "Qwen OAuth (Portal)", "Qwen OAuth (Reuses local Qwen CLI login)"),
 )]
+
+
+# Clawksis (BYOK): the Nous Portal row is not in ``CANONICAL_PROVIDERS`` (never listed, never offered).
+# This dormant entry only lets the credential-gated /model picker (``list_authenticated_providers``)
+# keep showing a provider the user is ALREADY signed into, as the fork did before the upstream sync.
+DORMANT_NOUS_PROVIDER = ProviderEntry("nous", "Nous Portal", "Nous Portal")
 
 
 # Auto-extend CANONICAL_PROVIDERS with providers registered under plugins/model-providers/<name>/

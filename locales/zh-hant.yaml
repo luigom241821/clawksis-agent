@@ -154,6 +154,7 @@ gateway:
     hygiene_timeout: "⚠️ 縮短對話歷史耗時過久，因此我已略過並保留原狀。執行 /compress 以重試，或 /new 重新開始。"
     hygiene_timeout_doctor_hint: " 若持續發生，請在主機上執行 `clawk doctor`。"
     hygiene_failed: "⚠️ 縮短對話歷史失敗，因此我已保留原狀。執行 /compress 以重試，或 /new 重新開始。若持續發生，請在主機上執行 `clawk doctor`。"
+    hygiene_compacting: "🧹 正在回覆前壓縮較長的對話歷史（{count} 則訊息）— 可能需要一兩分鐘。如果想重新開始，請使用 /new。"
     codex_nothing: "🗜️ 沒有可壓縮的內容：此工作階段執行於 Codex app-server 運行環境，其上下文存放在由 Codex 管理的討論串中，僅在代理活動時存在。請先傳送一則訊息，再執行 /compress — 或用 /reset 重新開始。"
     codex_compacted: "🗜️ Codex app-server 討論串已壓縮（thread/compact）。轉錄鏡像依設計保持不變 — 現在由 app-server 持有壓縮後的上下文。"
     codex_incomplete: "⚠️ Codex app-server 壓縮未完成 — 討論串保持不變。請檢查 app-server 日誌、重試 /compress，或用 /reset 建立乾淨的工作階段。"

@@ -914,12 +914,15 @@ def _normalize_krea_model(model_id: Optional[str]) -> Optional[str]:
 
 
 def _managed_model_plugin() -> Optional[tuple]:
-    """``(plugin_name, model_id)`` when the stored selection routes to the Krea or Portal gateway
-    (rule: :func:`tools.image_generation_managed.managed_route`), else ``None`` for the FAL path."""
-    from tools.image_generation_managed import KREA, PORTAL, managed_route
+    """``(plugin_name, model_id)`` when the stored selection routes to the Portal gateway
+    (rule: :func:`tools.image_generation_managed.managed_route`), else ``None`` for the FAL path.
+
+    Krea is BYOK in Clawksis (no managed Krea gateway): it is reached only through an explicit
+    ``image_gen.provider: krea`` plugin dispatch, never via the managed route."""
+    from tools.image_generation_managed import PORTAL, managed_route
 
     model_id = _read_configured_image_model()
-    return {KREA: ("krea", model_id), PORTAL: ("nous", model_id)}.get(
+    return {PORTAL: ("nous", model_id)}.get(
         managed_route(_read_configured_image_provider(), model_id)
     )
 
@@ -932,29 +935,19 @@ def _maybe_route_managed_model(
     upscale: Optional[bool] = None,
     controls: Optional[dict[str, Any]] = None,
 ) -> Optional[str]:
-    """JSON result from the Krea or Portal gateway the stored model belongs to, or ``None`` to fall
-    through to FAL.
-
-    A Krea model with no reachable Krea gateway falls through (direct/BYO users keep their
-    pipeline); a Portal model never does — falling through would silently bill a FAL default.
+    """JSON result from the Portal gateway the stored model belongs to, or ``None`` to fall
+    through to FAL. A Portal model never falls through — that would silently bill a FAL default.
     """
     target = _managed_model_plugin()
     if target is None:
         return None
     plugin_name, model_id = target
     try:
-        if plugin_name == "krea":
-            from plugins.image_gen.krea import _resolve_managed_krea_gateway
-
-            if _resolve_managed_krea_gateway() is None:
-                return None
         provider = _get_plugin_provider(plugin_name)
     except Exception as exc:
         logger.debug("Managed %s routing unavailable: %s", plugin_name, exc)
         provider = None
     if provider is None:
-        if plugin_name == "krea":
-            return None
         return _provider_error(
             f"image_gen.model='{model_id}' is a Nous Portal model but the Portal image backend is not "
             f"available. Pick another model via `clawk tools` → Image Generation.",
@@ -1038,8 +1031,8 @@ def _handle_image_generate(args, **kw):
     )
     if confine_error is not None:
         return confine_error
-    # Order matters: explicit plugin provider, then the model-driven managed gateways (Krea /
-    # Portal — only under the "nous"/unset selection, so BYO/direct FAL stays untouched), then FAL.
+    # Order matters: explicit plugin provider, then the model-driven managed Portal gateway (only
+    # under the "nous" selection, so BYO/direct FAL stays untouched), then FAL.
     sources = dict(
         image_url=image_url,
         reference_image_urls=reference_image_urls,
@@ -1053,64 +1046,9 @@ def _handle_image_generate(args, **kw):
         raw = _maybe_route_managed_model(
             prompt, aspect_ratio, controls=controls or None, **sources
         )
-        if raw is not None:
-            raw = _fall_back_to_fal(raw, prompt, aspect_ratio, sources)
     if raw is None:
         raw = image_generate_tool(prompt, aspect_ratio, **sources)
     return _postprocess_image_generate_result(raw, task_id=task_id)
-
-
-def _fall_back_to_fal(
-    raw: str, prompt: str, aspect_ratio: str, sources: dict[str, Any]
-) -> str:
-    """Rerun a managed Krea request on FAL's default model when Krea refused it before creating a job.
-
-    Only the Krea plugin marks a failure ``fallback_eligible``, and only when the submit provably never
-    created a job: a job that exists has already been authorized for billing and may still complete.
-    Source images never fall back; FAL would route them to an edit endpoint with different semantics."""
-    try:
-        result = json.loads(raw)
-    except ValueError:
-        return raw
-    if (
-        not isinstance(result, dict)
-        or result.get("success")
-        or not result.get("fallback_eligible")
-    ):
-        return raw
-    if sources.get("image_url") or sources.get("reference_image_urls"):
-        return raw
-    from plugins.image_gen.krea import fallback_to_fal_enabled
-
-    if not fallback_to_fal_enabled():
-        return raw
-    logger.warning(
-        "Managed Krea refused the request before starting a job; falling back to FAL: %s",
-        result.get("error"),
-    )
-    fal_result = json.loads(
-        image_generate_tool(
-            prompt,
-            aspect_ratio,
-            upscale=sources.get("upscale"),
-            fal_model=DEFAULT_MODEL,
-        )
-    )
-    note = (
-        f"Krea was unavailable, so this image was generated on FAL ({DEFAULT_MODEL}) instead."
-        if fal_result.get("success")
-        else f"Krea was unavailable and the fallback to FAL ({DEFAULT_MODEL}) also failed."
-    )
-    if fal_result.get("upscaled"):
-        note += f" The upscale ran on FAL's {UPSCALER_MODEL}, not Krea Enhance."
-    fal_result.update(
-        provider="fal",
-        model=DEFAULT_MODEL,
-        fallback_from="krea",
-        fallback_reason=result.get("error"),
-        note=note,
-    )
-    return json.dumps(fal_result)
 
 
 # --- Dynamic schema — reflect the active backend's image-to-image capability ---

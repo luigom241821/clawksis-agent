@@ -250,19 +250,19 @@ class DDGSWebSearchProvider(BaseWebSearchProvider):
         See #36776, #68096.
         """
         if not self.is_available():
-            # ddgs is the default search backend but ships as an opt-in package: lazy-install it on
-            # first use so a fresh agent (including a non-interactive cron) can search out of the
-            # box without a manual `clawk tools` pass. Gated by security.allow_lazy_installs.
+            # ddgs is the default search backend but ships as an opt-in extra: install it on first
+            # use so a fresh agent (including a non-interactive cron) can search out of the box
+            # without a manual `clawk tools` pass. Gated by security.allow_lazy_installs inside pm.
             try:
-                from tools.lazy_deps import FeatureUnavailable, ensure
+                from pm import ensure_import
 
-                ensure("search.ddgs", prompt=False)
-            except FeatureUnavailable as exc:
+                ensure_import("ddgs")
+            except (
+                Exception
+            ) as exc:  # InstallError (declined / disabled / failed) or pm unavailable
                 return search_fail(
-                    f"ddgs package is not installed — run `pip install ddgs` ({exc.reason})"
+                    f"ddgs package is not installed — run `pip install ddgs` ({exc})"
                 )
-            except ImportError:
-                pass  # tools.lazy_deps unavailable (stripped install); reported just below.
             if not self.is_available():
                 return search_fail(
                     "ddgs package is not installed — run `pip install ddgs`"

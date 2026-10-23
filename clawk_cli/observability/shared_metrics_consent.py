@@ -43,6 +43,11 @@ _OFFER_DESCRIPTION = "\n".join((
 ))
 _REASK_NOTE = "Asking once more: an earlier version could save \"No thanks\" before you saw this question."
 
+# Clawksis (BYOK): never volunteer the "Share with Nous" offer (end of ``clawk setup``, before the
+# first chat). Shared metrics stay off (the shipped default) unless the user opts in explicitly with
+# ``clawk setup telemetry``; the offer machinery stays for that explicit path.
+UNSOLICITED_OFFER = False
+
 
 def _section(cfg: Any) -> dict:
     telemetry = cfg.get("telemetry") if isinstance(cfg, dict) else None
@@ -153,6 +158,8 @@ def offer_consent_if_undecided(config: dict | None = None) -> None:
     from clawk_cli.config import is_managed
     from clawk_cli.setup import is_noninteractive
 
+    if not UNSOLICITED_OFFER:
+        return
     if is_managed() or is_noninteractive() or not sys.stdin.isatty():
         return
     state = _current_state()
@@ -171,6 +178,8 @@ def offer_consent_before_chat(args: Any) -> None:
     from clawk_cli.config import is_managed
     from clawk_cli.setup import is_noninteractive
 
+    if not UNSOLICITED_OFFER:
+        return
     if any(getattr(args, name, None) for name in ("query", "query_file", "oneshot", "oneshot_exit")):
         return
     if getattr(args, "safe_mode", False) or getattr(args, "ignore_user_config", False):

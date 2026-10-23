@@ -3109,6 +3109,10 @@ def cmd_update(args):
     # count + purple progress bar; full output only on failure). `--verbose`
     # keeps full streaming. Decided before stdio gets wrapped below.
     quiet = _quiet_update_requested(args, gateway_mode)
+    if getattr(args, "verbose", False):
+        # `--verbose` also un-contains the child phases (npm, web/TUI builds, uv sync) that run
+        # under pm.progress, which otherwise keeps them to a live tail + failure tail.
+        os.environ["CLAWK_VERBOSE"] = "1"
 
     _update_io_state = _install_hangup_protection(gateway_mode=gateway_mode)
     # Cross-process mutual exclusion: dashboard Update button, Tauri updater

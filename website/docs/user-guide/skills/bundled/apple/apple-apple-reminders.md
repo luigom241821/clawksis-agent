@@ -1,62 +1,32 @@
 ---
-
 title: "Apple Reminders — Apple Reminders via remindctl: add, list, complete"
-
 sidebar_label: "Apple Reminders"
-
 description: "Apple Reminders via remindctl: add, list, complete"
-
 ---
-
-
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-
-
 # Apple Reminders
-
-
 
 Apple Reminders via remindctl: add, list, complete.
 
-
-
 ## Skill metadata
 
-
-
 | | |
-
 |---|---|
-
 | Source | Bundled (installed by default) |
-
 | Path | `skills/apple/apple-reminders` |
-
 | Version | `1.0.0` |
-
 | Author | Clawksis |
-
 | License | MIT |
-
 | Platforms | macos |
-
 | Tags | `Reminders`, `tasks`, `todo`, `macOS`, `Apple` |
-
-
 
 ## Reference: full SKILL.md
 
-
-
 :::info
-
 The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-
 :::
-
-
 
 # Apple Reminders
 
@@ -289,4 +259,3 @@ Accepted by `--due` and date filters:
 2. Always confirm reminder content and due date before creating
 
 3. Use `--json` for programmatic parsing
-

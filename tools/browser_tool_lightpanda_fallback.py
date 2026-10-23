@@ -141,7 +141,8 @@ def _run_chrome_fallback_command(task_id: str, command: str, args: list[str], ti
     if not _install._chromium_installed():
         if _install._running_in_docker():
             hint = ("Chrome fallback requires Chromium, but it is missing. You're running in Docker — "
-                    "pull the latest image: docker pull ghcr.io/nousresearch/clawksis-agent:latest")
+                    "rebuild the image from your clawksis-agent checkout: "
+                    "git pull && docker compose build && docker compose up -d --force-recreate")
         else:
             hint = ("Chrome fallback requires Chromium, but it is missing. Install it with: "
                     "clawk pm install chromium")

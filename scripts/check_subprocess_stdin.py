@@ -42,7 +42,7 @@ TUI_CONTEXT_DIRS = [
 ]
 
 # User plugin roots — scanned at runtime if they exist.  Plugins load from
-# ``get_clawk_home() / "plugins"`` (user) and ``./.clawk/plugins/`` (project,
+# ``get_clawk_home() / "plugins"`` (user) and ``./.clawksis/plugins/`` (project,
 # gated behind ``CLAWK_ENABLE_PROJECT_PLUGINS``) — see
 # ``clawk_cli/plugins.py:10-12``.  The guard only checked the bundled
 # ``plugins/`` dir, missing user-installed code that spawns subprocesses

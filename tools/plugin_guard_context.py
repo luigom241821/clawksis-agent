@@ -159,7 +159,7 @@ def catalog_cap(finding: Finding) -> Optional[str]:
 # ~/.clawksis/profiles/N/roles/crew``). It lands at medium (a note). A wider target (``$HOME``, ``$HOME/.clawksis``,
 # ``$HOME/.clawksis/plugins/*``) only gets the generic prose step (high, caution) and the same line in a ``.sh``
 # stays critical (#115353).
-_UNINSTALL_HOME = r'(?:\$HOME|\$\{HOME\}|~)/\.clawk'
+_UNINSTALL_HOME = r'(?:\$HOME|\$\{HOME\}|~)/\.clawk(?:sis)?'
 
 
 def _uninstall_operand(group: str) -> str:
@@ -499,7 +499,7 @@ def is_quoted_injection_phrase(finding: Finding, line: str) -> bool:
 # keeps full severity.
 _TRAVERSAL_RUN = re.compile(r"(?:\.\./)+\.\.")
 _SENSITIVE_AFTER_TRAVERSAL = re.compile(
-    r"(?:/|\\)*(?:etc\b|passwd\b|shadow\b|\.ssh\b|\.aws\b|\.env\b|\.clawk\b|\.gnupg\b|\.kube\b"
+    r"(?:/|\\)*(?:etc\b|passwd\b|shadow\b|\.ssh\b|\.aws\b|\.env\b|\.clawk(?:sis)?\b|\.gnupg\b|\.kube\b"
     r"|\.docker\b|\.netrc\b|\.npmrc\b|\.pypirc\b|\.config\b|proc\b|root\b|home\b|var\b|usr\b|sys\b)",
     re.IGNORECASE)
 

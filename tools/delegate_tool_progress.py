@@ -284,6 +284,26 @@ def _short(text: str, n: int) -> str:
     return (text[:n] + "...") if len(text) > n else text
 
 
+# Sub-agent lifecycle events mirrored to the cross-process agent-events log (agent_events.py).
+_SUBAGENT_LOG_EVENTS = frozenset({"subagent.start", "subagent.tool", "subagent.thinking", "subagent.complete"})
+
+
+def _log_subagent_event(event_type: str, session_id, payload: dict[str, Any], tool_name=None, preview=None) -> None:
+    """Mirror a sub-agent lifecycle event to the agent-events log so the dashboard office can draw the delegation
+    tree (sub-agent characters + parent->child links) for EVERY agent, not just the chat that already receives
+    these over the WS feed. Best-effort, never raises."""
+    if event_type not in _SUBAGENT_LOG_EVENTS:
+        return
+    with _quiet(None):
+        import agent_events
+
+        agent_events.emit_subagent_event(
+            event_type=event_type, session_id=session_id, subagent_id=payload.get("subagent_id"),
+            parent_id=payload.get("parent_id"), depth=payload.get("depth"), goal=payload.get("goal"),
+            tool_name=tool_name, text=preview,
+        )
+
+
 class _ChildProgressRelay:
     """Callable relaying one child's events to the parent display. CLI: prints tree-view lines above the parent's
     delegation spinner. Gateway: batches tool names (``_BATCH_SIZE``) and relays to the parent's progress callback,
@@ -329,10 +349,13 @@ class _ChildProgressRelay:
         return kw
 
     def _relay(self, event_type: str, tool_name: str | None = None, preview: str | None = None, args=None, **kwargs):
+        payload = {**self._identity_kwargs(), **kwargs}  # kwargs override identity (e.g. status, duration_seconds).
+        # Fork: mirror to the agent-events log so the dashboard office draws the delegation tree even without a
+        # parent callback.
+        _log_subagent_event(event_type, getattr(self.parent_scope, "session_id", None), payload, tool_name, preview)
         if self.parent_cb:
-            # kwargs override identity (e.g. status, duration_seconds).
             with _quiet("Parent callback failed: %s"):
-                self.parent_cb(event_type, tool_name, preview, args, **{**self._identity_kwargs(), **kwargs})
+                self.parent_cb(event_type, tool_name, preview, args, **payload)
 
     def _tree_line(self, text: str) -> None:
         """Print one tree-view line above the CLI spinner (no-op without a spinner)."""

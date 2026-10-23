@@ -1531,7 +1531,7 @@ GUIDELINES when creating a job (so it behaves well at run time):
             },
             "profile": {
                 "type": "string",
-                "description": "Optional Clawksis profile name to run the job under: the scheduler applies that profile's home, config and .env for the run (restored afterwards). 'default' = the root profile; named profiles must already exist (`clawk profile`). Unset keeps the scheduler's profile. On update, '' clears.",
+                "description": "Optional Clawksis profile name to run the job under: the scheduler applies a context-local override to that profile's home, config and .env for the run (restored afterwards) and bridges CLAWK_HOME into subprocesses. 'default' = the root profile; named profiles must already exist (`clawk profile`). Unset keeps the scheduler's profile. On update, '' clears. Profile jobs run one at a time, not in parallel.",
             },
             "attach_to_session": {
                 "type": "boolean",

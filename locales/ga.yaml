@@ -154,6 +154,7 @@ gateway:
     hygiene_timeout: "⚠️ Thóg giorrú stair an chomhrá rófhada, mar sin d'fhág mé ar lár é agus choinnigh mé gach rud mar a bhí. Rith /compress chun iarracht eile a dhéanamh nó /new chun tosú as an nua."
     hygiene_timeout_doctor_hint: " Má leanann sé seo ar aghaidh, rith `clawk doctor` ar an óstach."
     hygiene_failed: "⚠️ Theip ar ghiorrú stair an chomhrá, mar sin choinnigh mé gach rud mar a bhí. Rith /compress chun iarracht eile a dhéanamh nó /new chun tosú as an nua. Má leanann sé seo ar aghaidh, rith `clawk doctor` ar an óstach."
+    hygiene_compacting: "🧹 Stair fhada comhrá ({count} teachtaireacht) á comhbhrú sula bhfreagraím — d'fhéadfadh sé nóiméad nó dhó a thógáil. Úsáid /new más fearr leat tosú as an nua."
     codex_nothing: "🗜️ Níl aon rud le dlúthú: ritheann an seisiún seo ar am rite app-server Codex, a bhfuil a chomhthéacs i snáithe faoi úinéireacht Codex nach ann dó ach fad a bhíonn an gníomhaire gníomhach. Seol teachtaireacht ar dtús, ansin /compress — nó /reset chun tosú as an nua."
     codex_compacted: "🗜️ Dlúthaíodh snáithe app-server Codex (thread/compact). Tá scáthán na traschríbhinne gan athrú d'aon ghnó — is ag an app-server atá an comhthéacs dlúthaithe anois."
     codex_incomplete: "⚠️ Níor críochnaíodh dlúthú app-server Codex — tá an snáithe gan athrú. Seiceáil logaí an app-server, bain triail eile as /compress, nó /reset le haghaidh seisiún glan."

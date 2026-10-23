@@ -105,11 +105,9 @@ def slow_response_message() -> str:
     return t("platform.yuanbao.slow_response_notice")
 
 
-# Cron wrapper markers, mirrored from cron/scheduler_delivery.py (``wrap_response``). The wrapper
-# is not keyed yet; when it is, import the same key here so ``strip_cron_wrapper`` keeps matching.
-CRON_WRAPPER_HEADER_PREFIX = "Cronjob Response: "
-CRON_WRAPPER_DIVIDER = "\n-------------\n\n"
-CRON_WRAPPER_FOOTER_PREFIX = '\n\nTo stop or manage this job, send me a new message (e.g. "stop reminder '
+# Cron wrapper header, mirrored from cron/scheduler_delivery.py ``CRON_DELIVERY_HEADER_PREFIX``
+# (``wrap_response``: "⏰ <job name>\n\n<content>").
+CRON_WRAPPER_HEADER_PREFIX = "⏰ "
 
 # Transcript anchors: [image|ybres:abc]  [file:report.pdf|ybres:xyz]  [voice|ybres:…]
 _YB_RES_REF_RE = re.compile(r"\[(image|voice|video|file(?::[^|\]]*)?)\|ybres:([A-Za-z0-9_\-]+)\]")
@@ -2561,16 +2559,13 @@ class MessageSender:
 
     @staticmethod
     def strip_cron_wrapper(content: str) -> str:
-        """Strip the scheduler's cron header/footer wrapper; unchanged when the shape doesn't match."""
+        """Strip the scheduler's ``⏰ <name>\\n\\n`` cron header; unchanged when the shape doesn't match."""
         if not content.startswith(CRON_WRAPPER_HEADER_PREFIX):
             return content
-        divider = CRON_WRAPPER_DIVIDER
-        footer_prefix = CRON_WRAPPER_FOOTER_PREFIX
-        divider_pos = content.find(divider)
-        footer_pos = content.rfind(footer_prefix)
-        if divider_pos < 0 or footer_pos < 0 or footer_pos <= divider_pos or "\n(job_id: " not in content[:divider_pos]:
+        sep = content.find("\n\n")
+        if sep < 0:
             return content
-        return content[divider_pos + len(divider):footer_pos].strip() or content
+        return content[sep + 2:].strip() or content
 
     async def close(self) -> None:
         self._chat_locks.clear()

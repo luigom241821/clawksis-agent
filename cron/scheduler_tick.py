@@ -3,6 +3,7 @@
 import concurrent.futures
 import contextlib
 import logging
+import threading
 import time
 
 from cron import store_health
@@ -13,6 +14,22 @@ logger = logging.getLogger("cron.scheduler")
 # Log the yield at most once per episode (reset when the skew changes) to avoid per-interval spam.
 _YIELD_LOG_INTERVAL_SECONDS = 3600.0
 _last_yield_log: dict[str, object] = {}
+
+# Jobs with a per-job ``profile`` (Clawksis) are serialized process-wide: _job_profile_context
+# snapshots/restores os.environ around the profile's .env load — process-global state two
+# overlapping profile runs would corrupt. They queue on one persistent single-thread pool (off
+# the ticker thread, so a long profile job never blocks it); every other job stays parallel.
+_profile_pool: concurrent.futures.ThreadPoolExecutor | None = None
+_profile_pool_lock = threading.Lock()
+
+
+def _get_profile_pool() -> concurrent.futures.ThreadPoolExecutor:
+    global _profile_pool
+    with _profile_pool_lock:
+        if _profile_pool is None:
+            _profile_pool = concurrent.futures.ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="cron-seq")
+        return _profile_pool
 
 
 def _log_tick_yield_once(reason: str) -> None:
@@ -181,7 +198,8 @@ def _tick_admitted(
         _all_futures: list = []
         pool = _sched._get_parallel_pool(_max_workers)
         for job in due_jobs:
-            fut = _sched._submit_with_guard(job, pool, _process_job)
+            job_pool = _get_profile_pool() if str(job.get("profile") or "").strip() else pool
+            fut = _sched._submit_with_guard(job, job_pool, _process_job)
             if fut is None:
                 continue
             _all_futures.append(fut)

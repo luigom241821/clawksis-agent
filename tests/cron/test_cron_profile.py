@@ -31,6 +31,9 @@ def isolated_cron_profile_home(tmp_path, monkeypatch):
 
     profile_home.mkdir(parents=True)
 
+    # Upstream only resolves a named profile that carries an identity marker.
+    (profile_home / "config.yaml").write_text("{}\n", encoding="utf-8")
+
     (root / "cron").mkdir(parents=True)
 
     monkeypatch.setenv("CLAWK_HOME", str(root))
@@ -589,7 +592,9 @@ class TestTickProfilePartition:
             sched, "get_due_jobs", lambda: [profile_a, profile_b, parallel_job]
         )
 
-        monkeypatch.setattr(sched, "advance_next_run", lambda *_a, **_kw: None)
+        monkeypatch.setattr(sched, "claim_job_for_fire", lambda *_a, **_kw: True)
+
+        monkeypatch.setattr(sched, "_maybe_run_worktree_maintenance", lambda: None)
 
         calls: list[tuple[str, str]] = []
 
@@ -610,7 +615,7 @@ class TestTickProfilePartition:
 
         monkeypatch.setattr(sched, "_deliver_result", lambda *_a, **_kw: None)
 
-        n = sched.tick(verbose=False)
+        n = sched.tick(verbose=False, sync=True)
 
         assert n == 3
 

@@ -1169,7 +1169,7 @@ def max_retries_exhausted_result(
     ``failure_retryable`` / ``billing_block``."""
     # Result/guidance helpers stay in the loop module (tests import + patch them there).
     from agent.conversation_loop import (
-        _billing_block_dict, _billing_or_entitlement_message, _billing_terminal_label,
+        _billing_block_dict, _billing_headline, _billing_or_entitlement_message, _billing_terminal_label,
         _print_billing_or_entitlement_guidance,
     )
 
@@ -1185,7 +1185,7 @@ def max_retries_exhausted_result(
                 f"(unverified — may be a content-filter rejection) — {_final_summary}"
             )
         else:
-            agent._emit_diagnostic_status(f"❌ Billing or credits exhausted — {_final_summary}")
+            agent._emit_diagnostic_status(f"❌ {_billing_headline(classified.message)} — {_final_summary}")
         _billing_kw = dict(
             capability="model access", provider=provider, base_url=str(base_url), model=model,
             unverified=classified.billing_unverified,
@@ -1743,7 +1743,9 @@ def _eager_fallback_status(classified: Any, is_upstream: bool, is_transport_fail
                 "(unverified — may be a content-filter rejection) "
                 "— switching to fallback provider..."
             )
-        return "⚠️ Billing or credits exhausted — switching to fallback provider..."
+        from agent.conversation_loop import _billing_headline
+
+        return f"⚠️ {_billing_headline(classified.message)} — switching to fallback provider..."
     if is_transport_failure:
         return "⚠️ Provider unreachable — switching to fallback provider..."
     return "⚠️ Rate limited — switching to fallback provider..."

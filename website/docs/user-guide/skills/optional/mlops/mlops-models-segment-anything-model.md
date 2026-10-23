@@ -110,7 +110,7 @@ input_label = np.array([1])  # 1 = foreground, 0 = background
 masks, scores, logits = predictor.predict(
     point_coords=input_point,
     point_labels=input_label,
-    multimask_output=True  # Returns 3 mask options
+    multimask_output=True,  # Returns 3 mask options
 )
 
 # Select best mask

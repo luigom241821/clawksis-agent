@@ -2,7 +2,6 @@
 resolved through the module object so test patches on ``clawk_cli.setup.<name>`` take effect."""
 
 import logging
-from tools import tool_backend_helpers
 from clawk_cli import nous_subscription
 
 logger = logging.getLogger("clawk_cli.setup")
@@ -97,10 +96,8 @@ def _vision_row(config, feats):
     return ("Vision (image analysis)", ok, None if ok else "run 'clawk setup' to configure")
 
 
-def _managed_or_provider_row(feature, name: str, managed_label: str, missing_hint: str):
-    """Row for a Nous-manageable feature: managed > available (with provider) > missing hint."""
-    if feature.managed_by_nous:
-        return (f"{name} ({managed_label})", True, None)
+def _provider_row(feature, name: str, missing_hint: str):
+    """Row for a BYOK feature: available (with provider) > missing hint."""
     if feature.available:
         return (f"{name} ({feature.current_provider})" if feature.current_provider else name, True, None)
     return (name, False, missing_hint)
@@ -108,19 +105,17 @@ def _managed_or_provider_row(feature, name: str, managed_label: str, missing_hin
 
 def _web_row(config, feats):
     # Web tools (Exa, Parallel, Firecrawl, Tavily, or Keenable)
-    return _managed_or_provider_row(feats.web, "Web Search & Extract", "Nous subscription", _WEB_MISSING)
+    return _provider_row(feats.web, "Web Search & Extract", _WEB_MISSING)
 
 
 def _browser_row(config, feats):
     # Browser tools (local Chromium, Camofox, Browserbase, Browser Use, or Firecrawl)
     hint = _BROWSER_MISSING_HINTS.get(feats.browser.current_provider, _BROWSER_MISSING_DEFAULT)
-    return _managed_or_provider_row(feats.browser, "Browser Automation", "Nous Browser Use", hint)
+    return _provider_row(feats.browser, "Browser Automation", hint)
 
 
 def _image_gen_row(config, feats):
-    # FAL (direct or via Nous), or any plugin-registered provider (OpenAI, etc.)
-    if feats.image_gen.managed_by_nous:
-        return ("Image Generation (Nous subscription)", True, None)
+    # FAL (direct key), or any plugin-registered provider (OpenAI, etc.)
     if feats.image_gen.available:
         return ("Image Generation", True, None)
     # Probe plugin-registered providers so OpenAI-only setups don't show as "missing FAL_KEY".
@@ -133,37 +128,27 @@ def _image_gen_row(config, feats):
 def _video_gen_row(config, feats):
     # Opt-in via `clawk tools` → Video Generation. Only show the row when a plugin reports
     # available so we don't badger users who don't care about video gen with a "missing" line.
-    if feats.video_gen.managed_by_nous:
-        return ("Video Generation (FAL via Nous subscription)", True, None)
     backend = _first_available_plugin_provider("video_gen_registry")
     return (f"Video Generation ({backend})", True, None) if backend else None
 
 
 def _tts_row(config, feats):
     # Configured provider, gated on its key (or local install)
-    if feats.tts.managed_by_nous:
-        return ("Text-to-Speech (OpenAI via Nous subscription)", True, None)
     provider = _setup.cfg_get(config, "tts", "provider", default="edge")
     return _voice_provider_status("Text-to-Speech", provider, _TTS_SUMMARY_ROWS, _TTS_SUMMARY_DEFAULT)
 
 
 def _stt_row(config, feats):
-    stt_feature = feats.features.get("stt")
-    if stt_feature is not None and stt_feature.managed_by_nous:
-        return ("Speech-to-Text (OpenAI via Nous subscription)", True, None)
     provider = _setup.cfg_get(config, "stt", "provider", default="local") or "local"
     return _voice_provider_status("Speech-to-Text", provider, _STT_SUMMARY_ROWS, _STT_SUMMARY_DEFAULT)
 
 
 def _modal_row(config, feats):
-    if feats.modal.managed_by_nous:
-        return ("Modal Execution (Nous subscription)", True, None)
+    # Clawksis is BYOK: Modal always runs on the user's own Modal account.
     if _setup.cfg_get(config, "terminal", "backend") == "modal":
         if feats.modal.direct_override:
             return ("Modal Execution (direct Modal)", True, None)
         return ("Modal Execution", False, "run 'clawk setup terminal'")
-    if tool_backend_helpers.managed_nous_tools_enabled() and feats.nous_auth_present:
-        return ("Modal Execution (optional via Nous subscription)", True, None)
     return None
 
 
@@ -205,9 +190,8 @@ def _print_setup_summary(config: dict, clawk_home):
     except Exception:
         print()
         _setup.print_warning("No inference provider is configured — Clawksis cannot chat yet.")
-        _setup._info("  Finish this one step with either of:",
-              "    clawk model            (pick any provider/model)",
-              "    clawk setup --portal   (Nous Portal OAuth, no API key)")
+        _setup._info("  Finish this one step with:",
+              "    clawk model            (pick any provider/model and add your own API key)")
 
     print()
     _setup.print_header("Tool Availability Summary")

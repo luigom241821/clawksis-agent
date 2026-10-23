@@ -2597,7 +2597,6 @@ export interface ToolsetProvider {
   tag: string;
   env_vars: ToolsetProviderEnvVar[];
   post_setup: string | null;
-  requires_nous_auth: boolean;
   is_active: boolean;
 }
 

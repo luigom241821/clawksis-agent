@@ -31,6 +31,10 @@ export interface SendDiagnosticsState {
   result?: SendDiagnosticsResult
 }
 
+// Clawksis is BYOK: the backend has no Nous upload RPC (diagnostics.share_nous),
+// so the "Send diagnostics" buttons stay hidden. Logs can still be opened or copied.
+export const SEND_DIAGNOSTICS_ENABLED = false
+
 export const $sendDiagnostics = atom<SendDiagnosticsState | null>(null)
 
 // Generation token: bumped on every open AND every dismiss. An in-flight

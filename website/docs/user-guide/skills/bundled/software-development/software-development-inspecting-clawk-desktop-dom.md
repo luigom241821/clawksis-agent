@@ -1,12 +1,12 @@
 ---
-title: "Inspecting Clawksis Desktop Dom — Read the live Clawksis desktop DOM/CSS over CDP"
-sidebar_label: "Inspecting Clawksis Desktop Dom"
+title: "Inspecting Clawk Desktop Dom — Read the live Clawksis desktop DOM/CSS over CDP"
+sidebar_label: "Inspecting Clawk Desktop Dom"
 description: "Read the live Clawksis desktop DOM/CSS over CDP"
 ---
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-# Inspecting Clawksis Desktop Dom
+# Inspecting Clawk Desktop Dom
 
 Read the live Clawksis desktop DOM/CSS over CDP.
 

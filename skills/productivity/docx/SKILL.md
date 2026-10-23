@@ -9,7 +9,7 @@ metadata:
   clawk:
     tags: [word, docx, documents, office, templates, revisions, comments]
     category: productivity
-    related_skills: [pdf, xlsx, powerpoint]
+    related_skills: [pdf, xlsx, pptx-author]
 ---
 
 # Docx Skill

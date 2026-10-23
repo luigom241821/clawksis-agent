@@ -1,12 +1,12 @@
 ---
-title: "Clawksis S6 Container Supervision — Modify or debug s6 services in the Clawksis Docker image"
-sidebar_label: "Clawksis S6 Container Supervision"
+title: "Clawk S6 Container Supervision — Modify or debug s6 services in the Clawksis Docker image"
+sidebar_label: "Clawk S6 Container Supervision"
 description: "Modify or debug s6 services in the Clawksis Docker image"
 ---
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-# Clawksis S6 Container Supervision
+# Clawk S6 Container Supervision
 
 Modify or debug s6 services in the Clawksis Docker image.
 

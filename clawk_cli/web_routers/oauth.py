@@ -34,6 +34,8 @@ _profile_scope = late("_profile_scope", "clawk_cli.web_server_profiles")
 _require_token = late("_require_token")
 _resolve_profile_dir = late("_resolve_profile_dir", "clawk_cli.web_server_profiles")
 _OAUTH_PROVIDER_CATALOG = LateState("_OAUTH_PROVIDER_CATALOG", "clawk_cli.web_server_oauth")
+# Unlisted (BYOK: Nous) providers: never in the listing, still startable/disconnectable by id.
+_DORMANT_OAUTH_PROVIDERS = LateState("_DORMANT_OAUTH_PROVIDERS", "clawk_cli.web_server_oauth")
 # Pollers are late-bound: they run on a background thread AFTER the route returns, so a
 # test's monkeypatch on web_server_oauth must win at spawn time, not router-import time.
 # A direct import here made those mocks no-ops — the real poller then hit the network
@@ -730,7 +732,7 @@ async def disconnect_oauth_provider(provider_id: str, request: Request, profile:
     _require_token(request)
 
     def _run():
-        catalog_by_id = {p["id"]: p for p in _build_oauth_catalog()}
+        catalog_by_id = {p["id"]: p for p in (*_DORMANT_OAUTH_PROVIDERS, *_build_oauth_catalog())}
         provider = catalog_by_id.get(provider_id)
         if provider is None:
             raise HTTPException(400, f"Unknown provider: {provider_id}. Available: {', '.join(sorted(catalog_by_id))}")
@@ -797,7 +799,8 @@ async def start_oauth_login(provider_id: str, request: Request, profile: Optiona
     _require_token(request)
     _gc_oauth_sessions()
     _validate_oauth_profile(profile)
-    catalog_entry = next((p for p in _OAUTH_PROVIDER_CATALOG if p["id"] == provider_id), None)
+    catalog_entry = next(
+        (p for p in (*_OAUTH_PROVIDER_CATALOG, *_DORMANT_OAUTH_PROVIDERS) if p["id"] == provider_id), None)
     if catalog_entry is None:
         raise HTTPException(status_code=400, detail=f"Unknown provider {provider_id}")
     if catalog_entry["flow"] == "external":

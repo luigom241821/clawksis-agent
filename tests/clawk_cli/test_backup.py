@@ -995,6 +995,20 @@ class TestValidation:
         with zipfile.ZipFile(buf, "r") as zf:
             assert _detect_prefix(zf) == ""
 
+    @pytest.mark.parametrize("prefix", [".clawksis", "clawksis", ".clawk", "clawk"])
+    def test_detect_prefix_home_dir_names(self, prefix):
+        """A home-dir wrapper (``.clawksis/config.yaml``) is detected and stripped."""
+        import io
+        from clawk_cli.backup import _detect_prefix
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr(f"{prefix}/config.yaml", "model: x\n")
+            zf.writestr(f"{prefix}/skills/a/SKILL.md", "# a\n")
+        buf.seek(0)
+        with zipfile.ZipFile(buf, "r") as zf:
+            assert _detect_prefix(zf) == f"{prefix}/"
+
 
 # ---------------------------------------------------------------------------
 # Edge case tests for uncovered paths

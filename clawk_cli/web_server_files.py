@@ -327,7 +327,11 @@ def _resolve_managed_path(
                 raise HTTPException(status_code=400, detail="Path cannot contain '..'")
             candidate = root / candidate
         elif not candidate.is_absolute():
-            raise HTTPException(status_code=400, detail="Path must be absolute")
+            # No locked root (Clawksis): a RELATIVE path resolves under the policy's default path
+            # instead of 400 — the chat upload sends "chat-uploads/<ts>_<name>". '..' still refused.
+            if any(part == ".." for part in candidate.parts):
+                raise HTTPException(status_code=400, detail="Path cannot contain '..'")
+            candidate = policy.default_path / candidate
 
     if ".." in candidate.parts:
         raise HTTPException(status_code=400, detail="Path cannot contain '..'")

@@ -11,7 +11,7 @@ from typing import Set
 from clawk_cli.cli_output import (
     print_error as _print_error, print_info as _print_info, print_success as _print_success,
     print_warning as _print_warning)
-from clawk_cli.config import get_env_value
+from clawk_cli.config import get_env_value, recommended_update_command_for_method
 from clawk_cli.tools_config_cua import _cua_driver_install_ready, install_cua_driver
 from tools.transcription_common import DEFAULT_LOCAL_MODEL, STT_MODEL_CATALOG
 
@@ -79,8 +79,9 @@ def _post_setup_agent_browser(post_setup_key: str) -> None:
             return
         if docker and post_setup_key == "agent_browser" and not _chromium_installed():
             _print_warning("    Chromium is missing but you're running in Docker.")
-            _info_lines("Pull the latest image to get the bundled Chromium:",
-                        "  docker pull ghcr.io/nousresearch/clawksis-agent:latest")
+            # Clawksis publishes no image: the container is built locally from the checkout.
+            _info_lines("Rebuild the image from your clawksis-agent checkout to get the bundled Chromium:",
+                        f"  {recommended_update_command_for_method('docker')}")
         return
 
     try:

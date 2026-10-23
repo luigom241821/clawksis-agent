@@ -90,7 +90,7 @@ _STEWARD_UNINSTALL_MESSAGES = {
         "✗ This Clawksis runs from a Docker image.\n"
         "\n"
         "There is no code to uninstall — remove the container and image:\n"
-        "  docker rm <container> && docker rmi nousresearch/clawksis-agent\n"
+        "  docker rm <container> && docker rmi clawksis-agent\n"
         "\n" +
         _STEWARD_DELETE_DATA_PREAMBLE +
         _STEWARD_DELETE_DATA_CLI

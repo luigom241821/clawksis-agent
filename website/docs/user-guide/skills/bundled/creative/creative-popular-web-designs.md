@@ -1,60 +1,31 @@
 ---
-
 title: "Popular Web Designs — 54 real design systems (Stripe, Linear, Vercel) as HTML/CSS"
-
 sidebar_label: "Popular Web Designs"
-
 description: "54 real design systems (Stripe, Linear, Vercel) as HTML/CSS"
-
 ---
-
-
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-
-
 # Popular Web Designs
-
-
 
 54 real design systems (Stripe, Linear, Vercel) as HTML/CSS.
 
-
-
 ## Skill metadata
 
-
-
 | | |
-
 |---|---|
-
 | Source | Bundled (installed by default) |
-
 | Path | `skills/creative/popular-web-designs` |
-
 | Version | `1.0.0` |
-
 | Author | Clawksis + Teknium (design systems sourced from VoltAgent/awesome-design-md) |
-
 | License | MIT |
-
 | Platforms | linux, macos, windows |
-
-
 
 ## Reference: full SKILL.md
 
-
-
 :::info
-
 The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-
 :::
-
-
 
 # Popular Web Designs
 
@@ -443,4 +414,3 @@ Match the design to the content:
 - **Data-dense / dashboards:** Sentry, Kraken, Cohere, ClickHouse
 
 - **Monospace / terminal aesthetic:** Ollama, OpenCode, x.ai, VoltAgent
-

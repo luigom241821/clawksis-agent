@@ -1,5 +1,5 @@
 """Truncation footers tell the AGENT where the full text lives, and the agent's read_file runs inside
-the active terminal backend: under docker the mounted cache is at /root/.clawk, so a host path in the
+the active terminal backend: under docker the mounted cache is at /root/.clawksis, so a host path in the
 footer is unreadable from the sandbox (#72389, #81984, #77015)."""
 
 import os

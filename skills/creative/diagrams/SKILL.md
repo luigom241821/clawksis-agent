@@ -1,6 +1,6 @@
 ---
 name: diagrams
-description: "Create visual diagrams: hand-drawn Excalidraw JSON diagrams or dark-themed SVG architecture/cloud/infra diagrams as HTML."
+description: "Draw Excalidraw or dark SVG architecture diagrams."
 version: 1.0.0
 author: Clawksis
 license: MIT

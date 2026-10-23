@@ -279,6 +279,11 @@ def _create_cron_job_sync(body: CronJobCreate, profile: Optional[str] = None):
             enabled_toolsets=_cron_string_list(body.enabled_toolsets),
             workdir=_cron_optional_text(body.workdir),
             no_agent=no_agent,
+            silent_notice=body.silent_notice,
+            use_soul=body.use_soul,
+            use_user_md=body.use_user_md,
+            use_memory=body.use_memory,
+            fallback_models=body.fallback_models or None,
             **{key: getattr(body, key) for key in ("paused", "paused_reason")
                if key in body.model_fields_set})
     except HTTPException:

@@ -26,10 +26,10 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 | Skill | Description | Path |
 |-------|-------------|------|
 | [`claude-code`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-claude-code.md) | Delegate coding to Claude Code CLI (features, PRs). | `autonomous-ai-agents/claude-code` |
+| [`clawksis-agent`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-clawksis-agent.md) | Use, configure, theme, extend, and orchestrate Clawksis. | `autonomous-ai-agents/clawksis-agent` |
 | [`codex`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-codex.md) | Delegate coding to OpenAI Codex CLI (features, PRs). | `autonomous-ai-agents/codex` |
 | [`computer-use`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-computer-use.md) | Drive the desktop background-first; escalate on signal. | `autonomous-ai-agents/computer-use` |
-| [`clawksis-agent`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-clawksis-agent.md) | Use, configure, theme, extend, and orchestrate Clawksis. | `autonomous-ai-agents/clawksis-agent` |
-| [`opencode`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-opencode.md) | Delegate coding to OpenCode CLI (features, PR review). | `autonomous-ai-agents/opencode` |
+| [`opencode`](../user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-opencode.md) | Delegate coding tasks to OpenCode, Claude Code or Codex. | `autonomous-ai-agents/opencode` |
 
 ## creative
 
@@ -40,17 +40,26 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 | [`baoyu-infographic`](../user-guide/skills/bundled/creative/creative-baoyu-infographic.md) | Infographics: 21 layouts x 21 styles (信息图, 可视化). | `creative/baoyu-infographic` |
 | [`claude-design`](../user-guide/skills/bundled/creative/creative-claude-design.md) | Design one-off HTML artifacts (landing, deck, prototype). | `creative/claude-design` |
 | [`design-md`](../user-guide/skills/bundled/creative/creative-design-md.md) | Author/validate/export Google's DESIGN.md token spec files. | `creative/design-md` |
+| [`diagrams`](../user-guide/skills/bundled/creative/creative-diagrams.md) | Draw Excalidraw or dark SVG architecture diagrams. | `creative/diagrams` |
 | [`humanizer`](../user-guide/skills/bundled/creative/creative-humanizer.md) | Humanize text: strip AI-isms and add real voice. | `creative/humanizer` |
 | [`manim-video`](../user-guide/skills/bundled/creative/creative-manim-video.md) | Manim CE animations: 3Blue1Brown math/algo videos. | `creative/manim-video` |
 | [`p5js`](../user-guide/skills/bundled/creative/creative-p5js.md) | p5.js sketches: gen art, shaders, interactive, 3D. | `creative/p5js` |
 | [`popular-web-designs`](../user-guide/skills/bundled/creative/creative-popular-web-designs.md) | 54 real design systems (Stripe, Linear, Vercel) as HTML/CSS. | `creative/popular-web-designs` |
 | [`songwriting-and-ai-music`](../user-guide/skills/bundled/creative/creative-songwriting-and-ai-music.md) | Songwriting craft and Suno AI music prompts. | `creative/songwriting-and-ai-music` |
+| [`ui-design`](../user-guide/skills/bundled/creative/creative-ui-design.md) | Design UI with DESIGN.md tokens, mockups and templates. | `creative/ui-design` |
+| [`youtube-shorts-generator`](../user-guide/skills/bundled/creative/creative-youtube-shorts-generator.md) | Genera Shorts de YouTube: guion, voz, stock y edición. | `creative/youtube-shorts-generator` |
 
 ## devops
 
 | Skill | Description | Path |
 |-------|-------------|------|
+| [`billing-monitoring`](../user-guide/skills/bundled/devops/devops-billing-monitoring.md) | Monitor API credit balances with daily Telegram reports. | `devops/billing-monitoring` |
+| [`cloudflare-tunnel`](../user-guide/skills/bundled/devops/devops-cloudflare-tunnel.md) | Expose a local port publicly via a Cloudflare Quick Tunnel. | `devops/cloudflare-tunnel` |
+| [`deploy-dashboard-custom-domain`](../user-guide/skills/bundled/devops/devops-deploy-dashboard-custom-domain.md) | Publish the Clawksis dashboard on a domain behind a proxy. | `devops/deploy-dashboard-custom-domain` |
+| [`gradient-cloud-dashboard`](../user-guide/skills/bundled/devops/devops-gradient-cloud-dashboard.md) | Use the Gradient Cloud dashboard to send WhatsApp messages. | `devops/gradient-cloud-dashboard` |
+| [`mcp-server-auth`](../user-guide/skills/bundled/devops/devops-mcp-server-auth.md) | Authenticate browser-login MCP servers on headless hosts. | `devops/mcp-server-auth` |
 | [`sdlc-review`](../user-guide/skills/bundled/devops/devops-sdlc-review.md) | Review Kanban handoffs and route verified outcomes. | `devops/sdlc-review` |
+| [`service-status-watchdogs`](../user-guide/skills/bundled/devops/devops-service-status-watchdogs.md) | Watch service status pages with silent cron alerts. | `devops/service-status-watchdogs` |
 
 ## email
 
@@ -59,13 +68,42 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 | [`email-inbox-triage`](../user-guide/skills/bundled/email/email-email-inbox-triage.md) | Triage an inbox: prioritize threads, draft replies safely. | `email/email-inbox-triage` |
 | [`himalaya`](../user-guide/skills/bundled/email/email-himalaya.md) | Himalaya CLI: IMAP/SMTP email from terminal. | `email/himalaya` |
 
+## emil-design-eng
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| [`emil-design-eng`](../user-guide/skills/bundled/emil-design-eng/emil-design-eng-emil-design-eng.md) | Design-engineering rules for polished UI and animation. | `emil-design-eng` |
+
+## integrations
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| [`notion-mcp`](../user-guide/skills/bundled/integrations/integrations-notion-mcp.md) | Conecta y automatiza Notion vía su servidor MCP oficial. | `integrations/notion-mcp` |
+| [`supabase`](../user-guide/skills/bundled/integrations/integrations-supabase.md) | Build on Supabase: Postgres, auth, RLS, storage, functions. | `integrations/supabase` |
+| [`supabase-postgres-best-practices`](../user-guide/skills/bundled/integrations/integrations-supabase-postgres-best-practices.md) | Optimize Postgres queries, indexes and schemas (Supabase). | `integrations/supabase-postgres-best-practices` |
+
 ## media
 
 | Skill | Description | Path |
 |-------|-------------|------|
 | [`gif-search`](../user-guide/skills/bundled/media/media-gif-search.md) | Search/download GIFs from Tenor via curl + jq. | `media/gif-search` |
+| [`media-processing`](../user-guide/skills/bundled/media/media-media-processing.md) | Process video and audio with ffmpeg and media tools. | `media/media-processing` |
 | [`songsee`](../user-guide/skills/bundled/media/media-songsee.md) | Audio spectrograms/features (mel, chroma, MFCC) via CLI. | `media/songsee` |
 | [`youtube-content`](../user-guide/skills/bundled/media/media-youtube-content.md) | YouTube transcripts to summaries, threads, blogs. | `media/youtube-content` |
+| [`youtube-shorts-automation`](../user-guide/skills/bundled/media/media-youtube-shorts-automation.md) | Produce and upload faceless YouTube Shorts on a schedule. | `media/youtube-shorts-automation` |
+
+## mlops-inference
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| [`local-llm-hardware`](../user-guide/skills/bundled/mlops-inference/mlops-inference-local-llm-hardware.md) | Compare mini PCs and workstations for running local LLMs. | `mlops-inference/local-llm-hardware` |
+| [`local-llm-inference`](../user-guide/skills/bundled/mlops-inference/mlops-inference-local-llm-inference.md) | Run and serve local LLMs with llama.cpp, vLLM and HF. | `mlops-inference/local-llm-inference` |
+
+## model-fallback
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| [`model-fallback`](../user-guide/skills/bundled/model-fallback/model-fallback-model-fallback.md) | Fail over to another API key or model when credits run out. | `model-fallback` |
 
 ## note-taking
 
@@ -73,20 +111,29 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 |-------|-------------|------|
 | [`obsidian`](../user-guide/skills/bundled/note-taking/note-taking-obsidian.md) | Read, search, create, and edit notes in the Obsidian vault. | `note-taking/obsidian` |
 
+## opinion-simulation
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| [`opinion-simulation`](../user-guide/skills/bundled/opinion-simulation/opinion-simulation-opinion-simulation.md) | Forecast public reaction with a MiroFish opinion simulation. | `opinion-simulation` |
+
 ## productivity
 
 | Skill | Description | Path |
 |-------|-------------|------|
 | [`airtable`](../user-guide/skills/bundled/productivity/productivity-airtable.md) | Airtable REST API via curl. Records CRUD, filters, upserts. | `productivity/airtable` |
 | [`box`](../user-guide/skills/bundled/productivity/productivity-box.md) | Box manages cloud files, sharing, search, and metadata. | `productivity/box` |
+| [`doc-coauthoring`](../user-guide/skills/bundled/productivity/productivity-doc-coauthoring.md) | Co-author docs, proposals, specs, PRDs and RFCs. | `productivity/doc-coauthoring` |
+| [`document-creation`](../user-guide/skills/bundled/productivity/productivity-document-creation.md) | Create APA-formatted Word documents with custom styling. | `productivity/document-creation` |
 | [`document-to-action-items`](../user-guide/skills/bundled/productivity/productivity-document-to-action-items.md) | Extract cited obligations, deadlines, tasks from documents. | `productivity/document-to-action-items` |
 | [`docx`](../user-guide/skills/bundled/productivity/productivity-docx.md) | Create, read, edit, template, and review Word .docx files. | `productivity/docx` |
+| [`excel-template-generator`](../user-guide/skills/bundled/productivity/productivity-excel-template-generator.md) | Create Excel .xlsx business templates and workbooks. | `productivity/excel-template-generator` |
 | [`google-workspace`](../user-guide/skills/bundled/productivity/productivity-google-workspace.md) | Gmail, Calendar, Drive, Docs, Sheets via gws CLI or Python. | `productivity/google-workspace` |
 | [`maps`](../user-guide/skills/bundled/productivity/productivity-maps.md) | Geocode, POIs, routes, timezones via OpenStreetMap/OSRM. | `productivity/maps` |
 | [`meeting-action-items`](../user-guide/skills/bundled/productivity/productivity-meeting-action-items.md) | Turn meeting notes into cited decisions, owners, tickets. | `productivity/meeting-action-items` |
+| [`news-briefing-cron`](../user-guide/skills/bundled/productivity/productivity-news-briefing-cron.md) | Schedule daily AI-news briefings to Telegram via cron. | `productivity/news-briefing-cron` |
 | [`notion`](../user-guide/skills/bundled/productivity/productivity-notion.md) | Notion API + ntn CLI: pages, databases, markdown, Workers. | `productivity/notion` |
 | [`pdf`](../user-guide/skills/bundled/productivity/productivity-pdf.md) | PDF files: create, read, merge, fill, OCR, edit text. | `productivity/pdf` |
-| [`powerpoint`](../user-guide/skills/bundled/productivity/productivity-powerpoint.md) | Create, read, edit .pptx decks with python-pptx. | `productivity/powerpoint` |
 | [`product-price-monitor`](../user-guide/skills/bundled/productivity/productivity-product-price-monitor.md) | Watch product, flight, or listing prices; alert on target. | `productivity/product-price-monitor` |
 | [`teams-meeting-pipeline`](../user-guide/skills/bundled/productivity/productivity-teams-meeting-pipeline.md) | Teams meeting summaries, job replay, Graph subscriptions. | `productivity/teams-meeting-pipeline` |
 | [`weekly-review-planning`](../user-guide/skills/bundled/productivity/productivity-weekly-review-planning.md) | Weekly reset: commitments, stalled work, next-week plan. | `productivity/weekly-review-planning` |
@@ -97,35 +144,52 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 | Skill | Description | Path |
 |-------|-------------|------|
 | [`arxiv`](../user-guide/skills/bundled/research/research-arxiv.md) | Search arXiv papers by keyword, author, category, or ID. | `research/arxiv` |
+| [`business-contact-scraping`](../user-guide/skills/bundled/research/research-business-contact-scraping.md) | Scrape business phones and emails for lead generation. | `research/business-contact-scraping` |
 | [`competitor-news-monitor`](../user-guide/skills/bundled/research/research-competitor-news-monitor.md) | Watch named companies for material news; cited digests. | `research/competitor-news-monitor` |
 | [`grounded-citations`](../user-guide/skills/bundled/research/research-grounded-citations.md) | Ground answers and documents in cited, verifiable sources. | `research/grounded-citations` |
+| [`hardware-research`](../user-guide/skills/bundled/research/research-hardware-research.md) | Research and compare hardware for self-hosted AI. | `research/hardware-research` |
+| [`last30days`](../user-guide/skills/bundled/research/research-last30days.md) | Research breaking news and trends from the last 30 days. | `research/last30days` |
 | [`llm-wiki`](../user-guide/skills/bundled/research/research-llm-wiki.md) | Karpathy's LLM Wiki: build/query interlinked markdown KB. | `research/llm-wiki` |
+| [`opportunity-research`](../user-guide/skills/bundled/research/research-opportunity-research.md) | Research and evaluate digital business opportunities. | `research/opportunity-research` |
 
 ## social-media
 
 | Skill | Description | Path |
 |-------|-------------|------|
+| [`linkedin-outreach`](../user-guide/skills/bundled/social-media/social-media-linkedin-outreach.md) | Find LinkedIn B2B leads and run rate-limited outreach. | `social-media/linkedin-outreach` |
 | [`xurl`](../user-guide/skills/bundled/social-media/social-media-xurl.md) | X/Twitter via xurl CLI: raw post search, posting, DM, media. | `social-media/xurl` |
 
 ## software-development
 
 | Skill | Description | Path |
 |-------|-------------|------|
+| [`agent-monetization`](../user-guide/skills/bundled/software-development/software-development-agent-monetization.md) | Monetiza coding agents con anuncios durante el thinking. | `software-development/agent-monetization` |
+| [`ai-agent-business-research`](../user-guide/skills/bundled/software-development/software-development-ai-agent-business-research.md) | Validate AI agent business ideas: market, rivals, pricing. | `software-development/ai-agent-business-research` |
+| [`clawksis-agent-skill-authoring`](../user-guide/skills/bundled/software-development/software-development-clawksis-agent-skill-authoring.md) | Author in-repo SKILL.md files: frontmatter and structure. | `software-development/clawksis-agent-skill-authoring` |
 | [`codebase-inspection`](../user-guide/skills/bundled/software-development/software-development-codebase-inspection.md) | Inspect codebases w/ pygount: LOC, languages, ratios. | `software-development/codebase-inspection` |
 | [`dogfood`](../user-guide/skills/bundled/software-development/software-development-dogfood.md) | Exploratory QA of web apps: find bugs, evidence, reports. | `software-development/dogfood` |
+| [`except-exception-narrowing`](../user-guide/skills/bundled/software-development/software-development-except-exception-narrowing.md) | Narrow broad except Exception clauses to specific types. | `software-development/except-exception-narrowing` |
 | [`github`](../user-guide/skills/bundled/software-development/software-development-github.md) | GitHub via gh CLI: PRs, issues, reviews, repos, auth. | `software-development/github` |
-| [`clawksis-agent-skill-authoring`](../user-guide/skills/bundled/software-development/software-development-clawksis-agent-skill-authoring.md) | Author in-repo SKILL.md files: frontmatter and structure. | `software-development/clawksis-agent-skill-authoring` |
 | [`inspecting-clawk-desktop-dom`](../user-guide/skills/bundled/software-development/software-development-inspecting-clawk-desktop-dom.md) | Read the live Clawksis desktop DOM/CSS over CDP. | `software-development/inspecting-clawk-desktop-dom` |
 | [`node-inspect-debugger`](../user-guide/skills/bundled/software-development/software-development-node-inspect-debugger.md) | Debug Node.js via --inspect + Chrome DevTools Protocol CLI. | `software-development/node-inspect-debugger` |
 | [`python-debugpy`](../user-guide/skills/bundled/software-development/software-development-python-debugpy.md) | Debug Python: pdb REPL + debugpy remote (DAP). | `software-development/python-debugpy` |
 | [`requesting-code-review`](../user-guide/skills/bundled/software-development/software-development-requesting-code-review.md) | Pre-commit review: security scan, quality gates, auto-fix. | `software-development/requesting-code-review` |
+| [`self-improvement`](../user-guide/skills/bundled/software-development/software-development-self-improvement.md) | Set up daily cron jobs that make Clawksis improve itself. | `software-development/self-improvement` |
 | [`simplify-code`](../user-guide/skills/bundled/software-development/software-development-simplify-code.md) | Parallel 4-agent cleanup of recent code changes. | `software-development/simplify-code` |
 | [`spike`](../user-guide/skills/bundled/software-development/software-development-spike.md) | Throwaway experiments to validate an idea before build. | `software-development/spike` |
 | [`systematic-debugging`](../user-guide/skills/bundled/software-development/software-development-systematic-debugging.md) | 4-phase root cause debugging: understand bugs before fixing. | `software-development/systematic-debugging` |
 | [`test-driven-development`](../user-guide/skills/bundled/software-development/software-development-test-driven-development.md) | TDD: enforce RED-GREEN-REFACTOR, tests before code. | `software-development/test-driven-development` |
+
+## token-saver
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| [`token-saver`](../user-guide/skills/bundled/token-saver/token-saver-token-saver.md) | Find and disable unused skills that waste context tokens. | `token-saver` |
 
 ## web
 
 | Skill | Description | Path |
 |-------|-------------|------|
 | [`blocked-page-recovery`](../user-guide/skills/bundled/web/web-blocked-page-recovery.md) | Use when a fetch fails: 403/429, paywall, WAF, bot wall. | `web/blocked-page-recovery` |
+| [`scrapegraphai`](../user-guide/skills/bundled/web/web-scrapegraphai.md) | Extract structured JSON from web pages with ScrapeGraphAI. | `web/scrapegraphai` |
+| [`scrapling-official`](../user-guide/skills/bundled/web/web-scrapling-official.md) | Scrape sites with Scrapling: anti-bot, stealth, spiders. | `web/scrapling-official` |

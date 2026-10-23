@@ -5,7 +5,7 @@ server's dashboard plugin loader.
 Two primitives combined into the original advisory chain:
 
 1. ``clawk_cli.web_server_dashboard._discover_dashboard_plugins`` opted into
-   the untrusted ``./.clawk/plugins/`` source via
+   the untrusted ``./.clawksis/plugins/`` source via
    ``os.environ.get("CLAWK_ENABLE_PROJECT_PLUGINS")`` — truthy for
    any non-empty string, so ``=0`` / ``=false`` / ``=no`` (all of
    which the agent loader treats as off, and which operators set to

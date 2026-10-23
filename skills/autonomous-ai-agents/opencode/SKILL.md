@@ -1,6 +1,6 @@
 ---
 name: opencode
-description: "External coding agents: delegate to OpenCode CLI (primary), Claude Code (Anthropic), or Codex (OpenAI) for features, PR review, and autonomous coding tasks."
+description: "Delegate coding tasks to OpenCode, Claude Code or Codex."
 version: 1.6.0
 author: Clawksis
 license: MIT

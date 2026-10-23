@@ -510,7 +510,9 @@ function CronJobFormFields({
     onChange({ ...form, [key]: next });
   };
   const onlyLocalAvailable =
-    deliveryTargets.filter((target) => target.id !== "local").length === 0;
+    deliveryTargets.filter(
+      (target) => target.id !== "local" && target.id !== "origin",
+    ).length === 0;
 
   const deliveryOptions = selectOptions(form.deliver, [
     ...deliveryTargets.map((target) => {
@@ -521,8 +523,6 @@ function CronJobFormFields({
       }
       return { value: target.id, label: base };
     }),
-    // Reply in the chat/channel where the job was created (cron deliver=origin).
-    { value: "origin", label: "Origin (reply where created)" },
   ]);
 
   return (

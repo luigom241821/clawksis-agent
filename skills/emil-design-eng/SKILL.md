@@ -1,11 +1,16 @@
 ---
 name: emil-design-eng
-description: "Emil Kowalski's design engineering philosophy — UI polish, component design, animation/easing decisions, springs, performance, accessibility, and the invisible details that make software feel great. USE THIS when creating or editing pages, landing pages, UI, components, or animations. Trigger on ES+EN: 'crear/hacer una landing', 'editar una página', 'mejorar/pulir la UI', 'diseño de interfaz', 'animaciones', 'build/edit a landing page', 'polish the UI', 'make it feel better'. Pair it with a coding CLI (codex_exec / claude_code / opencode_run) to implement, applying these design rules and reviewing with the Before/After table."
+description: "Design-engineering rules for polished UI and animation."
+version: 1.0.0
+license: MIT
+platforms: [linux, macos, windows]
 author: Emil Kowalski
 homepage: https://emilkowal.ski/skill
 source: https://github.com/emilkowalski/skill
 user-invocable: true
 metadata:
+  clawk:
+    tags: [design, ui, ux, animation, components, accessibility, frontend]
   openclaw:
     emoji: "🎨"
   clawksis:
@@ -14,6 +19,17 @@ metadata:
 ---
 
 # Design Engineering
+
+## When to Use
+
+Creating or editing pages, landing pages, UI, components, or animations: UI polish, component
+design, animation/easing decisions, springs, performance, accessibility, and the invisible
+details that make software feel great. Typical requests (ES + EN): 'crear/hacer una landing',
+'editar una página', 'mejorar/pulir la UI', 'diseño de interfaz', 'animaciones',
+'build/edit a landing page', 'polish the UI', 'make it feel better'.
+
+Pair it with a coding CLI (`codex_exec` / `claude_code` / `opencode_run`) to implement, applying
+these design rules and reviewing with the Before/After table below.
 
 ## Initial Response
 

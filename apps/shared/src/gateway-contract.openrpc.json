@@ -835,24 +835,6 @@
       }
     },
     {
-      "name": "diagnostics.share_nous",
-      "summary": "Upload a force-redacted debug bundle to Nous-internal diagnostics storage.",
-      "params": [
-        {
-          "name": "params",
-          "schema": {
-            "$ref": "#/components/schemas/DiagnosticsShareNousParams"
-          }
-        }
-      ],
-      "result": {
-        "name": "result",
-        "schema": {
-          "$ref": "#/components/schemas/DiagnosticsShareNousResult"
-        }
-      }
-    },
-    {
       "name": "display.install",
       "summary": "Run the distro package install on the gateway host; progress streams as display.install.log/.done.",
       "params": [
@@ -1965,6 +1947,60 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/McpServersTestResult"
+        }
+      }
+    },
+    {
+      "name": "media.delete",
+      "summary": "Delete one media entry: its row and its file on disk.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/MediaDeleteParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/MediaDeleteResult"
+        }
+      }
+    },
+    {
+      "name": "media.list",
+      "summary": "Generated media (newest first) with filters and pagination.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/MediaListParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/MediaListResult"
+        }
+      }
+    },
+    {
+      "name": "media.stats",
+      "summary": "Aggregate counts and size for the media gallery header.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/MediaStatsParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/MediaStatsResult"
         }
       }
     },
@@ -4341,6 +4377,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/UsageModel"
+        }
+      }
+    },
+    {
+      "name": "usage.by_model",
+      "summary": "Token usage and cost across every stored session, grouped by model.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/UsageByModelParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/UsageByModelResult"
         }
       }
     },
@@ -13765,7 +13819,7 @@
               }
             ],
             "default": null,
-            "title": "Requires Clawksis"
+            "title": "Requires Clawk"
           },
           "has_desktop_half": {
             "anyOf": [
@@ -16782,115 +16836,6 @@
           "max_concurrent_children"
         ],
         "title": "DelegationStatusResult",
-        "type": "object"
-      },
-      "DiagnosticsShareNousParams": {
-        "additionalProperties": false,
-        "properties": {
-          "error_context": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Error Context"
-          },
-          "extra_files": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Extra Files"
-          },
-          "log_lines": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Log Lines"
-          }
-        },
-        "title": "DiagnosticsShareNousParams",
-        "type": "object"
-      },
-      "DiagnosticsShareNousResult": {
-        "additionalProperties": false,
-        "description": "Structured envelope: ``ok=False`` + ``error`` renders inline instead of failing the RPC.",
-        "properties": {
-          "ok": {
-            "title": "Ok",
-            "type": "boolean"
-          },
-          "view_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "View Url"
-          },
-          "upload_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Upload Id"
-          },
-          "expires_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Expires At"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Error"
-          }
-        },
-        "required": [
-          "ok"
-        ],
-        "title": "DiagnosticsShareNousResult",
         "type": "object"
       },
       "DiscoveredRepo": {
@@ -23599,6 +23544,435 @@
         "title": "McpServersTestResult",
         "type": "object"
       },
+      "MediaDeleteParams": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "MediaDeleteParams",
+        "type": "object"
+      },
+      "MediaDeleteResult": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "freed_bytes": {
+            "title": "Freed Bytes",
+            "type": "integer"
+          },
+          "file_missing": {
+            "title": "File Missing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted",
+          "freed_bytes",
+          "file_missing"
+        ],
+        "title": "MediaDeleteResult",
+        "type": "object"
+      },
+      "MediaItem": {
+        "additionalProperties": true,
+        "description": "One ``media_generations`` row (``tui_gateway/server.py::_media_list``).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Id"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Session Id"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Message Id"
+          },
+          "media_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Media Type"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "file_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "File Path"
+          },
+          "original_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Original Url"
+          },
+          "file_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "File Size Bytes"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Height"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Prompt"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Created At"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "MediaItem",
+        "type": "object"
+      },
+      "MediaListParams": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Limit"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Offset"
+          },
+          "media_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "image",
+                  "video"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Media Type"
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date From"
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date To"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Session Id"
+          },
+          "search": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Search"
+          },
+          "min_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Min Size"
+          },
+          "max_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Size"
+          }
+        },
+        "title": "MediaListParams",
+        "type": "object"
+      },
+      "MediaListResult": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MediaItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "has_more"
+        ],
+        "title": "MediaListResult",
+        "type": "object"
+      },
+      "MediaStatsParams": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "MediaStatsParams",
+        "type": "object"
+      },
+      "MediaStatsResult": {
+        "additionalProperties": false,
+        "properties": {
+          "total_images": {
+            "title": "Total Images",
+            "type": "integer"
+          },
+          "total_videos": {
+            "title": "Total Videos",
+            "type": "integer"
+          },
+          "total_size_bytes": {
+            "title": "Total Size Bytes",
+            "type": "integer"
+          },
+          "last_7_days": {
+            "title": "Last 7 Days",
+            "type": "integer"
+          },
+          "expired_count": {
+            "title": "Expired Count",
+            "type": "integer"
+          },
+          "ready_count": {
+            "title": "Ready Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_images",
+          "total_videos",
+          "total_size_bytes",
+          "last_7_days",
+          "expired_count",
+          "ready_count"
+        ],
+        "title": "MediaStatsResult",
+        "type": "object"
+      },
       "MessageCompletePayload": {
         "additionalProperties": false,
         "description": "``prompt_turn._complete_turn_payload`` / ``session_auto_continue._emit_terminal_turn_error`` /\n``agent_callbacks._mirror_subagent_to_child`` (child watch mirror: ``text`` only) /\n``compute_host_bridge`` (``text`` + ``status``).",
@@ -24795,6 +25169,60 @@
           "provider"
         ],
         "title": "ModelSaveKeyResult",
+        "type": "object"
+      },
+      "ModelUsageRow": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "cache_read_tokens": {
+            "title": "Cache Read Tokens",
+            "type": "integer"
+          },
+          "cache_write_tokens": {
+            "title": "Cache Write Tokens",
+            "type": "integer"
+          },
+          "reasoning_tokens": {
+            "title": "Reasoning Tokens",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "title": "Total Tokens",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "sessions_count": {
+            "title": "Sessions Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model",
+          "input_tokens",
+          "output_tokens",
+          "cache_read_tokens",
+          "cache_write_tokens",
+          "reasoning_tokens",
+          "total_tokens",
+          "cost_usd",
+          "sessions_count"
+        ],
+        "title": "ModelUsageRow",
         "type": "object"
       },
       "NoticePayload": {
@@ -36510,6 +36938,18 @@
             "default": null,
             "title": "Title"
           },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Project Id"
+          },
           "model": {
             "anyOf": [
               {
@@ -45326,6 +45766,39 @@
         ],
         "title": "UsageBarKind",
         "type": "string"
+      },
+      "UsageByModelParams": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "UsageByModelParams",
+        "type": "object"
+      },
+      "UsageByModelResult": {
+        "additionalProperties": false,
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelUsageRow"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "total_tokens": {
+            "title": "Total Tokens",
+            "type": "integer"
+          },
+          "total_cost_usd": {
+            "title": "Total Cost Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "models",
+          "total_tokens",
+          "total_cost_usd"
+        ],
+        "title": "UsageByModelResult",
+        "type": "object"
       },
       "UsageLimit": {
         "additionalProperties": false,

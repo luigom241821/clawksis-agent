@@ -1,8 +1,13 @@
 ---
 name: supabase-postgres-best-practices
-description: "Postgres performance optimization and best practices from Supabase. Use this skill when writing, reviewing, or optimizing Postgres queries, schema designs, or database configurations. ES: postgres, optimización de consultas/queries, índices/indexes, índice faltante, RLS/seguridad a nivel de fila, rendimiento/performance, consultas lentas, EXPLAIN/plan de consulta, pooling/conexiones, particionado, esquema/schema, migraciones/constraints, llave primaria/foreign key, deadlock/bloqueos, SKIP LOCKED/colas, paginación, N+1, upsert, vacuum, pg_stat_statements, full text search, JSONB."
+description: "Optimize Postgres queries, indexes and schemas (Supabase)."
+version: "1.1.1"
+author: Supabase
+platforms: [linux, macos, windows]
 license: MIT
 metadata:
+  clawk:
+    tags: [postgres, supabase, performance, indexes, sql, rls, schema]
   author: supabase
   version: "1.1.1"
   openclaw:
@@ -25,6 +30,12 @@ Reference these guidelines when:
 - Configuring connection pooling or scaling
 - Optimizing for Postgres-specific features
 - Working with Row-Level Security (RLS)
+
+Spanish requests too: postgres, optimización de consultas/queries, índices/indexes, índice
+faltante, RLS/seguridad a nivel de fila, rendimiento/performance, consultas lentas,
+EXPLAIN/plan de consulta, pooling/conexiones, particionado, esquema/schema,
+migraciones/constraints, llave primaria/foreign key, deadlock/bloqueos, SKIP LOCKED/colas,
+paginación, N+1, upsert, vacuum, pg_stat_statements, full text search, JSONB.
 
 ## Rule Categories by Priority
 

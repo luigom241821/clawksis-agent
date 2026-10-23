@@ -47,7 +47,7 @@ def test_session_delete_returns_db_unavailable_when_no_db(monkeypatch):
 
 
 def test_session_delete_refuses_active_session(monkeypatch):
-    """Cannot delete a session currently bound to a live TUI session."""
+    """Cannot delete a session whose live TUI session is running a turn."""
     called: list[str] = []
 
     class _DB(_NoOnboardingRun):
@@ -56,7 +56,7 @@ def test_session_delete_refuses_active_session(monkeypatch):
             return True
 
     monkeypatch.setattr(server, "_get_db", lambda: _DB())
-    monkeypatch.setitem(server._sessions, "live", {"session_key": "key-live"})
+    monkeypatch.setitem(server._sessions, "live", {"session_key": "key-live", "running": True})
     try:
         resp = server.handle_request(
             {
@@ -127,6 +127,35 @@ def test_session_delete_propagates_db_exception(monkeypatch):
     assert "error" in resp
     assert resp["error"]["code"] == 5036
     assert "disk full" in resp["error"]["message"]
+
+
+def test_session_delete_closes_idle_live_session_first(monkeypatch):
+    """An idle live session no longer blocks a deliberate delete: it is closed, then deleted."""
+    called: list[str] = []
+    closed: list[tuple[str, str]] = []
+
+    class _DB(_NoOnboardingRun):
+        def delete_session(self, sid, sessions_dir=None, **_kw):
+            called.append(sid)
+            return True
+
+    def _close(sid, *, end_reason="tui_close", predicate=None):
+        assert predicate is not None and predicate(server._sessions[sid])
+        closed.append((sid, end_reason))
+        server._sessions.pop(sid, None)
+        return True
+
+    monkeypatch.setattr(server, "_get_db", lambda: _DB())
+    monkeypatch.setattr(server, "_close_session_by_id", _close)
+    monkeypatch.setitem(server._sessions, "idle", {"session_key": "key-idle", "running": False})
+
+    resp = server.handle_request(
+        {"id": "1", "method": "session.delete", "params": {"session_id": "key-idle"}}
+    )
+
+    assert resp.get("result") == {"deleted": "key-idle"}, resp
+    assert closed == [("idle", "deleted_by_user")]
+    assert called == ["key-idle"]
 
 
 def test_session_delete_success_returns_deleted_id(monkeypatch):

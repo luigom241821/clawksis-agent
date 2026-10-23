@@ -651,19 +651,6 @@ export interface SetupRuntimeCheckResult {
   free_tier_route?: boolean | null
   profile?: string | null
 }
-export interface DiagnosticsShareNousParams {
-  error_context?: string | null
-  extra_files?: Record<string, string> | null
-  log_lines?: number | null
-}
-/** Structured envelope: ``ok=False`` + ``error`` renders inline instead of failing the RPC. */
-export interface DiagnosticsShareNousResult {
-  ok: boolean
-  view_url?: string | null
-  upload_id?: string | null
-  expires_at?: string | null
-  error?: string | null
-}
 /** ``available`` = an identity exists AND the tier is on; whether inference runs on it is ``setup.runtime_check.free_tier_route``'s question. */
 export interface FreeTierStatusResult {
   has_guest: boolean
@@ -1989,6 +1976,75 @@ export interface MachineInfo {
   wsl?: boolean | null
   container?: boolean | null
 }
+export interface MediaListParams {
+  limit?: number | null
+  offset?: number | null
+  media_type?: 'image' | 'video' | null
+  date_from?: number | null
+  date_to?: number | null
+  model?: string | null
+  session_id?: string | null
+  search?: string | null
+  min_size?: number | null
+  max_size?: number | null
+}
+export interface MediaListResult {
+  items: MediaItem[]
+  total: number
+  has_more: boolean
+}
+/** One ``media_generations`` row (``tui_gateway/server.py::_media_list``). */
+export interface MediaItem {
+  id: number | string
+  session_id?: string | null
+  message_id?: number | string | null
+  media_type?: string | null
+  status?: string | null
+  file_path?: string | null
+  original_url?: string | null
+  file_size_bytes?: number | null
+  width?: number | null
+  height?: number | null
+  prompt?: string | null
+  model?: string | null
+  provider?: string | null
+  created_at?: number | null
+  [key: string]: unknown
+}
+export interface MediaDeleteParams {
+  id: number | string
+}
+export interface MediaDeleteResult {
+  deleted: boolean
+  freed_bytes: number
+  file_missing: boolean
+}
+export type MediaStatsParams = Record<string, never>
+export interface MediaStatsResult {
+  total_images: number
+  total_videos: number
+  total_size_bytes: number
+  last_7_days: number
+  expired_count: number
+  ready_count: number
+}
+export type UsageByModelParams = Record<string, never>
+export interface UsageByModelResult {
+  models: ModelUsageRow[]
+  total_tokens: number
+  total_cost_usd: number
+}
+export interface ModelUsageRow {
+  model: string
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  reasoning_tokens: number
+  total_tokens: number
+  cost_usd: number
+  sessions_count: number
+}
 /** ``word`` is the token under the cursor (``@`` prefix = context reference); ``cwd`` / ``session_id`` pick the directory the listing resolves against. */
 export interface CompletePathParams {
   profile?: string | null
@@ -3103,6 +3159,7 @@ export interface SessionCreateParams {
   messages?: SeedMessage[] | null
   parent_session_id?: string | null
   title?: string | null
+  project_id?: string | null
   model?: string | null
   provider?: string | null
   reasoning_effort?: string | null
@@ -6147,8 +6204,6 @@ export interface RpcMethods {
   'delegation.pause': { params: DelegationPauseParams; result: DelegationPauseResult }
   /** Running subagent tree plus the spawn pause flag and limits. */
   'delegation.status': { params: ProfileParams; result: DelegationStatusResult }
-  /** Upload a force-redacted debug bundle to Nous-internal diagnostics storage. */
-  'diagnostics.share_nous': { params: DiagnosticsShareNousParams; result: DiagnosticsShareNousResult }
   /** Run the distro package install on the gateway host; progress streams as display.install.log/.done. */
   'display.install': { params: ProfileParams; result: DisplayInstallResult }
   /** Take over: the human named by a viewer id this connection minted controls the screen. */
@@ -6273,6 +6328,12 @@ export interface RpcMethods {
   'mcp.servers.status': { params: ProfileParams; result: McpServersStatusResult }
   /** Connect, list tools, disconnect — an OAuth server with no token on disk is reported as not ok. */
   'mcp.servers.test': { params: McpServerNameParams; result: McpServersTestResult }
+  /** Delete one media entry: its row and its file on disk. */
+  'media.delete': { params: MediaDeleteParams; result: MediaDeleteResult }
+  /** Generated media (newest first) with filters and pagination. */
+  'media.list': { params: MediaListParams; result: MediaListResult }
+  /** Aggregate counts and size for the media gallery header. */
+  'media.stats': { params: MediaStatsParams; result: MediaStatsResult }
   /** Set/clear one author's emoji reaction on a message; returns the row's full reaction list. */
   'message.react': { params: MessageReactParams; result: MessageReactResult }
   /** Remove every credential (env keys and OAuth state) for a provider. */
@@ -6537,6 +6598,8 @@ export interface RpcMethods {
   'toolsets.list': { params: _SessionScoped; result: ToolsetsListResult }
   /** Two-bar dollar usage view shared by /usage, /topup and /subscription; fail-open to unavailable. */
   'usage.bars': { params: ProfileParams; result: UsageModel }
+  /** Token usage and cost across every stored session, grouped by model. */
+  'usage.by_model': { params: UsageByModelParams; result: UsageByModelResult }
   /** Add a login / payment / address item to the local vault. */
   'vault.add': { params: VaultAddParams; result: VaultAddResult }
   /** Metadata-only listing across the local vault and every unlocked password manager. */
@@ -6620,7 +6683,6 @@ export const RPC_METHODS = [
   'cron.manage',
   'delegation.pause',
   'delegation.status',
-  'diagnostics.share_nous',
   'display.install',
   'display.lease.acquire',
   'display.lease.release',
@@ -6683,6 +6745,9 @@ export const RPC_METHODS = [
   'mcp.servers.set_api_key',
   'mcp.servers.status',
   'mcp.servers.test',
+  'media.delete',
+  'media.list',
+  'media.stats',
   'message.react',
   'model.disconnect',
   'model.options',
@@ -6815,6 +6880,7 @@ export const RPC_METHODS = [
   'tools.show',
   'toolsets.list',
   'usage.bars',
+  'usage.by_model',
   'vault.add',
   'vault.list',
   'vault.lock',

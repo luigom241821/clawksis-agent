@@ -39,6 +39,7 @@ _cron_default_profile = late("_cron_default_profile", "clawk_cli.web_server_cron
 _cron_profile_home = late("_cron_profile_home", "clawk_cli.web_server_cron")
 _open_session_db_for_profile = late("_open_session_db_for_profile", "clawk_cli.web_server_sessions")
 _session_db_path_for_profile = late("_session_db_path_for_profile", "clawk_cli.web_server_sessions")
+_attach_session_projects = late("_attach_session_projects")
 
 _NOT_FOUND = "Session not found"
 
@@ -184,12 +185,14 @@ def get_sessions(
     limit: int = Query(20, ge=0, le=100), offset: int = Query(0, ge=0), min_messages: int = 0,
     archived: str = "exclude", order: str = "created", source: str | None = None, sources: str | None = None,
     exclude_sources: str | None = None, cwd_prefix: str | None = None, full: bool = False,
-    profile: Optional[str] = None):
+    profile: Optional[str] = None, project_id: Optional[str] = None):
     """List sessions.
 
     ``order=recent`` sorts by latest activity across the compression chain, so
     a long-running chat stays on page one after it auto-compresses onto a fresh
     id.  Rows omit ``system_prompt`` / ``model_config`` unless ``full=1``.
+    Rows carry their chat project (Clawksis); ``project_id`` filters the page to
+    one project, or to unassigned chats with ``none`` / ``null`` / ``unassigned``.
     """
     if archived not in ("exclude", "only", "include"):
         raise HTTPException(
@@ -224,6 +227,16 @@ def get_sessions(
                 include_pinned=True,
                 **scope)
             total = db.session_count(exclude_children=True, **scope)
+            try:
+                _attach_session_projects(sessions, db.db_path)
+            except Exception:  # project tags are decoration: never fail the list over them
+                _log.debug("GET /api/sessions: chat-project tagging failed", exc_info=True)
+            if requested_project := (project_id or "").strip():
+                unassigned = requested_project.lower() in ("none", "null", "unassigned")
+                sessions = [s for s in sessions
+                            if (not s.get("project_id") if unassigned
+                                else s.get("project_id") == requested_project)]
+                total = len(sessions)
             now = time.time()
             row_profile = profile_name or _cron_default_profile()
             for s in sessions:

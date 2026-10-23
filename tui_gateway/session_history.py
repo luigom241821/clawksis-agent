@@ -397,6 +397,7 @@ def _start_inflight_turn(
     if isinstance(display_metadata, dict):
         turn["display_metadata"] = dict(display_metadata)
     session["inflight_turn"] = turn
+    _record_pending_turn(session, text, now)  # durable twin (resilience.durable_turns, opt-in)
 
 
 def _append_inflight_delta(session: dict, delta: Any) -> None:
@@ -428,6 +429,7 @@ def _record_inflight_correction(session: dict, text: Any) -> None:
 
 def _clear_inflight_turn(session: dict) -> None:
     session["inflight_turn"] = None
+    _clear_pending_turn(session)
     # A turn that never reached the agent (cancelled/refused before ready) leaves its submit-time row
     # as the durable record of the send; a later turn must not adopt it as its own input.
     session.pop("_submit_user_row", None)
@@ -452,6 +454,7 @@ def _fail_inflight_turn(session: dict, error: Any, error_surface: Optional[dict]
         turn.pop("error_surface", None)
     turn.update(streaming=False, updated_at=now)
     session["inflight_turn"] = turn
+    _clear_pending_turn(session)  # the turn ended (with an error), it did not crash: nothing to resume
     # The turn is over (build failed, agent missing, prologue raised): the submit-time row stays as the
     # durable record of the send, but a later turn must not adopt it as its own input.
     session.pop("_submit_user_row", None)

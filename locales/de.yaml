@@ -154,6 +154,7 @@ gateway:
     hygiene_timeout: "⚠️ Das Kürzen des Konversationsverlaufs hat zu lange gedauert, daher habe ich es übersprungen und alles unverändert gelassen. Führen Sie /compress aus, um es erneut zu versuchen, oder /new für einen Neustart."
     hygiene_timeout_doctor_hint: " Wenn das wiederholt passiert, führen Sie `clawk doctor` auf dem Host aus."
     hygiene_failed: "⚠️ Das Kürzen des Konversationsverlaufs ist fehlgeschlagen, daher habe ich alles unverändert gelassen. Führen Sie /compress aus, um es erneut zu versuchen, oder /new für einen Neustart. Wenn das wiederholt passiert, führen Sie `clawk doctor` auf dem Host aus."
+    hygiene_compacting: "🧹 Ein langer Gesprächsverlauf ({count} Nachrichten) wird vor der Antwort komprimiert — das kann ein bis zwei Minuten dauern. Nutze /new, wenn du lieber neu anfangen möchtest."
     codex_nothing: "🗜️ Nichts zu komprimieren: Diese Sitzung läuft auf der Codex-App-Server-Runtime, deren Kontext in einem Codex-eigenen Thread liegt, der nur existiert, solange der Agent aktiv ist. Senden Sie zuerst eine Nachricht, dann /compress — oder /reset für einen Neustart."
     codex_compacted: "🗜️ Codex-App-Server-Thread komprimiert (thread/compact). Der Transkript-Spiegel bleibt absichtlich unverändert — der App-Server trägt jetzt den komprimierten Kontext."
     codex_incomplete: "⚠️ Die Komprimierung im Codex-App-Server wurde nicht abgeschlossen — der Thread ist unverändert. Prüfen Sie die App-Server-Logs, wiederholen Sie /compress oder verwenden Sie /reset für eine saubere Sitzung."

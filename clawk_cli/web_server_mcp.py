@@ -4,6 +4,7 @@ Wraps the same config layer the CLI uses (clawk_cli.mcp_config); stdio ``env``
 secrets are redacted on read.
 """
 
+import json
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional
@@ -70,10 +71,43 @@ def _normalize_mcp_server_create(body: MCPServerCreate) -> tuple[str, dict[str, 
     return name, server_config, bearer_token
 
 
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    """Best-effort dict: older/hand-edited config.yaml entries store ``env`` as a JSON string, and one
+    malformed server must not 500 the whole list endpoint."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+def _coerce_sequence(value: Any) -> list[Any]:
+    """Best-effort list (see ``_coerce_mapping``); a bare non-JSON string is ONE arg, not its chars."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, list):
+            return parsed
+        return [value] if value else []
+    try:
+        return list(value or [])
+    except TypeError:
+        return []
+
+
 def _redact_mcp_env(env: dict[str, Any]) -> dict[str, str]:
     """Mask secret-shaped MCP env values for read responses."""
     out: dict[str, str] = {}
-    for k, v in (env or {}).items():
+    for k, v in _coerce_mapping(env).items():
         try:
             out[str(k)] = redact_key(str(v)) if v else ""
         except Exception:
@@ -94,8 +128,8 @@ def _mcp_server_summary(name: str, cfg: dict[str, Any], plugin: str | None = Non
         "transport": transport,
         "url": cfg.get("url"),
         "command": cfg.get("command"),
-        "args": list(cfg.get("args") or []),
-        "env": _redact_mcp_env(cfg.get("env") or {}),
+        "args": _coerce_sequence(cfg.get("args")),
+        "env": _redact_mcp_env(cfg.get("env")),
         "auth": auth,
         "enabled": mcp_server_enabled(cfg),
         # Tool selection: list of enabled tool names, or None = all.

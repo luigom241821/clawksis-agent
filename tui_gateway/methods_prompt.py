@@ -837,6 +837,12 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_nowait(params, rid)
     if err:
         return err
+    # Cron runs are viewable from the chat but read-only (Clawksis): a manual turn would mix scheduler
+    # context and automatic state into an interactive history.
+    if (str(session.get("source") or "").strip().lower() == "cron"
+            or str(session.get("session_key") or "").startswith("cron_")):
+        return _err(rid, 4009, "Esta es una ejecución automática de cron. Puedes revisar el resultado aquí, "
+                               "pero para conversar sobre él abre una nueva conversación normal.")
     from tools.bot_relay import DeliveryAuthor
 
     # Only the relay handler can build a DeliveryAuthor. A dict here is a client claiming a sender.

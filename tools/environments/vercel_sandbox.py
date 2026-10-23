@@ -203,7 +203,7 @@ class VercelSandboxEnvironment(BaseEnvironment):
         return self._sandbox
 
     def _remote_clawk_dir(self) -> str:
-        return f"{self._remote_home.rstrip('/')}/.clawk"
+        return f"{self._remote_home.rstrip('/')}/.clawksis"
 
     def _create_sandbox(self) -> Sandbox:
         _ensure_vercel_sdk()

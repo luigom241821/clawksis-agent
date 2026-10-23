@@ -1,12 +1,12 @@
 ---
-title: "Clawksis — Use, configure, theme, extend, and orchestrate Clawksis"
-sidebar_label: "Clawksis"
+title: "Clawksis Agent — Use, configure, theme, extend, and orchestrate Clawksis"
+sidebar_label: "Clawksis Agent"
 description: "Use, configure, theme, extend, and orchestrate Clawksis"
 ---
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-# Clawksis
+# Clawksis Agent
 
 Use, configure, theme, extend, and orchestrate Clawksis.
 
@@ -626,7 +626,6 @@ For occasional contributors and PR authors. Full developer docs: https://github.
 ### Project Layout
 
 <!-- ascii-guard-ignore -->
-
 ```
 
 clawksis-agent/
@@ -666,7 +665,6 @@ clawksis-agent/
 └── website/              # Docusaurus docs site
 
 ```
-
 <!-- ascii-guard-ignore-end -->
 
 Config: `~/.clawksis/config.yaml` (settings), `~/.clawksis/.env` (API keys).

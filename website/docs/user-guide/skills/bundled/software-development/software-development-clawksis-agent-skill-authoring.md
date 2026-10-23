@@ -1,12 +1,12 @@
 ---
-title: "Clawksis Skill Authoring — Author in-repo SKILL.md files: frontmatter and structure"
-sidebar_label: "Clawksis Skill Authoring"
+title: "Clawksis Agent Skill Authoring — Author in-repo SKILL.md files: frontmatter and structure"
+sidebar_label: "Clawksis Agent Skill Authoring"
 description: "Author in-repo SKILL.md files: frontmatter and structure"
 ---
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-# Clawksis Skill Authoring
+# Clawksis Agent Skill Authoring
 
 Author in-repo SKILL.md files: frontmatter and structure.
 

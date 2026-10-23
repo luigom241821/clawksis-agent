@@ -1,8 +1,13 @@
 ---
 name: self-improvement
-description: "Autonomous self-improvement of Clawksis via daily cron jobs — scan skills/tools/MCPs for issues, implement fixes, deploy to main, and run clawk update. USE THIS when setting up or maintaining improvement crons, or when the user says 'mejórate solo', 'auto-mejora', 'improve yourself', 'hazte mejor'. ES: mejora automática del agente, auto-mejora diaria, cron de mejora, optimización autónoma."
+description: "Set up daily cron jobs that make Clawksis improve itself."
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 version: "1.11"
 metadata:
+  clawk:
+    tags: [self-improvement, cron, automation, ci-cd, maintenance]
   openclaw:
     emoji: "🔄"
     requires:
@@ -14,6 +19,12 @@ metadata:
 # Self-Improvement — autonomous CI/CD for Clawksis
 
 Run a daily cron job that autonomously improves Clawksis: scans skills/tools/MCPs for issues, implements fixes, deploys to main, and runs `clawk update`. The agent becomes self-healing and self-optimizing.
+
+## When to Use
+
+Setting up or maintaining the daily improvement crons, or when the user asks the agent to
+improve itself: 'mejórate solo', 'auto-mejora', 'improve yourself', 'hazte mejor', mejora
+automática del agente, auto-mejora diaria, cron de mejora, optimización autónoma.
 
 ## Workflow (5 phases)
 

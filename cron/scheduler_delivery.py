@@ -43,6 +43,10 @@ _HOME_TARGET_PRIORITY = (
     "feishu", "wecom", "weixin", "bluebubbles", "qqbot", "whatsapp", "whatsapp_cloud",
 )
 
+# ``wrap_response`` header (Clawksis): "⏰ <job name>\n\n<content>". Platform adapters that strip
+# the wrapper (Yuanbao) match this prefix.
+CRON_DELIVERY_HEADER_PREFIX = "⏰ "
+
 # Back-compat: primary env var -> previous name, consulted when the primary is unset.
 _LEGACY_HOME_TARGET_ENV_VARS = {"QQBOT_HOME_CHANNEL": "QQ_HOME_CHANNEL"}
 
@@ -1800,7 +1804,7 @@ def _deliver_result(
 
     from gateway.config import load_gateway_config
 
-    # Wrap with header/footer unless cron.wrap_response: false.
+    # Small "⏰ <name>" header unless cron.wrap_response: false.
     wrap_response = True
     user_cfg = None
     with contextlib.suppress(Exception):
@@ -1812,15 +1816,10 @@ def _deliver_result(
     # persisted as ``last_delivery_unverified`` so `clawk cron list` shows it.
     unverified_targets: list = []
     if wrap_response:
+        # Natural header (Clawksis): a "⏰ <name>" tag keeps a cron message recognizable without
+        # the robotic job_id / divider / management footer; jobs are managed from the dashboard.
         task_name = job.get("name", job["id"])
-        delivery_content = (
-            f"Cronjob Response: {task_name}\n"
-            f"(job_id: {job.get('id', '')})\n"
-            f"-------------\n\n"
-            f"{content}\n\n"
-            "To stop or manage this job, send me a new message "
-            f"(e.g. \"stop reminder {task_name}\")."
-        )
+        delivery_content = f"{CRON_DELIVERY_HEADER_PREFIX}{task_name}\n\n{content}"
     else:
         delivery_content = content
 

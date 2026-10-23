@@ -76,18 +76,18 @@ def test_status_routes_report_the_free_tier(portal, monkeypatch):
     portal_status = client.get("/api/portal", headers=HEADERS).json()
     assert portal_status["free_tier"] is True
     assert portal_status["account_tier"] == "anonymous"
+    # Clawksis is BYOK: the Accounts tab never lists a Nous Portal card.
     providers = client.get("/api/providers/oauth", headers=HEADERS).json()["providers"]
-    nous = next(p for p in providers if p["id"] == "nous")
-    assert nous["status"]["free_tier"] is True
+    assert not [p for p in providers if p["id"] == "nous"]
 
 
 def test_a_connector_only_guest_is_not_reported_as_the_free_tier(portal, monkeypatch):
     as_local_desktop_backend(monkeypatch)
     anon_auth.ensure_portal_identity(explicit=True)
     assert client.get("/api/portal", headers=HEADERS).json()["free_tier"] is False
+    # Clawksis is BYOK: the Accounts tab never lists a Nous Portal card.
     providers = client.get("/api/providers/oauth", headers=HEADERS).json()["providers"]
-    nous = next(p for p in providers if p["id"] == "nous")
-    assert not nous["status"].get("free_tier")
+    assert not [p for p in providers if p["id"] == "nous"]
 
 
 def test_a_sign_in_cancelled_while_waiting_stops_the_token_poll_and_persists_nothing(portal, free_account):

@@ -72,7 +72,7 @@ def _plugin_provider_rows(
             entries += [v for v in (schema.get("variants") or []) if isinstance(v, dict)]
         for entry in entries:
             row = {"name": entry.get("name", provider.display_name), "badge": entry.get("badge", ""),
-                   "tag": entry.get("tag", ""), "env_vars": entry.get("env_vars", [])}
+                   "tag": entry.get("tag", ""), "desc": entry.get("desc", ""), "env_vars": entry.get("env_vars", [])}
             row.update({key: name for key in marker_keys})
             if flatten_variants and entry.get("web_tier"):
                 row["web_tier"] = entry["web_tier"]
@@ -142,27 +142,13 @@ def _computer_use_provider_rows() -> list[dict]:
 def _visible_providers(
     cat: dict, config: dict, *, force_fresh: bool = False, features: Optional[NousSubscriptionFeatures] = None,
 ) -> list[dict]:
-    """Provider entries visible for the current auth/config state.
-    Nous-managed rows (``managed_nous_feature``) are always shown, even logged-out/unentitled, to
-    advertise the capability."""
-    from clawk_cli.tools_config import get_nous_subscription_features
-
-    if features is None:
-        features = get_nous_subscription_features(config, force_fresh=force_fresh)
-    acct = features.account_info
-    # Pool-only users (free tool pool, no paid access) get image gen but NOT video gen — the pool doesn't
-    # fund `fal-video`, so hide the managed video row rather than advertise a denial.
-    pool_only = bool(acct and acct.logged_in and acct.paid_service_access is not True and acct.tool_gateway_entitled)
-    visible = []
-    for provider in cat.get("providers", []):
-        managed = provider.get("managed_nous_feature")
-        # Managed rows stay visible regardless of auth (selecting one drives an inline Portal login); a
-        # `requires_nous_auth` row without a managed feature hides until logged in.
-        if provider.get("requires_nous_auth") and not managed and not features.nous_auth_present:
-            continue
-        if pool_only and managed == "video_gen" and not (acct and acct.tool_gateway_entitled_for("fal-video")):
-            continue
-        visible.append(provider)
+    """Provider entries visible for the current config state.
+    Clawksis is BYOK: Nous-managed (``managed_nous_feature``) and Portal-auth (``requires_nous_auth``)
+    rows are never offered, so a row re-introducing one cannot surface in any picker. ``config``,
+    ``force_fresh`` and ``features`` are kept for call-site compatibility."""
+    visible = [
+        provider for provider in cat.get("providers", [])
+        if not (provider.get("managed_nous_feature") or provider.get("requires_nous_auth"))]
 
     # Plugin-registered rows render BELOW the hardcoded rows (for web/browser they are the only real provider rows).
     builder = _PLUGIN_ROW_BUILDERS.get(cat.get("name"))
@@ -280,9 +266,10 @@ def _any_plugin_provider_available(registry_module: str) -> bool:
 
 def _configure_tool_category(ts_key: str, cat: dict, config: dict, *, force_fresh: bool = True, reconfigure: bool = False):
     """Provider selection for a tool category, then API-key setup for the chosen row.
-    ``reconfigure`` ("Reconfigure an existing tool"): no setup note / skip row / Nous marker, and the
-    chosen provider goes through the key-update prompts instead of the new-enable prompts."""
-    from clawk_cli.tools_config import _prompt_choice, _provider_env_ready, get_nous_subscription_features
+    ``reconfigure`` ("Reconfigure an existing tool"): no setup note / skip row, and the chosen provider
+    goes through the key-update prompts instead of the new-enable prompts. Each row's ``desc`` renders as
+    a dim secondary line under it."""
+    from clawk_cli.tools_config import _prompt_choice, _provider_env_ready
 
     name = cat["name"]
     providers = _visible_providers(cat, config, force_fresh=force_fresh)
@@ -301,15 +288,8 @@ def _configure_tool_category(ts_key: str, cat: dict, config: dict, *, force_fres
         return
     print()
 
-    # Logged-in Nous users get a marker on rows included in their subscription (cost-extra vs. included).
-    _nous_logged_in = False
-    if not reconfigure:
-        try:
-            _nous_logged_in = bool(get_nous_subscription_features(config, force_fresh=force_fresh).nous_auth_present)
-        except Exception:
-            pass
-
     provider_choices = []  # plain text labels only (no ANSI codes in menu items)
+    provider_descs = []
     for p in providers:
         badge = f" [{p['badge']}]" if p.get("badge") else ""
         tag = f" — {p['tag']}" if p.get("tag") else ""
@@ -319,18 +299,16 @@ def _configure_tool_category(ts_key: str, cat: dict, config: dict, *, force_fres
                 configured = " [active]"
             elif p.get("env_vars", []):
                 configured = " [configured]"
-        # Subscribers get the "included" star; everyone else a hint that selecting triggers a Portal login.
-        sub_marker = ""
-        if not reconfigure and p.get("managed_nous_feature"):
-            sub_marker = "  ★ Included with your Nous subscription" if _nous_logged_in else "  ★ via Nous Portal (login on select)"
-        provider_choices.append(f"{p['name']}{badge}{tag}{configured}{sub_marker}")
+        provider_choices.append(f"{p['name']}{badge}{tag}{configured}")
+        provider_descs.append(p.get("desc", ""))
 
     if not reconfigure:
         provider_choices.append("Skip — keep defaults / configure later")
+        provider_descs.append("Keep your current setup; you can change this anytime.")
 
     default_idx = _detect_active_provider_index(providers, config, force_fresh=force_fresh)
     question = "  Select provider:" if reconfigure else f"  {title}:"
-    provider_idx = _prompt_choice(question, provider_choices, default_idx)
+    provider_idx = _prompt_choice(question, provider_choices, default_idx, descriptions=provider_descs)
     if provider_idx >= len(providers):
         _print_info(f"  Skipped {name}")
         return
@@ -899,23 +877,6 @@ def _print_provider_selection(provider: dict, managed_feature, *, reconfigure: b
         _print_success(f"  Computer Use backend set to: {provider['computer_use_backend']}")
 
 
-def _show_portal_hint(provider: dict, config: dict, managed_feature, force_fresh: bool) -> bool:
-    """True when a BYOK row shares its category with a Nous-managed sibling and the user is not authed to
-    Nous — a single dim hint tells them the key is avoidable via a Portal subscription."""
-    from clawk_cli.tools_config import TOOL_CATEGORIES, get_nous_subscription_features
-
-    if managed_feature or provider.get("requires_nous_auth"):
-        return False
-    try:
-        for _cat in TOOL_CATEGORIES.values():
-            _providers = _cat.get("providers", [])
-            if provider in _providers and any(sib.get("managed_nous_feature") for sib in _providers):
-                return not get_nous_subscription_features(config, force_fresh=force_fresh).nous_auth_present
-    except Exception:
-        pass
-    return False
-
-
 def _prompt_secret(
     key: str, label: str, url: str, default_val: str, *, reconfigure: bool, url_label: str, strip: bool = False,
 ) -> bool:
@@ -983,13 +944,8 @@ def _configure_provider(provider: dict, config: dict, *, force_fresh: bool = Tru
         if provider.get("post_setup"):
             _run_post_setup(provider["post_setup"])
         _print_success(f"  {provider['name']} - no configuration needed!")
-        if managed_feature:
-            _print_info("  Requests for this tool will be billed to your Nous subscription.")
         _finish_provider_selection(provider, config, managed_feature)
         return
-
-    if not reconfigure and _show_portal_hint(provider, config, managed_feature, force_fresh):
-        _print_info("  Available through Nous Portal subscription.")
 
     all_configured = _prompt_env_vars(env_vars, reconfigure=reconfigure)
     if provider.get("post_setup") and all_configured:

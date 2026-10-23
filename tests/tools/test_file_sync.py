@@ -421,8 +421,8 @@ class TestSyncBackSecurity:
         def bulk_download(dest: Path) -> None:
             with tarfile.open(dest, "w") as tar:
                 for name, data in {
-                    "root/.clawk/credentials/token.json": b"remote-token",
-                    "root/.clawk/skills/skill.py": b"remote-skill",
+                    "root/.clawksis/credentials/token.json": b"remote-token",
+                    "root/.clawksis/skills/skill.py": b"remote-skill",
                 }.items():
                     info = tarfile.TarInfo(name)
                     info.size = len(data)

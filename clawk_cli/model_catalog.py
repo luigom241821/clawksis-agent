@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_CATALOG_URL = "https://github.com/samuelgradientai-sys/clawksis-agent"
+DEFAULT_CATALOG_URL = (
+    "https://samuelgradientai-sys.github.io/clawksis-agent/api/model-catalog.json"
+)
 # The Docusaurus site sits behind Vercel, which occasionally 403s non-browser clients (bot
 # challenge); the raw GitHub copy is the same manifest and is not bot-gated.
 DEFAULT_CATALOG_FALLBACK_URLS: tuple[str, ...] = (

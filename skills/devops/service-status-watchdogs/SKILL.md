@@ -1,6 +1,8 @@
 ---
 name: service-status-watchdogs
-description: "Monitor public service-status pages and wire silent cron watchdogs that alert on recovery or degradation changes."
+description: "Watch service status pages with silent cron alerts."
+license: MIT
+platforms: [linux, macos, windows]
 version: 1.0.0
 author: Clawksis
 tags: [cron, watchdog, monitoring, status-pages, alerts, service-health, public-json]

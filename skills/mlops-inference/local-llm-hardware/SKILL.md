@@ -1,7 +1,14 @@
 ---
 name: local-llm-hardware
-description: Research, compare, and recommend mini PCs / workstations for running local LLMs. Covers Strix Halo, DGX Spark, Apple Silicon, and DIY builds with unified memory trade-offs.
+description: "Compare mini PCs and workstations for running local LLMs."
+version: 1.0.0
+author: Clawksis
+license: MIT
+platforms: [linux, macos, windows]
 category: mlops-inference
+metadata:
+  clawk:
+    tags: [hardware, local-llm, mini-pc, workstation, apple-silicon, strix-halo, dgx-spark]
 ---
 
 # Local LLM Hardware Research

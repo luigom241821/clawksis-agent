@@ -188,6 +188,13 @@ class ProviderNotConfiguredError(RuntimeError):
     """
 
 
+def _env_file_remedy(env_var: str) -> str:
+    # Fork: point at the .env file, not a shell variable — the gateway/cron run as background
+    # services that never see an interactive shell's `export`.
+    return (f"Add {env_var} to the .env file under your Clawksis home (a shell `export` is not "
+            f"visible to background services like the gateway)")
+
+
 def missing_provider_credentials_message(provider_id: str) -> str:
     """The "Provider 'X' is set in config.yaml but …" error for an explicit provider with no credentials.
 
@@ -210,9 +217,9 @@ def missing_provider_credentials_message(provider_id: str) -> str:
     if provider_id in LLAMACPP_ALIASES:
         problem, remedy = "no local llama.cpp server is running", "Start it in Settings → Providers → Local models"
     elif env_vars:
-        remedy = f"Set the {env_vars[0]} environment variable"
+        remedy = _env_file_remedy(env_vars[0])
     elif pconfig is None:
-        remedy = f"Set the {provider_id.upper().replace('-', '_')}_API_KEY environment variable"
+        remedy = _env_file_remedy(f"{provider_id.upper().replace('-', '_')}_API_KEY")
     elif str(pconfig.auth_type).startswith("oauth"):
         problem, remedy = "no credentials were found", f"Run `clawk auth add {provider_id}` to sign in"
     else:

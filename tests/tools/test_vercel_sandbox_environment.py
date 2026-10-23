@@ -375,9 +375,9 @@ class TestFileSync:
         sandbox.snapshot_id = "snap_cleanup"
         vercel_sdk.current.download_file_content = _tar_bytes(
             {
-                "home/vercel/.clawk/credentials/token.txt": b"remote-token",
-                "home/vercel/.clawk/credentials/new.txt": b"new-remote",
-                "home/vercel/.clawk/unmapped/skip.txt": b"skip",
+                "home/vercel/.clawksis/credentials/token.txt": b"remote-token",
+                "home/vercel/.clawksis/credentials/new.txt": b"new-remote",
+                "home/vercel/.clawksis/unmapped/skip.txt": b"skip",
             }
         )
 

@@ -1,12 +1,16 @@
 ---
 name: opinion-simulation
-description: "USE THIS to forecast PUBLIC REACTION / opinion / sentiment / social dynamics around a topic, message, product, post or document — a synthetic focus group / audience simulation. It drives the MiroFish multi-agent simulation tool. Trigger on ES+EN: 'cómo va a reaccionar la gente a X', 'qué va a opinar/pensar el público', 'simular reacción/opinión/sentimiento', 'focus group sintético', 'probar un mensaje/anuncio antes de publicar', 'simular audiencia', 'forecast public reaction', 'simulate audience/opinion', 'social/opinion simulation', 'sentiment forecast', 'mirofish'."
+description: "Forecast public reaction with a MiroFish opinion simulation."
+version: 1.0.0
+platforms: [linux, macos, windows]
 argument-hint: 'opinion-simulation forecast reaction to <topic / message / product>'
 allowed-tools: Bash, Read
 author: Clawksis (Gradient AI)
 license: MIT
 user-invocable: true
 metadata:
+  clawk:
+    tags: [simulation, opinion, sentiment, focus-group, mirofish, forecasting]
   clawksis:
     emoji: "🐟"
   openclaw:
@@ -21,6 +25,15 @@ reaccionarían en redes (Twitter/Reddit), devolviendo un **reporte de análisis*
 en Markdown. Es un *focus group sintético* para anticipar reacción / sentimiento
 / dinámica social ante un tema, mensaje, producto, post o documento — ideal
 **antes de publicar** algo.
+
+## Cuándo usarla
+
+Para pronosticar la REACCIÓN PÚBLICA / opinión / sentimiento / dinámica social ante un tema,
+mensaje, producto, post o documento. Frases típicas (ES + EN): 'cómo va a reaccionar la gente
+a X', 'qué va a opinar/pensar el público', 'simular reacción/opinión/sentimiento', 'focus
+group sintético', 'probar un mensaje/anuncio antes de publicar', 'simular audiencia',
+'forecast public reaction', 'simulate audience/opinion', 'social/opinion simulation',
+'sentiment forecast', 'mirofish'.
 
 ## Paso 0 — disponibilidad y oferta proactiva
 

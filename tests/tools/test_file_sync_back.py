@@ -143,7 +143,7 @@ class TestStaleSyncBackTempCleanup:
 
         def download(dest: Path):
             seen["tar"] = dest
-            _make_tar({"root/.clawk/x.txt": b"hi"}, dest)
+            _make_tar({"root/.clawksis/x.txt": b"hi"}, dest)
 
         mgr = _make_manager(tmp_path, bulk_download_fn=download)
         mgr.sync_back()
@@ -412,7 +412,7 @@ class TestSyncBackSizeCap:
         non-integer value is ignored with a warning and the default applies. The env var
         the first cut used is gone — non-secret settings live in config.yaml."""
         host_file = _write_file(tmp_path / "host_skill.md", b"original")
-        files = {"root/.clawk/skill.md": b"remote_version"}
+        files = {"root/.clawksis/skill.md": b"remote_version"}
         mgr = _make_manager(
             tmp_path,
             file_mapping=[(host_file, "/root/.clawksis/skill.md")],
@@ -452,7 +452,7 @@ class TestSyncBackWindowsHost:
         def download(dest: Path) -> None:
             buf = io.BytesIO()
             with tarfile.open(fileobj=buf, mode="w") as tar:
-                info = tarfile.TarInfo(name="root/.clawk/skill.py")
+                info = tarfile.TarInfo(name="root/.clawksis/skill.py")
                 info.size = 2
                 tar.addfile(info, io.BytesIO(b"v2"))
             with open(
@@ -483,8 +483,8 @@ class TestSyncBackWindowsHost:
             mapping,
             bulk_download_fn=_make_download_fn(
                 {
-                    "root/.clawk/skills/a/skill.py": b"v2",
-                    "root/.clawk/skills/a/new.md": b"new",
+                    "root/.clawksis/skills/a/skill.py": b"v2",
+                    "root/.clawksis/skills/a/new.md": b"new",
                 }
             ),
         )
@@ -492,7 +492,7 @@ class TestSyncBackWindowsHost:
         mgr.sync_back(clawk_home=tmp_path / ".clawk")
         assert (
             host_file.read_bytes() == b"v2"
-        )  # relpath key was 'root\\.clawk\\...' → skipped
+        )  # relpath key was 'root\\.clawksis\\...' → skipped
         assert (
             tmp_path / "host" / "new.md"
         ).read_bytes() == b"new"  # _infer_host_path parent match

@@ -19,12 +19,12 @@ logger = logging.getLogger("tools.approval")
 # import-time path snapshot (stale once CLAWK_HOME is set after import) lives in the patterns.
 _SSH_SENSITIVE_PATH = r'(?:~|\$home|\$\{home\})/\.ssh(?:/|$)'
 _CLAWK_ENV_PATH = (
-    r'(?:~\/\.clawk/|(?:\$home|\$\{home\})/\.clawk/|(?:\$clawk_home|\$\{clawk_home\})/)' r'\.env\b'
+    r'(?:~\/\.clawksis/|(?:\$home|\$\{home\})/\.clawksis/|(?:\$clawk_home|\$\{clawk_home\})/)' r'\.env\b'
 )
 # ~/.clawksis/config.yaml IS the security policy (approvals.mode, yolo, allowlist) and the config cache is mtime-keyed,
 # so a write takes effect mid-session. Terminal-side coverage (sed -i, tee, >, cp) pairs the file_tools deny.
 _CLAWK_CONFIG_PATH = (
-    r'(?:~\/\.clawk/|(?:\$home|\$\{home\})/\.clawk/|(?:\$clawk_home|\$\{clawk_home\})/)' r'config\.yaml\b'
+    r'(?:~\/\.clawksis/|(?:\$home|\$\{home\})/\.clawksis/|(?:\$clawk_home|\$\{clawk_home\})/)' r'config\.yaml\b'
 )
 _PROJECT_ENV_PATH = r'(?:(?:/|\.{1,2}/)?(?:[^\s/"\'`]+/)*\.env(?:\.[^/\s"\'`]+)*)'
 _PROJECT_CONFIG_PATH = r'(?:(?:/|\.{1,2}/)?(?:[^\s/"\'`]+/)*config\.yaml)'
@@ -137,6 +137,23 @@ HARDLINE_PATTERNS = [
     (_CMDPOS + r'init\s+[06]\b', "init 0/6 (shutdown/reboot)"),
     (_CMDPOS + r'systemctl\s+(poweroff|reboot|halt|kexec)\b', "systemctl poweroff/reboot"),
     (_CMDPOS + r'telinit\s+[06]\b', "telinit 0/6 (shutdown/reboot)"),
+    # Self-DoS: the agent runs *inside* the clawk-gateway systemd unit, so stopping / restarting / killing
+    # that unit (or a sibling clawk/clawksis service) terminates the process executing the command; systemd's
+    # StartLimitBurst then leaves the unit `failed` until an operator intervenes (2026-07-07 incident: a
+    # self-restart to apply an .env change took Telegram + the dashboard offline ~3h). No in-turn recovery,
+    # so this is a floor like shutdown/reboot — yolo / approvals.mode=off must not bypass it (the softer
+    # DANGEROUS copies below are bypassed by exactly that config). Only clawk/clawksis units match, so
+    # `systemctl restart nginx`, read-only verbs (status/show/is-active/start) and journalctl stay allowed.
+    (
+        r'\bsystemctl\b[^;&|\n]*\b(?:stop|restart|kill|disable|mask)\b[^;&|\n]*\bclawk',
+        "stop/restart/kill the agent's own Clawksis gateway service (self-termination)",
+    ),
+    (
+        r'\bservice\s+(?:clawk|clawksis)[a-z0-9._@-]*\s+(?:stop|restart|kill|force-reload)\b',
+        "stop/restart the agent's own Clawksis gateway service (self-termination)",
+    ),
+    (r'\bclawk\s+gateway\s+(?:stop|restart)\b', "stop/restart the Clawksis gateway (self-termination)"),
+    (r'\bclawk\s+update\b', "clawk update restarts the gateway (self-termination)"),
 ]
 
 # Pre-compiled at module load so the hot-path matcher never pays the cold re.compile fan-out

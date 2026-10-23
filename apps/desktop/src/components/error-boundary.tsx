@@ -3,7 +3,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/ui/error-state'
 import { useI18n } from '@/i18n'
-import { requestSendDiagnostics } from '@/store/send-diagnostics'
+import { requestSendDiagnostics, SEND_DIAGNOSTICS_ENABLED } from '@/store/send-diagnostics'
 
 export interface ErrorBoundaryFallbackProps {
   error: Error
@@ -188,9 +188,11 @@ function RootErrorFallback({ error, reset }: ErrorBoundaryFallbackProps) {
         <Button onClick={() => void window.clawkDesktop?.revealLogs()?.catch(() => undefined)} variant="text">
           {t.errors.openLogs}
         </Button>
-        <Button onClick={() => requestSendDiagnostics(error.stack || error.message)} variant="text">
-          {t.errors.sendDiagnostics}
-        </Button>
+        {SEND_DIAGNOSTICS_ENABLED && (
+          <Button onClick={() => requestSendDiagnostics(error.stack || error.message)} variant="text">
+            {t.errors.sendDiagnostics}
+          </Button>
+        )}
       </ErrorState>
     </div>
   )

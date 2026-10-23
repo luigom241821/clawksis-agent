@@ -91,7 +91,12 @@ class TestDoctorPlatformHints:
 
         hint = doctor_platform._sqlite_upgrade_hint()
 
-        assert "docker pull nousresearch/clawksis-agent:latest" in hint
+        # Clawksis publishes no image: the hint rebuilds locally (config._UPDATE_COMMAND_BY_METHOD).
+        assert (
+            "git pull && docker compose build && docker compose up -d --force-recreate"
+            in hint
+        )
+        assert "docker pull" not in hint and "nousresearch" not in hint
         assert "clawk update" not in hint
 
     def test_sqlite_upgrade_hint_apt_stamp_names_termux_external_update(self):

@@ -141,10 +141,9 @@ def _external_process_cli_command(provider_id: str, default: str) -> str:
 # providers appear automatically. Also carries two non-catalog rows the Accounts tab needs:
 # the Anthropic credential-status card and the synthetic ``claude-code`` row.
 # ``flow``: ``device_code`` = show code + URL + poll; ``external`` = delegated to a terminal/CLI.
+# Clawksis is BYOK: the Nous Portal card is NOT listed (see ``_DORMANT_OAUTH_PROVIDERS``).
 _OAUTH_PROVIDER_CATALOG: tuple[dict[str, Any], ...] = (
     # status_fn None → dispatched via auth.get_<provider>_auth_status.
-    {"id": "nous", "name": "Nous Portal", "flow": "device_code", "cli_command": "clawk auth add nous",
-     "docs_url": "https://portal.nousresearch.com", "status_fn": None},
     {"id": "openai-codex", "name": "ChatGPT or Codex Subscription", "flow": "device_code",
      "cli_command": "clawk auth add openai-codex", "docs_url": "https://platform.openai.com/docs",
      "status_fn": None},
@@ -172,6 +171,12 @@ _OAUTH_PROVIDER_CATALOG: tuple[dict[str, Any], ...] = (
     {"id": "claude-code", "name": "Anthropic OAuth: Required Extra Usage Credits to Use Subscription",
      "flow": "external", "cli_command": "claude setup-token",
      "docs_url": "https://docs.claude.com/en/docs/claude-code", "status_fn": _claude_code_only_status},
+)
+# Unlisted device-code providers whose start route stays wired for dormant code paths (the
+# opt-in ``nous.guest`` free-tier sign-in). Never shown in ``GET /api/providers/oauth``.
+_DORMANT_OAUTH_PROVIDERS: tuple[dict[str, Any], ...] = (
+    {"id": "nous", "name": "Nous Portal", "flow": "device_code", "cli_command": "clawk auth add nous",
+     "docs_url": "", "status_fn": None},
 )
 _oauth_sessions: dict[str, dict[str, Any]] = {}
 _oauth_sessions_lock = threading.Lock()

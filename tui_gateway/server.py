@@ -3184,12 +3184,12 @@ def _usage_from_session_row(row: dict | None, base: dict | None = None) -> dict:
 
 
 def _session_usage_with_db_fallback(session: dict, params: dict | None = None) -> dict:
-    agent = session.get("agent")
-    live_usage = (
-        _get_usage(agent)
-        if agent is not None
-        else {"calls": 0, "input": 0, "output": 0, "total": 0}
-    )
+    live_usage = _session_usage_snapshot(session) or {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "total": 0,
+    }
     try:
         live_total = int(live_usage.get("total") or 0)
     except Exception:
@@ -3373,15 +3373,32 @@ def _maybe_resume_pending_turn(sid: str, session: dict, session_key: str) -> Non
         )
 
         def _dispatch() -> None:
+            rid = "resume-" + uuid.uuid4().hex[:8]
             try:
                 # Let session.resume return to the client first so it is listening
                 # on the transport before the resumed turn streams events.
                 time.sleep(0.5)
-                if session.get("running"):
+                # Turn contract (as session_auto_continue): the agent must exist — a cold
+                # resume defers its build — and the dispatcher owns ``running``.
+                _start_agent_build(sid, session)
+                if _wait_agent(session, rid, timeout=120.0):
                     return
-                _run_prompt_submit("resume-" + uuid.uuid4().hex[:8], sid, session, note)
+                with session["history_lock"]:
+                    if session.get("running") or session.get("_finalized"):
+                        return
+                    session["running"] = True
+                    session["last_active"] = time.time()
+                try:
+                    _run_prompt_submit(rid, sid, session, note)
+                except Exception:
+                    _notif_release_turn(
+                        session
+                    )  # never leave the session stuck "running"
+                    raise
             except Exception:
-                pass
+                logger.debug(
+                    "durable-turn resume dispatch failed for %s", sid, exc_info=True
+                )
 
         threading.Thread(target=_dispatch, daemon=True).start()
     except Exception:

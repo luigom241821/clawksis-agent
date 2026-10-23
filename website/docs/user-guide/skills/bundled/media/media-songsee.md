@@ -1,62 +1,32 @@
 ---
-
 title: "Songsee — Audio spectrograms/features (mel, chroma, MFCC) via CLI"
-
 sidebar_label: "Songsee"
-
 description: "Audio spectrograms/features (mel, chroma, MFCC) via CLI"
-
 ---
-
-
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-
-
 # Songsee
-
-
 
 Audio spectrograms/features (mel, chroma, MFCC) via CLI.
 
-
-
 ## Skill metadata
 
-
-
 | | |
-
 |---|---|
-
 | Source | Bundled (installed by default) |
-
 | Path | `skills/media/songsee` |
-
 | Version | `1.0.0` |
-
 | Author | community |
-
 | License | MIT |
-
 | Platforms | linux, macos, windows |
-
 | Tags | `Audio`, `Visualization`, `Spectrogram`, `Music`, `Analysis` |
-
-
 
 ## Reference: full SKILL.md
 
-
-
 :::info
-
 The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-
 :::
-
-
 
 # songsee
 
@@ -193,4 +163,3 @@ Multiple `--viz` types render as a grid in a single image.
 - Output images can be inspected with `vision_analyze` for automated audio analysis
 
 - Useful for comparing audio outputs, debugging synthesis, or documenting audio processing pipelines
-

@@ -1326,8 +1326,6 @@ class ClawksisCLI(
         "verbose": ("_toggle_verbose", False),
         "yolo": ("_toggle_yolo", False),
         "compress": ("_manual_compress", True),
-        "subscription": ("_show_subscription", False),
-        "topup": ("_show_billing", True),
         "insights": ("_show_insights", True),
         "update": ("_cmd_update", True),
         "version": ("_cmd_version", True),

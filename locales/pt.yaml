@@ -154,6 +154,7 @@ gateway:
     hygiene_timeout: "⚠️ Encurtar o histórico da conversa demorou demais, então pulei essa etapa e mantive tudo como está. Execute /compress para tentar novamente ou /new para começar do zero."
     hygiene_timeout_doctor_hint: " Se isso continuar acontecendo, execute `clawk doctor` no host."
     hygiene_failed: "⚠️ Falha ao encurtar o histórico da conversa, então mantive tudo como está. Execute /compress para tentar novamente ou /new para começar do zero. Se isso continuar acontecendo, execute `clawk doctor` no host."
+    hygiene_compacting: "🧹 Compactando um histórico de conversa longo ({count} mensagens) antes de responder — isso pode levar um ou dois minutos. Use /new se preferir começar do zero."
     codex_nothing: "🗜️ Nada para compactar: esta sessão roda no runtime app-server do Codex, cujo contexto fica em um tópico controlado pelo Codex que só existe enquanto o agente está ativo. Envie uma mensagem primeiro e depois /compress — ou /reset para começar do zero."
     codex_compacted: "🗜️ Tópico do app-server do Codex compactado (thread/compact). O espelho da transcrição permanece inalterado por design — o app-server agora carrega o contexto compactado."
     codex_incomplete: "⚠️ A compactação do app-server do Codex não foi concluída — o tópico permanece inalterado. Verifique os logs do app-server, tente /compress novamente ou use /reset para uma sessão limpa."

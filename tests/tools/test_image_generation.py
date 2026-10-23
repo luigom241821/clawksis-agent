@@ -476,14 +476,28 @@ class TestKreaModelNormalization:
 
 
 class TestManagedKreaRouting:
-    """`_maybe_route_managed_model` only fires for Krea / Portal models in managed mode."""
+    """`_maybe_route_managed_model` only fires for Portal models in managed mode (Krea is BYOK)."""
+
+    def test_no_route_for_krea_model_under_managed_selection(
+        self, image_tool, monkeypatch
+    ):
+        # No managed Krea gateway: a krea-* id under the nous/unset selection falls through.
+        for provider in (None, "nous"):
+            monkeypatch.setattr(
+                image_tool, "_read_configured_image_provider", lambda p=provider: p
+            )
+            monkeypatch.setattr(
+                image_tool, "_read_configured_image_model", lambda: "krea-2-medium"
+            )
+            assert image_tool._managed_model_plugin() is None
+            assert image_tool._maybe_route_managed_model("p", "square") is None
 
     def test_no_route_when_model_not_krea(self, image_tool, monkeypatch):
         monkeypatch.setattr(image_tool, "_read_configured_image_provider", lambda: None)
         monkeypatch.setattr(
             image_tool, "_read_configured_image_model", lambda: "fal-ai/flux-2/klein/9b"
         )
-        assert image_tool._maybe_route_managed_krea("p", "square") is None
+        assert image_tool._maybe_route_managed_model("p", "square") is None
 
     def test_no_route_when_provider_is_krea_plugin(self, image_tool, monkeypatch):
         # provider == "krea" is handled by the normal plugin dispatch instead.
@@ -493,7 +507,8 @@ class TestManagedKreaRouting:
         monkeypatch.setattr(
             image_tool, "_read_configured_image_model", lambda: "krea-2-medium"
         )
-        assert image_tool._maybe_route_managed_krea("p", "square") is None
+        assert image_tool._maybe_route_managed_model("p", "square") is None
+
 
 class TestFalKreaCatalog:
     """Krea 2 on FAL remains in the FAL picker for FAL-billed users."""

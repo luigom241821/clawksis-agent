@@ -1110,6 +1110,7 @@ def _run_prompt_submit(
     if admitted is None:
         return False
     images, agent = admitted
+    _apply_project_instructions_to_session(session)  # chat project overlay (Clawksis)
     from gateway.warning_notifications import diagnostic_turn_muted
     from agent.notification_presentation import notification_config_snapshot
     with _session_profile_runtime_scope(session):

@@ -951,10 +951,15 @@ def _lap_overlay_rows(b: _PickerBuild, data: dict, user_providers: dict) -> None
 
 
 def _lap_canonical_rows(b: _PickerBuild) -> None:
-    """Section 2b: CANONICAL_PROVIDERS missed by sections 1/2."""
+    """Section 2b: CANONICAL_PROVIDERS missed by sections 1/2. The unlisted Nous Portal entry rides
+    along (credential-gated like every row here): only a user already signed into Nous sees it."""
     from clawk_cli.auth import PROVIDER_REGISTRY
     from clawk_cli.models import CANONICAL_PROVIDERS
-    for cp in CANONICAL_PROVIDERS:
+    from clawk_cli.models_catalog_static import DORMANT_NOUS_PROVIDER
+    entries = list(CANONICAL_PROVIDERS)
+    if not any(cp.slug == DORMANT_NOUS_PROVIDER.slug for cp in entries):
+        entries.insert(0, DORMANT_NOUS_PROVIDER)
+    for cp in entries:
         if _skip(b.seen_slugs, b.excluded, cp.slug):
             continue
         cp_config = PROVIDER_REGISTRY.get(cp.slug)
@@ -987,7 +992,8 @@ def _lap_canonical_rows(b: _PickerBuild) -> None:
             model_ids = _live_or_curated_ids(cp.slug, b.curated, merge_models_dev=False,
                                              non_blocking=b.non_blocking_catalogs)
         b.add_builtin_row(
-            cp.slug, cp.label, cp.slug == b.current_provider, model_ids, "canonical", uncapped_ok=False)
+            cp.slug, cp.label, cp.slug == b.current_provider, model_ids, "canonical",
+            uncapped_ok=cp.slug == DORMANT_NOUS_PROVIDER.slug)  # the curated Nous list is never capped
 
 
 def _lap_user_provider_rows(b: _PickerBuild, user_providers: dict) -> None:
@@ -1184,6 +1190,29 @@ def _lap_custom_provider_rows(b: _PickerBuild, custom_providers: list) -> None:
         section4_slugs.add(slug.lower())
 
 
+def _lap_ollama_row(b: _PickerBuild) -> None:
+    """Fork: a running local Ollama daemon surfaces its pulled models as their own picker row (see
+    ``clawk cookbook``). Purely local discovery — no credentials, best-effort, never fatal."""
+    if "ollama" in b.excluded or "ollama" in b.seen_slugs:
+        return
+    try:
+        from clawk_cli import cookbook
+
+        if not cookbook.ollama_running():
+            return
+        model_ids = [m for m in cookbook.ollama_models() if m]
+        if not model_ids:
+            return
+        is_current = (b.current_provider_norm == "ollama"
+                      or _norm_url(b.current_base_url) == _norm_url(cookbook.OLLAMA_OPENAI_URL))
+        b.results.append({
+            "slug": "ollama", "name": "Ollama (local)", "is_current": is_current, "is_user_defined": False,
+            "models": _cap_models(model_ids, b.max_models), "total_models": len(model_ids), "source": "local"})
+        b.seen_slugs.add("ollama")
+    except Exception:
+        logger.debug("Ollama picker row discovery failed", exc_info=True)
+
+
 def _build_curated_lists(current_provider: str, current_base_url: str, current_model: str,
                         non_blocking: bool = False) -> dict[str, list[str]]:
     """Curated model lists keyed by clawk provider id, plus the dynamic ones (nous manifest,
@@ -1307,6 +1336,7 @@ def list_authenticated_providers(
     _lap_bare_custom_row(b, custom_providers)
     if custom_providers and isinstance(custom_providers, list):
         _lap_custom_provider_rows(b, custom_providers)
+    _lap_ollama_row(b)
 
     return _finalize_picker_rows(b.results, user_providers, current_model)
 

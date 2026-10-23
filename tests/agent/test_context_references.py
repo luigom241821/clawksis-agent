@@ -404,7 +404,7 @@ def test_binary_reference_block_maps_host_attachment_to_container_path(tmp_path:
     )
 
     assert result.expanded
-    # Default container base for the docker backend is /root/.clawk.
+    # Default container base for the docker backend is /root/.clawksis.
     assert "/root/.clawksis/attachments/archive.zip" in result.message
     assert "binary file, not inlined" in result.message
 

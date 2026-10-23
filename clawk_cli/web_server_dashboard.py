@@ -264,6 +264,7 @@ _BUILTIN_DASHBOARD_THEMES = [
     {"name": "mono",      "label": "Mono",           "description": "Clean grayscale — minimal and focused"},
     {"name": "cyberpunk", "label": "Cyberpunk",      "description": "Neon green on black — matrix terminal"},
     {"name": "rose",      "label": "Rosé",           "description": "Soft pink and warm ivory — easy on the eyes"},
+    {"name": "pixel",     "label": "Clawksis Pixel", "description": "16-bit retro — pixel font, purple grid & scanlines"},
 ]
 
 
@@ -517,7 +518,7 @@ def _dashboard_plugin_search_dirs() -> list[tuple]:
     # ``true`` / ``yes`` / ``on``) so the gate matches ``clawk_cli/plugins.py`` and the documented user
     # contract.
     if env_var_enabled("CLAWK_ENABLE_PROJECT_PLUGINS"):
-        search_dirs.append((Path.cwd() / ".clawk" / "plugins", "project"))
+        search_dirs.append((Path.cwd() / ".clawksis" / "plugins", "project"))
     return search_dirs
 
 
@@ -800,7 +801,7 @@ def _plugin_api_mount_skip_reason(plugin: dict[str, Any], enabled_set: set, disa
 
     User plugins must be in ``plugins.enabled`` and not ``plugins.disabled`` before their
     Python runs (GHSA-mcfc-hp25-cjv7); bundled plugins are trusted but respect an explicit
-    disable; project plugins (``./.clawk/plugins/``) ship with the CWD and are
+    disable; project plugins (``./.clawksis/plugins/``) ship with the CWD and are
     attacker-controlled when opening a malicious repo — never auto-imported (GHSA-5qr3-c538-wm9j).
     """
     source, plugin_name = plugin.get("source"), plugin.get("name", "")
@@ -1006,7 +1007,7 @@ def _mount_plugin_api_routes():
     ``/api/plugins/<name>/``. See ``_plugin_api_mount_skip_reason`` for the trust gates.
 
     Backend import is restricted to ``bundled`` and ``user`` sources. Project plugins
-    (``./.clawk/plugins/``) ship with the CWD and are therefore attacker-controlled in any threat model
+    (``./.clawksis/plugins/``) ship with the CWD and are therefore attacker-controlled in any threat model
     where the user opens a malicious repo; they can extend the dashboard UI via static JS/CSS but their
     Python ``api`` file is never auto-imported by the web server. See GHSA-5qr3-c538-wm9j (#29156).
     Additionally, user plugins must be explicitly enabled via the ``plugins.enabled`` allow-list in

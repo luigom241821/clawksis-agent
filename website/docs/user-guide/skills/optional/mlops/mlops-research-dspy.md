@@ -1,64 +1,33 @@
 ---
-
 title: "Dspy — DSPy: declarative LM programs, auto-optimize prompts, RAG"
-
 sidebar_label: "Dspy"
-
 description: "DSPy: declarative LM programs, auto-optimize prompts, RAG"
-
 ---
-
-
 
 {/* This page is auto-generated from the skill's SKILL.md by website/scripts/generate-skill-docs.py. Edit the source SKILL.md, not this page. */}
 
-
-
 # Dspy
-
-
 
 DSPy: declarative LM programs, auto-optimize prompts, RAG.
 
-
-
 ## Skill metadata
 
-
-
 | | |
-
 |---|---|
-
 | Source | Optional — install with `clawk skills install official/mlops/dspy` |
-
 | Path | `optional-skills/mlops/research/dspy` |
-
 | Version | `1.0.0` |
-
 | Author | Orchestra Research |
-
 | License | MIT |
-
 | Dependencies | `dspy`, `openai`, `anthropic` |
-
 | Platforms | linux, macos, windows |
-
 | Tags | `Prompt Engineering`, `DSPy`, `Declarative Programming`, `RAG`, `Agents`, `Prompt Optimization`, `LM Programming`, `Stanford NLP`, `Automatic Optimization`, `Modular AI` |
-
-
 
 ## Reference: full SKILL.md
 
-
-
 :::info
-
 The following is the complete skill definition that Clawksis loads when this skill is triggered. This is what the agent sees as instructions when the skill is active.
-
 :::
-
-
 
 # DSPy: Declarative Language Model Programming
 
@@ -1014,4 +983,3 @@ for call in dspy.settings.trace:
 - `references/optimizers.md` - Optimization algorithms (BootstrapFewShot, MIPRO, BootstrapFinetune)
 
 - `references/examples.md` - Real-world examples (RAG, agents, classifiers)
-

@@ -1,6 +1,6 @@
 ---
 name: local-llm-inference
-description: "Run, serve, customize, and discover LLMs locally: llama.cpp GGUF inference, vLLM high-throughput serving, HuggingFace model management, abliteration, and model discovery/evaluation."
+description: "Run and serve local LLMs with llama.cpp, vLLM and HF."
 version: 1.0.0
 author: Clawksis (consolidated)
 license: MIT

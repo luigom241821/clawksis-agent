@@ -8,7 +8,7 @@
 """
 
 import logging
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -91,12 +91,83 @@ class TestCronGuidance:
         assert "USER PROFILE" in result
         assert "Samuel" in result
 
+    def test_user_profile_skipped_when_job_opts_out(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("cron.scheduler._get_clawk_home", lambda: tmp_path)
+        (tmp_path / "user.md").write_text("Name: Samuel.", encoding="utf-8")
+        from cron.scheduler import _build_job_prompt
+
+        result = _build_job_prompt({"prompt": "go", "use_user_md": False})
+        assert "## USER PROFILE" not in result
+        assert "Samuel" not in result
+
+
+# --------------------------------------------------------------------------
+# Natural delivery header: "⏰ <job name>" instead of the robotic wrapper
+# --------------------------------------------------------------------------
+class TestNaturalDeliveryHeader:
+    @staticmethod
+    def _deliver(job, content):
+        from cron.scheduler import _deliver_result
+        from gateway.config import Platform
+
+        pconfig = MagicMock()
+        pconfig.enabled = True
+        mock_cfg = MagicMock()
+        mock_cfg.platforms = {Platform.TELEGRAM: pconfig}
+        with (
+            patch("gateway.config.load_gateway_config", return_value=mock_cfg),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+        ):
+            _deliver_result(job, content)
+        send_mock.assert_called_once()
+        return send_mock.call_args.kwargs.get("content") or send_mock.call_args[0][-1]
+
+    def test_header_uses_job_name_without_robotic_wrapper(self):
+        sent = self._deliver(
+            {
+                "id": "test-job",
+                "name": "daily-report",
+                "deliver": "origin",
+                "origin": {"platform": "telegram", "chat_id": "123"},
+            },
+            "Here is today's summary.",
+        )
+        assert sent.startswith("⏰ daily-report\n\n")
+        assert "Here is today's summary." in sent
+        assert "(job_id:" not in sent
+        assert "-------------" not in sent
+        assert "To stop or manage this job" not in sent
+
+    def test_header_falls_back_to_job_id(self):
+        sent = self._deliver(
+            {
+                "id": "abc-123",
+                "deliver": "origin",
+                "origin": {"platform": "telegram", "chat_id": "123"},
+            },
+            "Output.",
+        )
+        assert sent.startswith("⏰ abc-123\n\n")
+
+    def test_yuanbao_strips_natural_header(self):
+        from plugins.platforms.yuanbao.adapter import MessageSender
+
+        assert MessageSender.strip_cron_wrapper("⏰ daily\n\nbody text") == "body text"
+        assert MessageSender.strip_cron_wrapper("plain reply") == "plain reply"
+
 
 # --------------------------------------------------------------------------
 # stop_after_alert: pause after the first real delivery
 # --------------------------------------------------------------------------
 class TestStopAfterAlert:
-    def _job(self, **extra):
+    """The tick body is split upstream; exercise the post-delivery hook directly."""
+
+    def _delivery(self, response="Meta is back up ✅", **extra):
+        from cron.scheduler import _RunDelivery, _is_cron_silence_response
+
         job = {
             "id": "alert-job",
             "name": "meta-up",
@@ -104,65 +175,58 @@ class TestStopAfterAlert:
             "origin": {"platform": "telegram", "chat_id": "123"},
         }
         job.update(extra)
-        return job
+        should_deliver = not _is_cron_silence_response(response)
+        return _RunDelivery(
+            job=job,
+            success=True,
+            error=None,
+            should_deliver=should_deliver,
+            delivery_attempted=should_deliver,
+        )
 
     def test_pauses_after_real_delivery_when_flag_set(self):
-        with (
-            patch(
-                "cron.scheduler.get_due_jobs",
-                return_value=[self._job(stop_after_alert=True)],
-            ),
-            patch(
-                "cron.scheduler.run_job",
-                return_value=(True, "# output", "Meta is back up ✅", None),
-            ),
-            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
-            patch("cron.scheduler._deliver_result", return_value=None),
-            patch("cron.scheduler.mark_job_run"),
-            patch("cron.jobs.pause_job") as pause_mock,
-        ):
-            from cron.scheduler import tick
+        from cron.scheduler import _maybe_stop_after_alert
 
-            tick(verbose=False)
+        with patch("cron.jobs.pause_job") as pause_mock:
+            _maybe_stop_after_alert(self._delivery(stop_after_alert=True))
 
         pause_mock.assert_called_once()
         assert pause_mock.call_args.args[0] == "alert-job"
 
     def test_no_pause_without_flag(self):
-        with (
-            patch("cron.scheduler.get_due_jobs", return_value=[self._job()]),
-            patch(
-                "cron.scheduler.run_job",
-                return_value=(True, "# output", "Meta is back up ✅", None),
-            ),
-            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
-            patch("cron.scheduler._deliver_result", return_value=None),
-            patch("cron.scheduler.mark_job_run"),
-            patch("cron.jobs.pause_job") as pause_mock,
-        ):
-            from cron.scheduler import tick
+        from cron.scheduler import _maybe_stop_after_alert
 
-            tick(verbose=False)
+        with patch("cron.jobs.pause_job") as pause_mock:
+            _maybe_stop_after_alert(self._delivery())
 
         pause_mock.assert_not_called()
 
     def test_no_pause_on_silent_even_with_flag(self):
-        with (
-            patch(
-                "cron.scheduler.get_due_jobs",
-                return_value=[self._job(stop_after_alert=True)],
-            ),
-            patch(
-                "cron.scheduler.run_job",
-                return_value=(True, "# output", "[SILENT]", None),
-            ),
-            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
-            patch("cron.scheduler._deliver_result", return_value=None),
-            patch("cron.scheduler.mark_job_run"),
-            patch("cron.jobs.pause_job") as pause_mock,
-        ):
-            from cron.scheduler import tick
+        from cron.scheduler import _maybe_stop_after_alert
 
-            tick(verbose=False)
+        with patch("cron.jobs.pause_job") as pause_mock:
+            _maybe_stop_after_alert(
+                self._delivery(response="[SILENT]", stop_after_alert=True)
+            )
 
         pause_mock.assert_not_called()
+
+    def test_no_pause_after_failed_delivery(self):
+        from cron.scheduler import _maybe_stop_after_alert
+
+        d = self._delivery(stop_after_alert=True)
+        d.delivery_error = "telegram down"
+        with patch("cron.jobs.pause_job") as pause_mock:
+            _maybe_stop_after_alert(d)
+
+        pause_mock.assert_not_called()
+
+
+def test_format_job_surfaces_stop_after_alert_and_profile():
+    from tools.cronjob_job_args import _format_job
+
+    shown = _format_job({"id": "abc", "prompt": "x", "stop_after_alert": True, "profile": "work"})
+    plain = _format_job({"id": "abc", "prompt": "x"})
+
+    assert shown["stop_after_alert"] is True and shown["profile"] == "work"
+    assert "stop_after_alert" not in plain and "profile" not in plain

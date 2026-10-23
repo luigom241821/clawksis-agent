@@ -1,8 +1,8 @@
 """Tests for the ScrapeGraphAI integration (native tool + web_extract backend).
 
-scrapegraphai itself is NOT installed in CI (it's lazy-installed on first use),
-so every test mocks the extraction layer. We verify the wiring: registration,
-toolset membership, the lazy-deps feature, the LLM-config builder, the tool/
+scrapegraphai itself is NOT installed in CI (it's installed on first use via
+pm.ensure_import), so every test mocks the extraction layer. We verify the wiring:
+registration, toolset membership, the pm extra, the LLM-config builder, the tool/
 backend handlers (success + unavailable + error paths), and that web_extract
 prefers scrapegraph over 3rd-party backends once the library is present.
 """
@@ -42,9 +42,31 @@ def test_tool_registered_in_web_toolset():
 
 
 def test_lazy_feature_declared():
-    from tools.lazy_deps import LAZY_DEPS
+    """The pm extra exists in pyproject and its anchor is the scrapegraphai import."""
+    import tomllib
+    from pathlib import Path
 
-    assert LAZY_DEPS.get("scrape.scrapegraph") == ("scrapegraphai",)
+    from pm import extras
+
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"][
+        "optional-dependencies"
+    ]
+    assert sgc.LAZY_FEATURE in declared
+    assert extras.ANCHORS.get(sgc.LAZY_FEATURE) == "scrapegraphai"
+
+
+def test_ensure_installed_wraps_pm_install_error(monkeypatch):
+    """A failed/disabled pm install surfaces as ScrapegraphUnavailable."""
+    import pm
+
+    def _fail(extra):
+        raise RuntimeError(f"install of {extra} disabled")
+
+    monkeypatch.setattr(sgc, "is_available", lambda: False)
+    monkeypatch.setattr(pm, "ensure_import", _fail)
+    with pytest.raises(sgc.ScrapegraphUnavailable, match="scrapegraph disabled"):
+        sgc.ensure_installed()
 
 
 def test_schema_shape():

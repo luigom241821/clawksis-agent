@@ -223,68 +223,6 @@ def test_save_platform_tools_preserves_mcp_server_names():
     assert "terminal" not in saved_toolsets
 
 
-def test_first_install_nous_auto_configures_video_gen(monkeypatch):
-    """When a Nous subscriber checks video_gen in the toolset checklist,
-    apply_nous_managed_defaults must write video_gen.provider and
-    video_gen.use_gateway so the FAL plugin can route through the gateway
-    at runtime.  Regression test for the bug where video_gen was marked as
-    auto-configured but no config was actually written."""
-    monkeypatch.setattr(
-        "tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True
-    )
-    config = {
-        "model": {"provider": "nous"},
-        "platform_toolsets": {"cli": []},
-    }
-    for env_var in (
-        "VOICE_TOOLS_OPENAI_KEY",
-        "OPENAI_API_KEY",
-        "ELEVENLABS_API_KEY",
-        "FIRECRAWL_API_KEY",
-        "FIRECRAWL_API_URL",
-        "KEENABLE_API_KEY",
-        "TAVILY_API_KEY",
-        "PARALLEL_API_KEY",
-        "BROWSERBASE_API_KEY",
-        "BROWSERBASE_PROJECT_ID",
-        "BROWSER_USE_API_KEY",
-        "FAL_KEY",
-    ):
-        monkeypatch.delenv(env_var, raising=False)
-
-    monkeypatch.setattr(
-        "clawk_cli.tools_config._prompt_toolset_checklist",
-        lambda *args, **kwargs: {"video_gen"},
-    )
-    monkeypatch.setattr("clawk_cli.tools_config.save_config", lambda config: None)
-    monkeypatch.setattr(
-        "clawk_cli.tools_config._get_enabled_platforms",
-        lambda: ["cli"],
-    )
-    monkeypatch.setattr(
-        "clawk_cli.nous_subscription.get_nous_portal_account_info",
-        lambda *args, **kwargs: NousPortalAccountInfo(
-            logged_in=True,
-            source="jwt",
-            fresh=False,
-            paid_service_access=True,
-        ),
-    )
-
-    configured = []
-    monkeypatch.setattr(
-        "clawk_cli.tools_config._configure_toolset",
-        lambda ts_key, config: configured.append(ts_key),
-    )
-
-    tools_command(first_install=True, config=config)
-
-    assert config["video_gen"]["provider"] == "nous"
-    assert "use_gateway" not in config["video_gen"]
-    # video_gen should NOT appear in the manual configure list — it's auto-configured
-    assert "video_gen" not in configured
-
-
 # NOTA (sync v2026.7.20): ``test_first_install_nous_auto_configures_managed_defaults``
 # y ``test_first_install_nous_auto_configures_video_gen`` NO se adoptan: el fork es
 # BYOK y ``tools_command`` no llama ``apply_nous_managed_defaults`` (esa funcion solo
@@ -654,9 +592,8 @@ def test_visible_providers_reuses_logged_out_feature_snapshot(monkeypatch):
 
     providers = _visible_providers(TOOL_CATEGORIES["image_gen"], {}, features=features)
 
-    assert any(
-        provider.get("managed_nous_feature") == "image_gen" for provider in providers
-    )
+    # Clawksis is BYOK: no Nous-managed row is ever offered, logged in or not.
+    assert not any(provider.get("managed_nous_feature") for provider in providers)
 
 
 def test_visible_providers_reuses_pool_video_feature_snapshot(monkeypatch):
@@ -692,22 +629,14 @@ def test_visible_providers_reuses_pool_video_feature_snapshot(monkeypatch):
     )
 
 
-# ── One managed image row ─────────────────────────────────────────────────────
+# ── No managed image row (BYOK) ───────────────────────────────────────────────
 #
-# FAL, Krea and Portal models all live behind the single "Nous Subscription" row; the stored
-# model id picks the gateway. Before, the Portal plugin rendered its own row that also wrote
-# `provider: nous`, so two rows read active at once and the Portal pick generated on FAL.
+# Upstream folds FAL, Krea and Portal models behind one "Nous Subscription" row. Clawksis is BYOK:
+# that row is never offered, so a legacy ``provider: nous`` selection activates no picker row and
+# the GUI model catalog never resolves to the managed union.
 
 
-def _managed_image_row() -> dict:
-    return next(
-        p
-        for p in TOOL_CATEGORIES["image_gen"]["providers"]
-        if p.get("managed_nous_feature") == "image_gen"
-    )
-
-
-def test_exactly_one_image_row_is_active_for_a_managed_selection(monkeypatch):
+def test_no_image_row_is_active_for_a_legacy_managed_selection(monkeypatch):
     from clawk_cli import tools_config
     from clawk_cli.tools_config_providers import _plugin_image_gen_providers
 
@@ -718,7 +647,12 @@ def test_exactly_one_image_row_is_active_for_a_managed_selection(monkeypatch):
             features={"image_gen": SimpleNamespace(managed_by_nous=True)}
         ),
     )
-    rows = TOOL_CATEGORIES["image_gen"]["providers"] + _plugin_image_gen_providers()
+    rows = _visible_providers(TOOL_CATEGORIES["image_gen"], {})
+    assert (
+        rows
+        == TOOL_CATEGORIES["image_gen"]["providers"] + _plugin_image_gen_providers()
+    )
+    assert not any(r.get("managed_nous_feature") for r in rows)
     for model in (
         "fal-ai/flux-2/klein/9b",
         "krea-2-medium",
@@ -728,34 +662,14 @@ def test_exactly_one_image_row_is_active_for_a_managed_selection(monkeypatch):
         active = [
             r["name"] for r in rows if tools_config._is_provider_active(r, config)
         ]
-        assert active == [_managed_image_row()["name"]], (model, active)
+        assert active == [], (model, active)
 
 
-def test_gui_model_catalog_for_the_managed_row_spans_every_managed_gateway(monkeypatch):
-    from clawk_cli import tools_config
-    from clawk_cli.web_routers.tools import (
-        _resolve_toolset_model_plugin,
-        _toolset_model_catalog,
-    )
-    from plugins.image_gen.krea import KREA_MODEL_IDS
-    from tools.image_generation_catalog import FAL_MODELS
+def test_gui_model_catalog_never_resolves_to_the_managed_union():
+    from clawk_cli.web_routers.tools import _resolve_toolset_model_plugin
 
-    paid = NousPortalAccountInfo(
-        logged_in=True, source="jwt", fresh=False, paid_service_access=True
-    )
-    monkeypatch.setattr(
-        tools_config,
-        "get_nous_subscription_features",
-        lambda *args, **kwargs: SimpleNamespace(features={}, account_info=paid),
-    )
-    plugin = _resolve_toolset_model_plugin("image_gen", _managed_image_row())
-    catalog, default_model = _toolset_model_catalog("image_gen", plugin, {})
-
-    assert default_model in catalog and default_model in FAL_MODELS
-    assert KREA_MODEL_IDS <= set(catalog)
-    assert not any(mid.startswith("fal-ai/krea/") for mid in catalog), (
-        "Krea 2 must appear once, natively"
-    )
+    for row in _visible_providers(TOOL_CATEGORIES["image_gen"], {}):
+        assert _resolve_toolset_model_plugin("image_gen", row) != "nous", row["name"]
 
 
 def test_pool_only_account_is_offered_fal_models_only(monkeypatch):

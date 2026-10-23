@@ -731,7 +731,11 @@ async def get_cron_delivery_targets(profile: Optional[str] = None):
     inside the profile scope, exactly like the sibling cron routes — otherwise
     the poll raises ``UnscopedSecretError`` on every tick and the dropdown
     silently loses every configured platform."""
-    targets = [{"id": "local", "name": "Local (save only)", "home_target_set": True, "home_env_var": None}]
+    targets = [
+        {"id": "local", "name": "Local (save only)", "home_target_set": True, "home_env_var": None},
+        # Reply in the chat where the job was created (deliver=origin; no origin -> first home channel).
+        {"id": "origin", "name": "Origin (reply where created)", "home_target_set": True, "home_env_var": None},
+    ]
     try:
         from cron.scheduler_delivery import cron_delivery_targets
 

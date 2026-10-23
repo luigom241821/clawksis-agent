@@ -125,6 +125,8 @@ class SessionCreateParams(ProfileParams):
     messages: list[SeedMessage] | None = None
     parent_session_id: str | None = None
     title: str | None = None
+    # Clawksis chat project: stamped on the row and applied as an instruction overlay each turn.
+    project_id: str | None = None
     model: str | None = None
     provider: str | None = None
     reasoning_effort: str | None = None

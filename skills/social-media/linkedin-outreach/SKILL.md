@@ -1,6 +1,6 @@
 ---
 name: linkedin-outreach
-description: "Find B2B leads on LinkedIn and run personalized, rate-limited outreach (connect + follow-up) via an open-source LinkedIn MCP server."
+description: "Find LinkedIn B2B leads and run rate-limited outreach."
 version: 1.0.0
 author: Clawksis + Gradient AI
 license: MIT
@@ -107,7 +107,9 @@ gets banned). This is how a prior account was lost.
 2. Copy the **whole `~/.linkedin-mcp/` directory** (the full cookie set — not
    just `li_at`; dropping the rest yields empty/partial responses) to the server,
    and point the server at it via `USER_DATA_DIR` / `--user-data-dir`. For Docker:
-   `-v ~/.linkedin-mcp:/home/pwuser/.linkedin-mcp`.
+   `-v ~/.linkedin-mcp:<container-home>/.linkedin-mcp`, where `<container-home>`
+   is the container user's home directory (the `pwuser` account in the
+   Playwright-based image).
 3. Route the server's browser through a **residential proxy in the operator's
    region** (no proxy flag — do it at the OS/network/container layer). This is
    what neutralizes the datacenter-IP signal the verification code can't.

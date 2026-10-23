@@ -1,6 +1,8 @@
 ---
 name: notion-mcp
-description: "Conectar y gestionar Notion desde Clawksis via MCP server oficial. Instalación, configuración, query de bases de datos, enriquecimiento de registros, y automatización con cron jobs. Cubre toda la integración con la API de Notion."
+description: "Conecta y automatiza Notion vía su servidor MCP oficial."
+license: MIT
+platforms: [linux, macos, windows]
 version: 1.0.0
 author: Clawksis
 metadata:

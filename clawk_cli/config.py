@@ -520,12 +520,12 @@ Verify the new version after restart:
 Notes:
   • Your config and session history live under ``$CLAWK_HOME`` (``/opt/data``
     in the container, typically bind-mounted from the host) and persist
-    across image upgrades — re-pulling doesn't lose any state.
+    across image upgrades — rebuilding doesn't lose any state.
   • Pin the image tag (e.g. ``clawksis-agent:v2026.6.5``) instead of relying
     on ``:latest`` so rebuilds stay reproducible and don't silently drift
     between versions.
-  • Running a fork?  Build your own image with this repo's ``Dockerfile``
-    and replace the ``docker pull`` step with your build/push pipeline."""
+  • Publishing to a registry?  Build with this repo's ``Dockerfile`` in your
+    own build/push pipeline and pull from there instead."""
 
 
 def format_docker_update_message() -> str:

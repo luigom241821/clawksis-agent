@@ -118,10 +118,30 @@ def test_no_answer_survives_the_callers_later_config_save(monkeypatch):
     assert read_raw_config()["telemetry"]["shared_metrics"] == {"enabled": False, "send": False, "offer_version": 2}
 
 
+def test_unsolicited_offers_are_off_by_default(monkeypatch):
+    """Clawksis (BYOK): neither the end-of-setup nor the before-chat offer is volunteered."""
+    from clawk_cli.config import read_raw_config
+    from clawk_cli.observability import shared_metrics_consent as consent
+
+    asked = []
+    monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: asked.append(a) or 0)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+    monkeypatch.delenv("CLAWK_DESKTOP", raising=False)
+    monkeypatch.delenv("CLAWK_NONINTERACTIVE", raising=False)
+
+    assert consent.UNSOLICITED_OFFER is False
+    consent.offer_consent_before_chat(argparse.Namespace())
+    consent.offer_consent_if_undecided({})
+    assert asked == []
+    assert consent.consent_state(read_raw_config())["enabled"] is False
+
+
 def test_chat_offer_asks_an_undecided_profile_once(monkeypatch):
     from clawk_cli.config import read_raw_config
     from clawk_cli.observability import shared_metrics_consent as consent
 
+    monkeypatch.setattr(consent, "UNSOLICITED_OFFER", True)  # the offer machinery itself
     asked = []
     monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: asked.append(a) or 0)
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -159,6 +179,7 @@ def test_unseen_no_thanks_is_asked_once_more_and_then_settled(monkeypatch):
     from clawk_cli.config import read_raw_config, save_config
     from clawk_cli.observability import shared_metrics_consent as consent
 
+    monkeypatch.setattr(consent, "UNSOLICITED_OFFER", True)  # the offer machinery itself
     shown = []
     monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: shown.append(k["description"]) or -1)
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)

@@ -530,6 +530,9 @@ def gateway_setup():
         _gw().managed_error("run gateway setup")
         return
 
+    from clawk_cli.banner import print_clawksis_banner
+
+    print_clawksis_banner()
     print()
     for banner_line in _WIZARD_BANNER:
         print(_gw().color(banner_line, _gw().Colors.MAGENTA))

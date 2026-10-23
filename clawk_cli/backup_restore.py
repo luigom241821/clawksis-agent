@@ -395,7 +395,7 @@ def _validate_backup_zip(zf: zipfile.ZipFile) -> tuple[bool, str]:
 def _detect_prefix(zf: zipfile.ZipFile) -> str:
     """Detect if the zip has a common directory prefix wrapping all entries.
 
-    Some tools zip as `.clawk/config.yaml` instead of `config.yaml`.
+    Some tools zip as `.clawksis/config.yaml` instead of `config.yaml`.
     Returns the prefix to strip (empty string if none).
     """
     names = [n for n in zf.namelist() if not n.endswith("/")]
@@ -410,7 +410,7 @@ def _detect_prefix(zf: zipfile.ZipFile) -> str:
     if len(first_parts) == 1:
         prefix = first_parts.pop()
         # Only strip if it looks like a clawk dir name
-        if prefix in {".clawk", "clawk"}:
+        if prefix in {".clawksis", "clawksis", ".clawk", "clawk"}:
             return prefix + "/"
 
     return ""

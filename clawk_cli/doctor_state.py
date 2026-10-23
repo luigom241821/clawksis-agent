@@ -211,9 +211,10 @@ def _check_directory_structure(should_fix: bool, f: Finding) -> None:
         check_warn(f"{_DHH}/SOUL.md not found", "(create it to give Clawksis a custom personality)")
         if should_fix:
             soul_path.parent.mkdir(parents=True, exist_ok=True)
-            soul_path.write_text("# Clawksis Persona\n\n<!-- Edit this file to customize how Clawksis communicates. -->\n\n"
-                                 "You are Clawksis, a helpful AI assistant.\n", encoding="utf-8")
-            check_ok(f"Created {_DHH}/SOUL.md with basic template")
+            from clawk_cli.default_soul import DEFAULT_SOUL_MD
+
+            soul_path.write_text(DEFAULT_SOUL_MD, encoding="utf-8")
+            check_ok(f"Created {_DHH}/SOUL.md with bundled persona")
             f.fixed += 1
     # Only enabled built-in stores: users can disable either legacy file target, and stale migration files
     # must not read as active memory usage.

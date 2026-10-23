@@ -56,7 +56,8 @@ async def get_dashboard_themes(profile: Optional[str] = None):
     from `~/.clawksis/dashboard-themes/*.yaml` ship their normalised `definition`."""
     def _run():
         config = load_config()
-        active = cfg_get(config, "dashboard", "theme", default="default")
+        # Same default as config_defaults (dashboard.theme: midnight).
+        active = cfg_get(config, "dashboard", "theme", default="midnight")
         themes = list(_BUILTIN_DASHBOARD_THEMES)
         seen = {t["name"] for t in themes}
         for t in _discover_user_themes():

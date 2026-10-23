@@ -257,12 +257,29 @@ def _load_cron_skill_parts(job: dict, skill_names: list[str]) -> list[str]:
     return parts
 
 
-_CRON_HINT = (
-    "[IMPORTANT: You are running as a scheduled cron job. "
+_CRON_HINT_HEAD = (
+    "[IMPORTANT: You are running as a scheduled cron job. There is no user "
+    "present to answer questions or clarify — act autonomously. "
     "DELIVERY: Your final response will be automatically delivered "
     "to the user — do NOT use send_message or try to deliver "
     "the output yourself. Just produce your report/output as your "
     "final response and the system handles the rest. "
+)
+# Clawksis cron rules: natural tone, do the real task, silent condition checks.
+_CRON_HINT_RULES = (
+    "TONE: Write naturally, the way a person would — same tone and shape "
+    "as the messages that already land well with this user. Do not sound "
+    "like an automated system or a templated alert. "
+    "REAL TASK: A cron can be a task, not just a reminder. If the job "
+    "implies getting something done, actually do the work this run using "
+    "your tools — do not merely restate the task and bail. Firing and "
+    "rescheduling without completing the work is a failure. "
+    "CONDITION: If this job waits for a condition to become true, check it "
+    "silently each run. While the condition is NOT met, respond with "
+    "exactly \"[SILENT]\" — never send useless 'still waiting' pings. Notify "
+    "only when the condition is actually met or there is a real problem to report. "
+)
+_CRON_HINT_TAIL = (
     "SILENT: If there is genuinely nothing new to report, respond "
     "with exactly \"[SILENT]\" (nothing else) to suppress delivery. "
     "[SILENT] is a literal ASCII control token — never translate or "
@@ -278,6 +295,19 @@ _CRON_HINT = (
     "treat phrasing like \"each Monday\" or \"every day at 9\" as "
     "context for this run, not as a request to schedule another job.]\n\n"
 )
+
+
+def _cron_hint() -> str:
+    """Cron execution guidance, with the Clawksis LANGUAGE rule resolved against the configured
+    language (``user.md``, injected after the hint, takes precedence when present)."""
+    configured_lang = _sched._cron_configured_language()
+    lang_clause = (
+        "LANGUAGE: Reply in the user's language — see the USER PROFILE below (user.md) when present"
+        + (f", otherwise use the configured language '{configured_lang}'. " if configured_lang
+           else ", otherwise match the language the user normally writes in. ")
+        + "Never default to English unless that is the user's language. "
+    )
+    return _CRON_HINT_HEAD + lang_clause + _CRON_HINT_RULES + _CRON_HINT_TAIL
 
 
 def _build_job_prompt(
@@ -333,7 +363,15 @@ def _build_job_prompt(
         prompt = f"{notepad_section}{prompt}"
         has_injected_data = True
 
-    prompt = _CRON_HINT + prompt
+    # user.md by default so a cron honours the user's language and preferences with no live
+    # conversation; per-job ``use_user_md=False`` opts out. Scanned as data, like the notepad.
+    if job.get("use_user_md", True):
+        profile_block = _sched._load_user_profile_block()
+        if profile_block:
+            prompt = f"{profile_block}\n\n{prompt}"
+            has_injected_data = True
+
+    prompt = _cron_hint() + prompt
     skill_names = _job_skill_names(job)
     if not skill_names:
         return _scan_assembled_cron_prompt(

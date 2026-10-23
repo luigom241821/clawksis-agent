@@ -154,6 +154,7 @@ gateway:
     hygiene_timeout: "⚠️ Konuşma geçmişini kısaltmak çok uzun sürdü, bu yüzden atladım ve her şeyi olduğu gibi bıraktım. Tekrar denemek için /compress, sıfırdan başlamak için /new çalıştırın."
     hygiene_timeout_doctor_hint: " Bu sürekli tekrarlanıyorsa ana makinede `clawk doctor` çalıştırın."
     hygiene_failed: "⚠️ Konuşma geçmişini kısaltma başarısız oldu, bu yüzden her şeyi olduğu gibi bıraktım. Tekrar denemek için /compress, sıfırdan başlamak için /new çalıştırın. Bu sürekli tekrarlanıyorsa ana makinede `clawk doctor` çalıştırın."
+    hygiene_compacting: "🧹 Yanıt vermeden önce uzun bir konuşma geçmişi ({count} mesaj) sıkıştırılıyor — bu bir iki dakika sürebilir. Baştan başlamayı tercih edersen /new kullan."
     codex_nothing: "🗜️ Sıkıştırılacak bir şey yok: bu oturum Codex app-server çalışma zamanında çalışıyor; bağlamı, yalnızca ajan aktifken var olan Codex'e ait bir thread'de tutulur. Önce bir mesaj gönderin, sonra /compress — ya da sıfırdan başlamak için /reset kullanın."
     codex_compacted: "🗜️ Codex app-server thread'i sıkıştırıldı (thread/compact). Transkript aynası tasarım gereği değişmedi — sıkıştırılmış bağlamı artık app-server taşıyor."
     codex_incomplete: "⚠️ Codex app-server sıkıştırması tamamlanmadı — thread değişmedi. App-server günlüklerini kontrol edin, /compress komutunu yeniden deneyin veya temiz bir oturum için /reset kullanın."
