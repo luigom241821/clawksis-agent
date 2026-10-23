@@ -63,6 +63,15 @@ class _FakeOpenAI:
         pass
 
 
+@pytest.fixture(autouse=True)
+def _reset_auxiliary_provider_state():
+    from agent.auxiliary_client import _reset_aux_unhealthy_cache
+
+    _reset_aux_unhealthy_cache()
+    yield
+    _reset_aux_unhealthy_cache()
+
+
 def _make_agent(
     monkeypatch,
     provider,
@@ -374,32 +383,11 @@ class TestBuildApiKwargsAIGateway:
 
 
 class TestBuildApiKwargsNousPortal:
-    def test_uses_chat_completions_format(self, monkeypatch):
-        agent = _make_agent(
-            monkeypatch,
-            "nous",
-            base_url="https://inference-api.nousresearch.com/v1",
-            model="gpt-5",
-        )
-        tool = {"role": "tool", "tool_call_id": "c1", "content": "inbox"}
-        messages = [
-            {"role": "user", "content": "read my mail"},
-            {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "c1",
-                        "type": "function",
-                        "function": {"name": "tool_call", "arguments": "{}"},
-                    }
-                ],
-            },
-            {**tool, **({"data_use": data_use} if data_use else {})},
-        ]
-        kwargs = agent._build_api_kwargs(messages)
-        assert kwargs["extra_body"].get("provider") == provider
-        assert kwargs["messages"][-1] == tool
+    # NOTE (fork): upstream's Nous Portal product-tag and no-training-route
+    # tests (agent + auxiliary) are not carried over — Clawksis is BYOK and
+    # ships no Nous provider profile (the profile is what turns connector
+    # ``data_use`` into a ``provider.data_collection`` route). The generic
+    # guarantee that ``data_use`` never reaches the wire is covered below.
 
     def test_connector_data_use_is_not_sent_to_other_providers(self, monkeypatch):
         agent = _make_agent(monkeypatch, "openrouter")
@@ -426,25 +414,6 @@ class TestBuildApiKwargsNousPortal:
         kwargs = agent._build_api_kwargs(messages)
         assert "provider" not in kwargs.get("extra_body", {})
         assert "data_use" not in kwargs["messages"][-1]
-
-    def test_auxiliary_nous_call_carrying_a_connector_result_asks_for_a_no_training_route(
-        self,
-    ):
-        from agent.auxiliary_client import _build_call_kwargs
-
-        messages = [
-            {"role": "user", "content": "title this"},
-            {
-                "role": "tool",
-                "tool_call_id": "c1",
-                "content": "inbox",
-                "data_use": ["no_training"],
-            },
-        ]
-        kwargs = _build_call_kwargs(
-            provider="nous", model="hermes-4", messages=messages
-        )
-        assert kwargs["extra_body"]["provider"] == {"data_collection": "deny"}
 
 
 class TestBuildApiKwargsCustomEndpoint:

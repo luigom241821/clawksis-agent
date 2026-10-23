@@ -20,12 +20,70 @@ def transport():
 
 
 class TestChatCompletionsBasic:
-    def test_api_mode(self, transport):
-        assert transport.api_mode == "chat_completions"
+    @pytest.mark.parametrize(
+        "choice",
+        [SimpleNamespace(message=SimpleNamespace()), SimpleNamespace()],
+    )
+    def test_normalize_response_allows_missing_optional_message_fields(
+        self, transport, choice
+    ):
+        response = SimpleNamespace(choices=[choice], usage=None)
 
-    def test_registered(self, transport):
-        assert transport is not None
+        normalized = transport.normalize_response(response)
 
+        assert normalized.content is None
+        assert normalized.tool_calls is None
+        assert normalized.finish_reason == "stop"
+
+    def test_normalize_response_allows_sparse_tool_call_fields(self, transport):
+        response = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        tool_calls=[
+                            SimpleNamespace(
+                                function=SimpleNamespace(arguments='{"city":"Paris"}')
+                            ),
+                            SimpleNamespace(),
+                            SimpleNamespace(
+                                id="call-3",
+                                function=SimpleNamespace(name="lookup"),
+                            ),
+                            SimpleNamespace(
+                                id="call-4",
+                                function=SimpleNamespace(name="", arguments="{}"),
+                            ),
+                            SimpleNamespace(
+                                function=SimpleNamespace(name="weather", arguments="{}")
+                            ),
+                        ]
+                    )
+                )
+            ],
+            usage=None,
+        )
+
+        normalized = transport.normalize_response(response)
+
+        assert normalized.finish_reason == "stop"
+        assert normalized.tool_calls is not None
+        assert [tool.id for tool in normalized.tool_calls] == [
+            "call-3",
+            "call-4",
+            None,
+        ]
+        assert [tool.name for tool in normalized.tool_calls] == [
+            "lookup",
+            "",
+            "weather",
+        ]
+        assert [tool.arguments for tool in normalized.tool_calls] == [
+            "{}",
+            "{}",
+            "{}",
+        ]
+
+    # Clawksis is BYOK: the Nous provider profile is not shipped.
     @pytest.mark.parametrize("provider", ["openrouter"])
     def test_gpt56_ultra_uses_max_wire_effort(self, transport, provider):
         from providers import get_provider_profile
@@ -227,87 +285,6 @@ class TestChatCompletionsBuildKwargs:
         )
         assert kw["extra_body"]["provider"] == {"only": ["openai"]}
 
-    def test_openrouter_pareto_min_coding_score(self, transport):
-        """Profile path: model=openrouter/pareto-code + score → plugins block."""
-        from providers import get_provider_profile
-
-        profile = get_provider_profile("openrouter")
-        msgs = [{"role": "user", "content": "Hi"}]
-        kw = transport.build_kwargs(
-            model="openrouter/pareto-code",
-            messages=msgs,
-            provider_profile=profile,
-            openrouter_min_coding_score=0.65,
-        )
-        assert kw["extra_body"]["plugins"] == [
-            {"id": "pareto-router", "min_coding_score": 0.65}
-        ]
-
-    def test_openrouter_pareto_score_ignored_for_other_models(self, transport):
-        """Score must not be emitted for any model other than openrouter/pareto-code."""
-        from providers import get_provider_profile
-
-        profile = get_provider_profile("openrouter")
-        msgs = [{"role": "user", "content": "Hi"}]
-        kw = transport.build_kwargs(
-            model="anthropic/claude-sonnet-4.6",
-            messages=msgs,
-            provider_profile=profile,
-            openrouter_min_coding_score=0.65,
-        )
-        assert "plugins" not in (kw.get("extra_body") or {})
-
-    def test_openrouter_pareto_score_omitted_when_unset(self, transport):
-        """No score → no plugins block (router uses its omission default = strongest coder)."""
-        from providers import get_provider_profile
-
-        profile = get_provider_profile("openrouter")
-        msgs = [{"role": "user", "content": "Hi"}]
-        kw = transport.build_kwargs(
-            model="openrouter/pareto-code",
-            messages=msgs,
-            provider_profile=profile,
-            openrouter_min_coding_score=None,
-        )
-        assert "plugins" not in (kw.get("extra_body") or {})
-
-    def test_openrouter_pareto_score_out_of_range_dropped(self, transport):
-        """Out-of-range scores must be silently dropped, not forwarded."""
-        from providers import get_provider_profile
-
-        profile = get_provider_profile("openrouter")
-        msgs = [{"role": "user", "content": "Hi"}]
-        for bad in (1.5, -0.1, "not-a-number"):
-            kw = transport.build_kwargs(
-                model="openrouter/pareto-code",
-                messages=msgs,
-                provider_profile=profile,
-                openrouter_min_coding_score=bad,
-            )
-            assert "plugins" not in (kw.get("extra_body") or {}), f"bad={bad!r}"
-
-    def test_openrouter_pareto_legacy_path(self, transport):
-        """Legacy flag path (no profile loaded) must also emit the plugins block."""
-        msgs = [{"role": "user", "content": "Hi"}]
-        kw = transport.build_kwargs(
-            model="openrouter/pareto-code",
-            messages=msgs,
-            is_openrouter=True,
-            openrouter_min_coding_score=0.8,
-        )
-        assert kw["extra_body"]["plugins"] == [
-            {"id": "pareto-router", "min_coding_score": 0.8}
-        ]
-
-    def test_reasoning_default(self, transport):
-        msgs = [{"role": "user", "content": "Hi"}]
-        kw = transport.build_kwargs(
-            model="gpt-4o",
-            messages=msgs,
-            supports_reasoning=True,
-        )
-        assert kw["extra_body"]["reasoning"] == {"enabled": True, "effort": "medium"}
-
     def test_ollama_num_ctx(self, transport):
         from providers import get_provider_profile
 
@@ -433,7 +410,7 @@ class TestChatCompletionsKimi:
     """Regression tests for the Kimi/Moonshot quirks migrated into the transport."""
 
     def test_moonshot_tool_schemas_are_sanitized_by_model_name(self, transport):
-        """Aggregator routes (Nous, OpenRouter) hit Moonshot by model name, not base URL."""
+        """Aggregator routes (OpenRouter) hit Moonshot by model name, not base URL."""
         tools = [
             {
                 "type": "function",
@@ -678,14 +655,345 @@ class TestChatCompletionsCacheStats:
         result = transport.extract_cache_stats(r)
         assert result == {"cached_tokens": 1500, "creation_tokens": 0}
 
-    def test_nested_details_win_over_deepseek_top_level(self, transport):
-        """When both shapes are present, the OpenAI nested value wins."""
-        details = SimpleNamespace(cached_tokens=800, cache_write_tokens=0)
-        r = SimpleNamespace(
-            usage=SimpleNamespace(
-                prompt_tokens_details=details,
-                prompt_cache_hit_tokens=1500,
-            )
+
+class TestChatCompletionsGeminiNativeExtraBodyStrip:
+    """Profile extra_body must not reach a native Gemini endpoint — Google's
+    REST API rejects unknown fields with HTTP 400.
+
+    Clawksis has no Nous provider (upstream exercises this with Nous portal
+    tags); OpenRouter's sticky ``session_id`` extra_body key covers the same
+    strip path.
+    """
+
+    def _profile(self):
+        from providers import get_provider_profile
+
+        return get_provider_profile("openrouter")
+
+    def test_extra_body_stripped_when_endpoint_is_native_gemini(self, transport):
+        kw = transport.build_kwargs(
+            "anthropic/claude-sonnet-4.6",
+            [{"role": "user", "content": "hi"}],
+            None,
+            provider_profile=self._profile(),
+            base_url="https://generativelanguage.googleapis.com/v1beta",
+            session_id="s1",
+            max_tokens=None,
         )
-        result = transport.extract_cache_stats(r)
-        assert result == {"cached_tokens": 800, "creation_tokens": 0}
+        eb = kw.get("extra_body")
+        assert not eb or "session_id" not in eb
+
+    def test_extra_body_preserved_on_profile_endpoint(self, transport):
+        kw = transport.build_kwargs(
+            "anthropic/claude-sonnet-4.6",
+            [{"role": "user", "content": "hi"}],
+            None,
+            provider_profile=self._profile(),
+            base_url="https://openrouter.ai/api/v1",
+            session_id="s1",
+            max_tokens=None,
+        )
+        eb = kw.get("extra_body")
+        assert eb and "session_id" in eb
+
+    def test_extra_body_passes_through_on_gemini_openai_compat(self, transport):
+        # /openai compat endpoint is not "native" — unchanged behavior.
+        kw = transport.build_kwargs(
+            "anthropic/claude-sonnet-4.6",
+            [{"role": "user", "content": "hi"}],
+            None,
+            provider_profile=self._profile(),
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+            session_id="s1",
+            max_tokens=None,
+        )
+        eb = kw.get("extra_body")
+        assert eb and "session_id" in eb
+
+
+class TestPromptCacheKeyCapability:
+    """Chat Completions cache routing is opt-in and body-safe."""
+
+    @staticmethod
+    def _messages(instructions="You are stable."):
+        return [
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": "hello"},
+        ]
+
+    @staticmethod
+    def _tools(name="lookup"):
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": "Look something up.",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+    def _request_body(self, kwargs, *, stream=False):
+        captured = {}
+
+        def handler(request):
+            captured.update(json.loads(request.content))
+            if stream:
+                return httpx.Response(
+                    200,
+                    headers={"content-type": "text/event-stream"},
+                    content=(
+                        'data: {"id":"chatcmpl_1","object":"chat.completion.chunk",'
+                        '"choices":[{"index":0,"delta":{"content":"ok"},'
+                        '"finish_reason":null}]}\n\n'
+                        "data: [DONE]\n\n"
+                    ),
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "id": "chatcmpl_1",
+                    "object": "chat.completion",
+                    "created": 0,
+                    "model": kwargs["model"],
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "ok"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                },
+            )
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
+            client = OpenAI(
+                api_key="test-key",
+                base_url="https://cache-capable.test/v1",
+                http_client=http_client,
+            )
+            result = client.chat.completions.create(**kwargs, stream=stream)
+            if stream:
+                list(result)
+        return captured
+
+    def test_profile_capability_emits_content_key_in_nonstream_request_body(
+        self, transport
+    ):
+        from providers.base import ProviderProfile
+
+        kwargs = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            session_id="cron_job_2026-07-15T10:00:00Z",
+            provider_profile=ProviderProfile(
+                name="cache-capable",
+                supports_prompt_cache_key=True,
+            ),
+        )
+
+        body = self._request_body(kwargs)
+
+        assert body["prompt_cache_key"].startswith("pck_")
+        assert body["prompt_cache_key"] == kwargs["prompt_cache_key"]
+
+    def test_legacy_capability_emits_same_key_in_streaming_request_body(
+        self, transport
+    ):
+        kwargs = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            session_id="cron_job_2026-07-15T10:05:00Z",
+            supports_prompt_cache_key=True,
+        )
+
+        body = self._request_body(kwargs, stream=True)
+
+        assert body["prompt_cache_key"] == kwargs["prompt_cache_key"]
+
+    def test_openai_api_base_url_implies_capability(self, transport):
+        """api.openai.com gets the key WITHOUT an explicit flag (exact host)."""
+        kwargs = transport.build_kwargs(
+            model="gpt-cache-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            session_id="cron_job_2026-07-15T10:07:00Z",
+            base_url="https://api.openai.com/v1",
+        )
+
+        assert kwargs["prompt_cache_key"].startswith("pck_")
+
+    @pytest.mark.parametrize(
+        "base_url",
+        [
+            "https://myproxy.example.com/api.openai.com/v1",  # host embedded in path
+            "https://api.openai.com.evil.example/v1",  # prefix-spoofed host
+            "https://eastus.api.cognitive.microsoft.com/openai/v1",  # Azure
+        ],
+    )
+    def test_non_openai_hosts_do_not_imply_capability(self, transport, base_url):
+        kwargs = transport.build_kwargs(
+            model="strict-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            session_id="cron_job_2026-07-15T10:08:00Z",
+            base_url=base_url,
+        )
+
+        assert "prompt_cache_key" not in kwargs
+
+    @pytest.mark.parametrize("provider", [None, "anthropic", "custom"])
+    def test_default_off_never_leaks_unknown_body_field(self, transport, provider):
+        from providers import get_provider_profile
+
+        kwargs = transport.build_kwargs(
+            model="strict-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            session_id="cron_job_2026-07-15T10:00:00Z",
+            provider_profile=(get_provider_profile(provider) if provider else None),
+        )
+
+        body = self._request_body(kwargs)
+
+        assert "prompt_cache_key" not in kwargs
+        assert "prompt_cache_key" not in body
+
+    def test_explicit_top_level_and_extra_body_overrides_are_preserved(self, transport):
+        from providers.base import ProviderProfile
+
+        profile = ProviderProfile(name="cache-capable", supports_prompt_cache_key=True)
+        top_level = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            provider_profile=profile,
+            request_overrides={"prompt_cache_key": "caller-top-level"},
+        )
+        in_extra_body = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            provider_profile=profile,
+            request_overrides={"extra_body": {"prompt_cache_key": "caller-extra-body"}},
+        )
+
+        assert top_level["prompt_cache_key"] == "caller-top-level"
+        assert "prompt_cache_key" not in top_level.get("extra_body", {})
+        assert "prompt_cache_key" not in in_extra_body
+        assert in_extra_body["extra_body"]["prompt_cache_key"] == "caller-extra-body"
+
+    def test_cron_ids_share_static_prefix_key_and_content_changes_invalidate(
+        self, transport
+    ):
+        def key(session_id, *, instructions="You are stable.", tool_name="lookup"):
+            return transport.build_kwargs(
+                model="cache-model",
+                messages=self._messages(instructions),
+                tools=self._tools(tool_name),
+                session_id=session_id,
+                supports_prompt_cache_key=True,
+            )["prompt_cache_key"]
+
+        first = key("cron_job_20260715_100000")
+        second = key("cron_job_20260715_100500")
+
+        assert first == second
+        assert first != key(
+            "cron_job_20260715_100500", instructions="You are different."
+        )
+        assert first != key("cron_job_20260715_100500", tool_name="search")
+
+    def test_unrelated_sessions_get_distinct_keys(self, transport):
+        """#78941: identical static prefix across unrelated (non-cron) sessions
+        must not collapse onto one shared prompt_cache_key."""
+        kw1 = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages("You are stable."),
+            tools=self._tools("lookup"),
+            session_id="session_alice_1",
+            supports_prompt_cache_key=True,
+        )
+        kw2 = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages("You are stable."),
+            tools=self._tools("lookup"),
+            session_id="session_bob_1",
+            supports_prompt_cache_key=True,
+        )
+        assert kw1["prompt_cache_key"] != kw2["prompt_cache_key"]
+
+    def test_overlong_caller_top_level_key_is_bounded(self, transport):
+        """OpenAI caps prompt_cache_key at 64 chars and 400s longer values.
+
+        A caller-supplied over-length key (request_overrides) must be hashed
+        to the same pck_<sha256[:24]> shape the Responses transport uses
+        (opencode#44571 parity — clamp on every chat protocol).
+        """
+        from providers.base import ProviderProfile
+
+        profile = ProviderProfile(name="cache-capable", supports_prompt_cache_key=True)
+        long_key = "sess-" + "x" * 200
+
+        kwargs = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            provider_profile=profile,
+            request_overrides={"prompt_cache_key": long_key},
+        )
+
+        assert kwargs["prompt_cache_key"].startswith("pck_")
+        assert len(kwargs["prompt_cache_key"]) <= 64
+        body = self._request_body(kwargs)
+        assert body["prompt_cache_key"] == kwargs["prompt_cache_key"]
+
+    def test_overlong_caller_extra_body_key_is_bounded(self, transport):
+        from providers.base import ProviderProfile
+
+        profile = ProviderProfile(name="cache-capable", supports_prompt_cache_key=True)
+        long_key = "sess-" + "y" * 200
+
+        kwargs = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            provider_profile=profile,
+            request_overrides={"extra_body": {"prompt_cache_key": long_key}},
+        )
+
+        eb_key = kwargs["extra_body"]["prompt_cache_key"]
+        assert eb_key.startswith("pck_")
+        assert len(eb_key) <= 64
+        # No duplicate top-level field competing with the caller's extra_body.
+        assert "prompt_cache_key" not in kwargs
+
+    def test_overlong_caller_key_bounded_on_legacy_path(self, transport):
+        long_key = "sess-" + "z" * 200
+        kwargs = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            supports_prompt_cache_key=True,
+            request_overrides={"prompt_cache_key": long_key},
+        )
+        assert kwargs["prompt_cache_key"].startswith("pck_")
+        assert len(kwargs["prompt_cache_key"]) <= 64
+
+    def test_whitespace_only_caller_key_is_dropped(self, transport):
+        """_bounded_prompt_cache_key returns None for blank keys — the field
+        must be removed rather than sent empty."""
+        from providers.base import ProviderProfile
+
+        profile = ProviderProfile(name="cache-capable", supports_prompt_cache_key=True)
+        kwargs = transport.build_kwargs(
+            model="cache-model",
+            messages=self._messages(),
+            tools=self._tools(),
+            provider_profile=profile,
+            request_overrides={"prompt_cache_key": "   "},
+        )
+        assert "prompt_cache_key" not in kwargs

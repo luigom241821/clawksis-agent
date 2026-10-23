@@ -1029,24 +1029,14 @@ class TestCollectShareBundle:
             f"2026-09-29 01:00:01 INFO agent: using proxy http://alice:{password}@10.0.0.5:3128\n"
         )
         with patch("clawk_cli.dump.run_dump"):
-            expected = collect_share_bundle(log_lines=50, redact=True)["report"]
+            bundle = "\n".join(collect_share_bundle(log_lines=50, redact=True).values())
 
-        uploaded = []
-
-        def _upload(content, expiry_days=7):
-            uploaded.append(content)
-            return "https://paste.rs/x"
-
-        with (
-            patch("clawk_cli.dump.run_dump"),
-            patch("clawk_cli.debug.upload_to_pastebin", side_effect=_upload),
-            patch("clawk_cli.debug._schedule_auto_delete"),
-        ):
-            result = build_debug_share(log_lines=50, redact=True)
-
-        assert result.urls["Report"] == "https://paste.rs/x"
-        # The report uploaded should match the collector's report.
-        assert uploaded[0] == expected
+        assert query_token not in bundle
+        assert password not in bundle
+        # Query credentials are masked in place; strict URL redaction masks the
+        # complete userinfo field while preserving the host and port.
+        assert "export.csv?token=***&page=2" in bundle
+        assert "***:***@10.0.0.5:3128" in bundle
 
 
 # NOTE (fork): upstream's ``TestBuildNousBundle`` and ``TestRunDebugShareNous``
@@ -1127,10 +1117,6 @@ class TestShareConsentGate:
         assert exc.value.code == 1
         mock_upload.assert_not_called()
         assert "--yes" in capsys.readouterr().err
-
-    # NOTE (fork): upstream's ``test_nous_path_also_gated`` is not carried
-    # over — the fork has no Nous upload path to gate (``--nous`` exits 1
-    # before the consent prompt).
 
     def test_local_never_prompts(self, clawk_home, capsys, monkeypatch):
         """--local renders to stdout and must not prompt or upload."""

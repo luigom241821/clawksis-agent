@@ -186,13 +186,65 @@ class TestIdempotentRerun(TestHappyPath):
             existing_client_id="   ",
             captured=captured,
         )
+        assert "client_id" not in captured["body"]
+        assert captured["body"].get("name")  # auto-generated
 
-        assert (
-            captured["body"]["custom_redirect_uri"]
-            == "https://clawksis.example.com/auth/callback"
-        )
 
-    def test_non_default_portal_is_persisted(self, capsys):
+class TestCustomPortalPersistence:
+    """`--portal-url` / CLAWK_DASHBOARD_PORTAL_URL is persisted to .env.
+
+    An *explicitly supplied* custom portal URL is an intentional choice the
+    user wants to survive across sessions, so it's always written (updating an
+    existing entry in place rather than appending a duplicate). When no custom
+    URL is supplied, the older conservative behaviour is preserved: an inferred
+    portal is only written when absent and non-default, and an existing entry
+    is never altered unexpectedly.
+    """
+
+    def _run(self, *, args, portal, existing_portal):
+        """Drive cmd_dashboard_register, capturing save_env_value calls.
+
+        `existing_portal` is what get_env_value returns for
+        CLAWK_DASHBOARD_PORTAL_URL (None = not present in .env).
+        """
+        response = {
+            "client_id": "agent:selfhost-1",
+            "id": "selfhost-1",
+            "name": "dreamy_tesla",
+            "kind": "SELF_HOSTED",
+            "custom_redirect_uri": None,
+            "created_at": "2026-06-04T12:00:00.000Z",
+        }
+
+        saved: dict = {}
+
+        def fake_save(key, value):
+            saved[key] = value
+
+        def fake_get_env_value(key, *a, **kw):
+            if key == "CLAWK_DASHBOARD_PORTAL_URL":
+                return existing_portal
+            return None
+
+        with (
+            patch("clawk_cli.auth.resolve_nous_access_token", return_value="tok"),
+            patch("clawk_cli.config.is_managed", return_value=False),
+            patch.dict(dr.os.environ, {}, clear=False),
+            patch.object(dr, "_resolve_portal_base_url", return_value=portal),
+            patch("clawk_cli.config.get_env_value", side_effect=fake_get_env_value),
+            patch("clawk_cli.config.save_env_value", side_effect=fake_save),
+            patch.object(
+                dr.urllib.request, "urlopen", return_value=_fake_http_ok(response)
+            ),
+        ):
+            # The ambient process env may carry CLAWK_DASHBOARD_PORTAL_URL
+            # (e.g. staging dev shells); drop it so `custom_portal_supplied`
+            # is driven solely by the args.portal_url under test.
+            dr.os.environ.pop("CLAWK_DASHBOARD_PORTAL_URL", None)
+            dr.cmd_dashboard_register(args)
+        return saved
+
+    def test_no_flag_default_portal_not_written(self, capsys):
         # No custom URL supplied, resolves to default → not written.
         saved = self._run(
             args=_ns(),

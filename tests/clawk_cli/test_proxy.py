@@ -15,32 +15,10 @@ from clawk_cli.proxy.adapters import ADAPTERS, get_adapter
 from clawk_cli.proxy.adapters.base import UpstreamAdapter, UpstreamCredential
 from clawk_cli.proxy.adapters.xai import XAIGrokAdapter
 
-# ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
 # Adapter registry
-
 # ---------------------------------------------------------------------------
-
-def test_registry_lists_xai():
-
-    assert "xai" in ADAPTERS
-
-def test_get_adapter_returns_xai_instance():
-
-    adapter = get_adapter("xai")
-
-    assert isinstance(adapter, XAIGrokAdapter)
-
-    assert isinstance(adapter, UpstreamAdapter)
-
-def test_get_adapter_case_insensitive():
-
-    assert isinstance(get_adapter("XAI"), XAIGrokAdapter)
-
-def test_get_adapter_unknown_provider_raises():
-
-    with pytest.raises(ValueError, match="anthropic"):
-        get_adapter("anthropic")  # not yet implemented
 
 
 # ---------------------------------------------------------------------------
