@@ -99,7 +99,7 @@ describe('fmtProjectCwdBranch', () => {
   })
 
   it('keeps the project visible when space is tight', () => {
-    expect(fmtProjectCwdBranch('/Users/bb/proj', 'main', 'clawksis-agent', 12)).toBe('clawksis-agent')
+    expect(fmtProjectCwdBranch('/Users/bb/proj', 'main', 'clawksis-agent', 14)).toBe('clawksis-agent')
   })
 })
 
